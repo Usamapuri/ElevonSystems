@@ -1,0 +1,293 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom utility classes for touch-friendly interfaces */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
+  
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+}
+
+@layer base {
+  :root {
+    /*
+     * Height reserved for the desktop "update ready" strip (F-FE-N47).
+     * DesktopUpdateBanner overwrites this on document.documentElement while it
+     * is mounted and removes it on unmount. Stays 0px everywhere else — browser
+     * tenants and the desktop app with no update pending — so the full-height
+     * shells that subtract it are unaffected.
+     */
+    --desktop-update-banner-h: 0px;
+
+    /*
+     * Tells the browser which chrome to render for NATIVE widgets it draws
+     * itself — <select> popups, scrollbars, date pickers, autofill. Without
+     * it the UA assumes light regardless of our tokens, which is how the void
+     * modal ended up with white-on-white options in dark mode: the popup kept
+     * its light background while the option text inherited our near-white
+     * --foreground. Declared per theme, alongside the tokens it must match.
+     */
+    color-scheme: light;
+
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+  }
+
+  /*
+   * Dark theme — an ELEVATION RAMP, not a single dark colour.
+   *
+   * The stock shadcn dark palette we shipped with gave --background, --card
+   * and --popover all the same value (222.2 84% 4.9%). Three different
+   * semantic layers, one colour: a modal floating over a card floating over
+   * the page read as one flat void, and the only thing separating anything
+   * was a 1px border that happened to be the exact same colour as --muted,
+   * --secondary and --accent. That is why dark mode looked "too dark with no
+   * shades" — there literally were no shades.
+   *
+   * The rule here: surfaces get LIGHTER as they rise. That is the physical
+   * metaphor (light falls from above) and it is what lets staff tell a dialog
+   * from the page behind it at a glance, mid-shift, on a cheap panel.
+   *
+   *   background  6%   the canvas, furthest back
+   *   card        9%   resting surfaces — cards, rails, panels
+   *   popover    13%   floating surfaces — modals, dropdowns, menus
+   *   muted      15%   recessed wells, table stripes
+   *   secondary  17%   filled chips, segmented controls
+   *   accent     22%   hover / active — a hover must read as a LIFT
+   *   border     24%   edges sit ABOVE the surface they delimit, or they
+   *                    are not edges. This is the fix for borders that were
+   *                    previously invisible against filled surfaces.
+   *
+   * Saturation steps DOWN as lightness rises. 84% saturation is invisible at
+   * 5% lightness but turns the higher surfaces a muddy purple-blue if carried
+   * up the ramp, so the canvas keeps the deep navy character while raised
+   * surfaces resolve toward a neutral slate.
+   *
+   * --foreground is 94%, not 98%. Near-white on near-black measures ~18:1 and
+   * haloes on the TN/OLED panels these terminals use; 94% on 6% still clears
+   * WCAG AAA with room to spare and stops the text glowing in a dim café.
+   */
+  .dark {
+    color-scheme: dark;
+
+    --background: 222 42% 6%;
+    --foreground: 210 30% 94%;
+    --card: 222 34% 9%;
+    --card-foreground: 210 30% 94%;
+    --popover: 221 30% 13%;
+    --popover-foreground: 210 30% 94%;
+    --primary: 210 30% 94%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 27% 17%;
+    --secondary-foreground: 210 30% 94%;
+    --muted: 217 27% 15%;
+    --muted-foreground: 215 18% 65%;
+    --accent: 216 26% 22%;
+    --accent-foreground: 210 30% 96%;
+    /*
+     * The old destructive (0 62.8% 30.6%) was so dark it read as muddy brown
+     * against the canvas — a Void button has to look like a Void button.
+     */
+    --destructive: 0 66% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 216 19% 24%;
+    --input: 216 20% 28%;
+    /*
+     * Focus was a pale grey-blue (212.7 26.8% 83.9%) that read as "disabled"
+     * more than "focused". Azure is unambiguous against both the green
+     * confirm actions and the red destructive ones, so a keyboard user
+     * tabbing through a tender flow can never mistake focus for state.
+     */
+    --ring: 199 89% 55%;
+  }
+
+  /*
+   * High Contrast theme — optimised for old 1080p/720p Dell-class monitors
+   * where our normal "lots of white + subtle gray borders + thin fonts"
+   * minimal aesthetic washes out. Pure black/white tokens, saturated brand
+   * colors, no subtle grays for helper text, no drop shadows for separation.
+   * Activated by `.high-contrast` on <html> via ThemeContext.
+   */
+  .high-contrast {
+    color-scheme: light;
+
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 222 70% 22%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 90%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 20%;
+    --accent: 24 95% 42%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 222 70% 22%;
+  }
+}
+
+/*
+ * High Contrast — heavier weight + everything ~5% larger for legibility on
+ * low-DPI panels. The 5% bump is applied to the root font-size, so every
+ * rem-based Tailwind utility (text-*, p-*, m-*, gap-*, w-*, h-*) scales
+ * proportionally. We tried a per-heading `font-size: 1.05em` rule but `em`
+ * resolves against the parent's font-size, not the element's own, so it
+ * collapsed Tailwind's text-3xl headings to ~16px. Root-font-size scaling
+ * sidesteps that entirely.
+ *
+ * We deliberately do NOT thicken borders: the dark border tokens above
+ * (--border at 0% 15%) already render strongly on old monitors, and a
+ * global 2px rule created a "boxy" nested-rectangles look. Drop shadows
+ * collapse so card separation comes from the dark border color rather than
+ * fragile 1px light gray glows that vanish on old TN panels.
+ */
+/*
+ * Per-device UI scale (see lib/ui-zoom.ts). `--ui-zoom` multiplies the root
+ * font-size, so every rem-based Tailwind utility (text-*, p-*, w-*, h-*)
+ * shrinks together while viewport-based heights (dvh / 100% / vh) keep filling
+ * the screen. This is why we use font-size scaling and NOT CSS `zoom`: `zoom`
+ * shrank the `height:100%` document box and left white space below it, and it
+ * mis-placed Radix popovers. Composes with the high-contrast bump below — both
+ * multiply the same var.
+ */
+html {
+  font-size: calc(16px * var(--ui-zoom, 1));
+}
+.high-contrast {
+  font-size: calc(16.8px * var(--ui-zoom, 1));
+}
+.high-contrast body {
+  font-weight: 500;
+}
+.high-contrast [class*='shadow-'] {
+  box-shadow: none !important;
+}
+
+/*
+ * Dark-theme shadows.
+ *
+ * Tailwind's default shadows are black at low opacity. On a white page that
+ * reads as depth; on a 6%-lightness canvas it is black on near-black, i.e.
+ * nothing. Every "floating" surface in dark mode was therefore held up by its
+ * border alone, which is the other half of why the theme looked flat.
+ *
+ * Two changes. The shadows go deeper and wider so they still register against
+ * a dark canvas. And the three elevated tiers — the ones used by modals,
+ * dropdowns and popovers — get a 1px inset highlight along their top edge.
+ * That hairline is what sells "lit from above": it is the same trick a physical
+ * bevel uses, and it costs nothing because it rides on the existing shadow
+ * utility rather than asking every component to opt in.
+ *
+ * Specificity (0,2,0) beats Tailwind's own (0,1,0), so no !important needed —
+ * unlike the high-contrast rule above, which has to flatten every tier at once.
+ */
+.dark .shadow-sm {
+  box-shadow: 0 1px 2px 0 hsl(222 60% 2% / 0.65);
+}
+.dark .shadow {
+  box-shadow:
+    0 1px 3px 0 hsl(222 60% 2% / 0.75),
+    0 1px 2px -1px hsl(222 60% 2% / 0.65);
+}
+.dark .shadow-md {
+  box-shadow:
+    0 4px 8px -2px hsl(222 60% 2% / 0.8),
+    0 2px 4px -2px hsl(222 60% 2% / 0.65);
+}
+.dark .shadow-lg {
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.05),
+    0 12px 20px -6px hsl(222 60% 2% / 0.85),
+    0 4px 8px -4px hsl(222 60% 2% / 0.7);
+}
+.dark .shadow-xl {
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.06),
+    0 20px 32px -8px hsl(222 60% 2% / 0.9),
+    0 8px 12px -6px hsl(222 60% 2% / 0.75);
+}
+.dark .shadow-2xl {
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.07),
+    0 28px 56px -12px hsl(222 60% 2% / 0.95);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /*
+   * Native form controls must carry their OWN colours, never inherit them.
+   *
+   * The void-reason dropdown was white-on-white in dark mode because the
+   * modal hardcoded a white panel while the bare <select> inherited the
+   * near-white --foreground from <body>. Every label around it had an
+   * explicit text-gray-* class, so the select was the only element that
+   * silently picked up the wrong colour — invisible until the OS highlight
+   * bar passed behind an option.
+   *
+   * There are 15 files with a bare <select>, so this is pinned at the base
+   * layer rather than patched per-component: any select, anywhere, in any
+   * container, resolves against the theme instead of its ancestors.
+   * `color-scheme` (declared per theme above) handles the popup chrome the
+   * browser draws; these rules handle the parts CSS can reach.
+   */
+  select {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+  select option {
+    background-color: hsl(var(--popover));
+    color: hsl(var(--popover-foreground));
+  }
+
+  /* Lock the document to the viewport so rail/grid momentum scrolls
+     cannot chain to <html> and rubber-band the page on iPadOS / trackpad
+     Safari. Every screen must own its scroll via a child container. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
