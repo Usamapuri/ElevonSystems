@@ -1,0 +1,58 @@
+# Reads ./.env (copy .env.example). Override POSTGRES_HOST_PORT / BACKEND_HOST_PORT /
+# FRONTEND_HOST_PORT in .env when the default host ports are taken.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: elevon-postgres-dev
+    environment:
+      POSTGRES_DB: ${DB_NAME:-elevon_pos}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-elevon_pos}"]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: elevon-backend-dev
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-elevon_pos}?sslmode=disable
+      PORT: 8080
+      GIN_MODE: ${GIN_MODE:-debug}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    ports:
+      - "${BACKEND_HOST_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    image: node:20-alpine
+    container_name: elevon-frontend-dev
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
+    ports:
+      - "${FRONTEND_HOST_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+
+volumes:
+  postgres_dev_data:
+  frontend_node_modules:
