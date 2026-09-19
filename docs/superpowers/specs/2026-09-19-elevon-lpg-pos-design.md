@@ -486,7 +486,7 @@ Each phase ends green (§10 gate) and is one PR from `dev`.
 
 | Phase | Deliverable | Notes |
 |---|---|---|
-| **0 Scaffold** | Repo layout, CLAUDE.md, `.claude/settings.json`, CI, docker-compose, Go server with `/health` + migration runner + first migration (users, settings), React shell with login page, sidebar, theme, API client, `window.elevon` bridge stub | Copies from §9. First commit `E-00`. |
+| **0 Scaffold** | Repo layout, CLAUDE.md, `.claude/settings.json`, CI, docker-compose, Go server with `/health` + migration runner + first migration (users, settings), React shell with login page, sidebar, theme, API client, `window.elevon` bridge stub | **DONE 2026-09-20** on `dev` (commits `212a442`…`e48cf92`, plan `docs/superpowers/plans/2026-09-19-phase-0-scaffold.md`). Login/JWT/`/auth/me` were pulled forward from Phase 1 so sign-in works end to end. Deviation: route guards use `beforeLoad` + `redirect`, not `<Navigate>` in render, because the installed TanStack Router (1.170) loops on the latter. |
 | **1 Auth + users + settings** | Login/JWT/roles, initial admin from env, users CRUD, PIN set, settings API + Business/Tax/Receipt/Day-close/Credit sections | §6.1 |
 | **2 Products, rates, customers** | Products CRUD (weight), Rates screen with history, Customers CRUD | §5.2, §5.3 |
 | **3 Day ops + invoices + ledger (backend)** | Business day open/ensure/close/reopen, drawer movements, audit log; `POST /invoices` with server-side pricing (§6.3), numbering, idempotency, credit tender + ledger + limit; receipts; voids; list/search/detail; `testdb` harness with the §10 cases | The money core. Rounding examples put to the owner before merge. |
