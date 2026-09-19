@@ -6,7 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"elevon-backend/internal/api"
 	"elevon-backend/internal/database"
+	"elevon-backend/internal/middleware"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -42,6 +44,8 @@ func main() {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "healthy", "message": "Elevon POS API is running"})
 	})
+
+	api.SetupRoutes(router.Group("/api/v1"), db, middleware.AuthMiddleware(db))
 
 	port := getEnv("PORT", "8080")
 	log.Printf("listening on :%s", port)
