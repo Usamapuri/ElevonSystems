@@ -27,6 +27,7 @@ func main() {
 	if err := database.Migrate(db); err != nil {
 		log.Fatalf("migrations: %v", err)
 	}
+	database.EnsureInitialAdmin(db)
 
 	gin.SetMode(getEnv("GIN_MODE", "release"))
 	router := gin.New()
