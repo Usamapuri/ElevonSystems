@@ -38,7 +38,7 @@ export function canAccess(role: string, pathname: string): boolean {
 }
 
 /** First screen after login. */
-export function defaultPath(role: string): string {
+export function defaultPath(role: string): '/dashboard' | '/pos' {
   return role === 'admin' ? '/dashboard' : '/pos'
 }
 
