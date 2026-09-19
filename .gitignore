@@ -1,0 +1,37 @@
+# env
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+
+# build / deps
+node_modules/
+frontend/dist/
+backend/tmp/
+backend/main
+backend/main.exe
+electron/dist/
+electron/build/
+*.log
+coverage/
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# local Claude settings (project settings.json IS committed)
+.claude/settings.local*.json
+.claude/scheduled_tasks.lock
+
+# Vite
+frontend/vite.config.ts.timestamp-*.mjs
+
+# credentials — never commit
+*.p8
+*.p12
+*.pem
+*.cer
+*.key

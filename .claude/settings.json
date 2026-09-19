@@ -1,0 +1,15 @@
+{
+  "$comment": "Elevon POS is a sibling of the Bhookly / Bhookly Retail products, never a fork of their deployments. The user-scoped skills below embed Bhookly Railway project IDs, repos and *.bhookly.com tenants; they are hidden here so they can never run against that fleet from this repo. Railway is allowed, but every mutating action must name the explicit Elevon project/environment ID and be confirmed first.",
+  "skillOverrides": {
+    "tenant-deploy": "off",
+    "tenant-cleanup": "off",
+    "railway-tenant": "off",
+    "tenant-drift": "off",
+    "pral-replay": "off",
+    "tax-reconciliation": "off",
+    "invoice-sequence-check": "off",
+    "pre-deploy-check": "off",
+    "review": "off",
+    "desktop-dev": "off"
+  }
+}
