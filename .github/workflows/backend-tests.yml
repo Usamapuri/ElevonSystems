@@ -1,0 +1,45 @@
+name: Backend tests
+
+on:
+  push:
+    branches: [main, dev]
+    paths: ['backend/**', '.github/workflows/backend-tests.yml']
+  pull_request:
+    paths: ['backend/**', '.github/workflows/backend-tests.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: elevon_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/elevon_test?sslmode=disable
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: backend/go.sum
+      - name: Migrations apply cleanly
+        run: go run ./cmd/migrate --database-url "$TEST_DATABASE_URL"
+      - name: go vet
+        run: go vet ./...
+      - name: go test (fail if DB-backed tests skipped)
+        run: |
+          set -o pipefail
+          go test ./... -v 2>&1 | tee /tmp/go-test.log
+          if grep -q -- 'TEST_DATABASE_URL not set' /tmp/go-test.log; then
+            echo "::error::DB-backed tests skipped — the Postgres service is not reachable."
+            exit 1
+          fi
