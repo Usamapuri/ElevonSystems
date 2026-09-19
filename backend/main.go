@@ -24,6 +24,10 @@ func main() {
 	}
 	defer db.Close()
 
+	if err := database.Migrate(db); err != nil {
+		log.Fatalf("migrations: %v", err)
+	}
+
 	gin.SetMode(getEnv("GIN_MODE", "release"))
 	router := gin.New()
 	// Default-deny proxy headers so c.ClientIP() is the TCP peer and IP-keyed
