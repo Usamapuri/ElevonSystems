@@ -41,4 +41,11 @@ func SetupRoutes(r *gin.RouterGroup, db *sql.DB, auth gin.HandlerFunc) {
 	settingsH := handlers.NewSettingsHandler(db)
 	staff.GET("/settings", settingsH.GetAll)
 	admin.PUT("/settings", settingsH.Update)
+
+	productsH := handlers.NewProductsHandler(db)
+	staff.GET("/products", productsH.List)
+	admin.POST("/products", productsH.Create)
+	admin.PUT("/products/:id", productsH.Update)
+	admin.PUT("/rates", productsH.UpdateRates)
+	admin.GET("/rates/history", productsH.RateHistory)
 }
