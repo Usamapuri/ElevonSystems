@@ -9,6 +9,7 @@ import (
 	"elevon-backend/internal/api"
 	"elevon-backend/internal/database"
 	"elevon-backend/internal/middleware"
+	"elevon-backend/internal/settings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,7 @@ func main() {
 		log.Fatalf("migrations: %v", err)
 	}
 	database.EnsureInitialAdmin(db)
+	settings.LoadDayBoundaryHour(db)
 
 	gin.SetMode(getEnv("GIN_MODE", "release"))
 	router := gin.New()
