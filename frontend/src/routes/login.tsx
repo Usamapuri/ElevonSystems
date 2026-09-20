@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Eye, EyeOff, Flame, Loader2, Lock, Scale, User as UserIcon, FileCheck2, BookUser } from 'lucide-react'
@@ -103,6 +103,11 @@ function LoginPage() {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+          </div>
+          <div className="text-right">
+            <Link to="/forgot-password" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+              Forgot password?
+            </Link>
           </div>
           {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{error}</div>}
           <Button type="submit" className="w-full" disabled={login.isPending || !form.username || !form.password}>
