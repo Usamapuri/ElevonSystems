@@ -65,4 +65,20 @@ func SetupRoutes(r *gin.RouterGroup, db *sql.DB, auth gin.HandlerFunc) {
 	staff.GET("/customers/:id/statement", customersH.Statement)
 	admin.POST("/customers", customersH.Create)
 	admin.PUT("/customers/:id", customersH.Update)
+
+	// Receipts are staff work: taking money against an account happens at the
+	// counter. The void needs an admin PIN in the body, which is the
+	// authority — not the route's role (spec §6.5).
+	staff.GET("/customers/:id/receipts", customersH.ListReceipts)
+	staff.POST("/customers/:id/receipts", customersH.CreateReceipt)
+	staff.POST("/customers/:id/receipts/:rid/void", customersH.VoidReceipt)
+
+	// The money core. Voids are on staff for the same reason: the PIN in the
+	// body identifies the admin who authorised it (spec §6.4).
+	invoicesH := handlers.NewInvoicesHandler(db)
+	staff.POST("/invoices", invoicesH.Create)
+	staff.GET("/invoices", invoicesH.List)
+	staff.GET("/invoices/recent", invoicesH.Recent)
+	staff.GET("/invoices/:id", invoicesH.Get)
+	staff.POST("/invoices/:id/void", invoicesH.Void)
 }
