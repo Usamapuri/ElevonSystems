@@ -35,8 +35,13 @@ backend/internal/middleware/auth.go JWT (24h, X-POS-JWT fallback), CheckTokenNot
 backend/internal/util/roles.go      canonical roles ↔ frontend/src/lib/roles.ts
 backend/internal/util/timewindow.go business timezone + boundary-hour BusinessDate()
 backend/internal/testdb/            DB-backed test harness (TEST_DATABASE_URL; skips loudly)
+backend/internal/pricing/           ComputeTotals — exact-integer §6.3 arithmetic, shared fixture with the TS mirror
+backend/internal/dayops/            business day open/ensure-open/close/reopen/force-close, no-auto-open contract
+backend/internal/invoice/           atomic daily invoice/receipt numbering (YYYYMMDD-NNN, R-YYYYMMDD-NNN)
+backend/internal/ledger/            customer ledger Post/Balance/Statement, append-only
 frontend/src/api/client.ts          the only place that talks HTTP
 frontend/src/lib/print/transport.ts window.elevon desktop bridge seam (browser falls back to window.print)
+frontend/src/lib/print/             receipt/A4/Z-report HTML builders, pure and node-safe (no DOM at module scope)
 frontend/src/routes/                file-based routes; routeTree.gen.ts is generated — never hand-edit
 ```
 
@@ -46,7 +51,7 @@ frontend/src/routes/                file-based routes; routeTree.gen.ts is gener
 3. `JWT_SECRET` is per store and mandatory in release mode; never hardcoded.
 4. Migrations are idempotent DDL (`migrations_idempotent_contract_test.go`) and `Migrate` runs before `EnsureInitialAdmin` (`boot_order_contract_test.go`).
 5. `SetTrustedProxies(nil)` stays (`boot_order_contract_test.go`).
-6. (from Phase 3) invoice money is computed server-side from `products.rate`; Go and TS pricing share one fixture; `void_log`, `customer_ledger_entries`, `day_close_audit_log`, `fiscal_audit_events` are append-only; reports filter on `business_date` only; every invoice has a `business_day_id` and there is no auto-open.
+6. Invoice money is computed server-side from `products.rate`; Go and TS pricing share one fixture; `void_log`, `customer_ledger_entries`, `day_close_audit_log`, `fiscal_audit_events` are append-only; reports filter on `business_date` only; every invoice has a `business_day_id` and there is no auto-open; every rate change writes a `product_rate_history` row in the same transaction.
 7. (from Phase 7) no HS-code default in code; sandbox validate URL is `_sb`; sandbox config in release refuses; retries consult `fiscal_invoices` first.
 8. Customer-visible money changes (rates, rounding, tax base, further tax) are stop-and-ask: compute before/after and put it to the owner first.
 
