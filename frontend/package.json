@@ -39,6 +39,7 @@
   "devDependencies": {
     "@tailwindcss/container-queries": "^0.1.1",
     "@tanstack/router-plugin": "^1.57.15",
+    "@types/node": "^20.19.43",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react-swc": "^3.7.1",
