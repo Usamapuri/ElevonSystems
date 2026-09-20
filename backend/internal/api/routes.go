@@ -49,6 +49,16 @@ func SetupRoutes(r *gin.RouterGroup, db *sql.DB, auth gin.HandlerFunc) {
 	admin.PUT("/rates", productsH.UpdateRates)
 	admin.GET("/rates/history", productsH.RateHistory)
 
+	dayH := handlers.NewDayHandler(db)
+	staff.GET("/day/current", dayH.Current)
+	staff.POST("/day/open", dayH.Open)
+	staff.POST("/day/movements", dayH.AddMovement)
+	staff.POST("/day/close", dayH.Close)
+	staff.GET("/day/:id/z", dayH.ZReport)
+	admin.POST("/day/reopen", dayH.Reopen)
+	admin.POST("/day/force-close", dayH.ForceClose)
+	admin.GET("/day/history", dayH.History)
+
 	customersH := handlers.NewCustomersHandler(db)
 	staff.GET("/customers", customersH.List)
 	staff.GET("/customers/:id", customersH.Get)
