@@ -34,13 +34,17 @@ export function ChangePasswordDialog({ open, onOpenChange }: Props) {
     },
   })
   const { errors } = form.formState
+  const close = () => {
+    form.reset()
+    onOpenChange(false)
+  }
 
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) form.reset()
-        onOpenChange(o)
+        if (!o) close()
+        else onOpenChange(o)
       }}
     >
       <DialogContent className="sm:max-w-md">
@@ -66,7 +70,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: Props) {
           </div>
           {errors.root && <p className="text-sm text-red-600">{errors.root.message}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={change.isPending}>
+            <Button type="button" variant="outline" onClick={close} disabled={change.isPending}>
               Cancel
             </Button>
             <Button type="submit" disabled={change.isPending}>

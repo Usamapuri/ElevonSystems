@@ -289,7 +289,11 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(current), []byte(req.CurrentPassword)) != nil {
-		c.JSON(http.StatusUnauthorized, models.Fail("Current password is incorrect", "invalid_current_password"))
+		// 400, not 401: the session is valid — only the submitted current
+		// password is wrong. A 401 here would hit the client's response
+		// interceptor, which treats every 401 except missing_auth_header as
+		// an expired session and force-logs the user out.
+		c.JSON(http.StatusBadRequest, models.Fail("Current password is incorrect", "invalid_current_password"))
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)

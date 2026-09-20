@@ -128,8 +128,8 @@ func TestChangePassword_RequiresCurrentAndRevokes(t *testing.T) {
 	db := testdb.Fresh(t)
 	id := seedUser(t, db, "owner", "admin", "old-password-1", nil)
 	r := passwordRouter(NewAuthHandler(db, nil), actor{id: id, username: "owner", role: "admin"})
-	if w := doJSON(r, http.MethodPost, "/auth/change-password", models.ChangePasswordRequest{CurrentPassword: "nope", NewPassword: "new-password-1"}); errCode(decodeEnvelope(t, w)) != "invalid_current_password" {
-		t.Fatalf("wrong current password: %s", w.Body.String())
+	if w := doJSON(r, http.MethodPost, "/auth/change-password", models.ChangePasswordRequest{CurrentPassword: "nope", NewPassword: "new-password-1"}); w.Code != http.StatusBadRequest || errCode(decodeEnvelope(t, w)) != "invalid_current_password" {
+		t.Fatalf("wrong current password: %d %s", w.Code, w.Body.String())
 	}
 	if w := doJSON(r, http.MethodPost, "/auth/change-password", models.ChangePasswordRequest{CurrentPassword: "old-password-1", NewPassword: "old-password-1"}); errCode(decodeEnvelope(t, w)) != "password_unchanged" {
 		t.Fatalf("same password: %s", w.Body.String())
