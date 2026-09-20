@@ -1,7 +1,8 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type {
-  APIResponse, AppSettings, CreateUserRequest, LoginRequest, LoginResponse, PaginatedResponse,
-  SettingsPatch, UpdateUserRequest, User, UserListParams,
+  APIResponse, AppSettings, CreateProductRequest, CreateUserRequest, LoginRequest, LoginResponse,
+  PaginatedResponse, Product, ProductListParams, RateHistoryEntry, RateHistoryParams, SettingsPatch,
+  UpdateProductRequest, UpdateRatesRequest, UpdateRatesResponse, UpdateUserRequest, User, UserListParams,
 } from '@/types'
 
 export const TOKEN_KEY = 'elevon_token'
@@ -134,6 +135,23 @@ class APIClient {
   }
   setUserPin(id: string, pin: string) {
     return this.request<never>({ method: 'PUT', url: `/admin/users/${id}/pin`, data: { pin } })
+  }
+
+  // ── Products & rates (reads for any staff, writes admin only) ──────────
+  getProducts(params: ProductListParams = {}) {
+    return this.request<Product[]>({ method: 'GET', url: '/products', params })
+  }
+  createProduct(req: CreateProductRequest) {
+    return this.request<Product>({ method: 'POST', url: '/admin/products', data: req })
+  }
+  updateProduct(id: string, req: UpdateProductRequest) {
+    return this.request<Product>({ method: 'PUT', url: `/admin/products/${id}`, data: req })
+  }
+  updateRates(req: UpdateRatesRequest) {
+    return this.request<UpdateRatesResponse>({ method: 'PUT', url: '/admin/rates', data: req })
+  }
+  getRateHistory(params: RateHistoryParams = {}) {
+    return this.request<RateHistoryEntry[]>({ method: 'GET', url: '/admin/rates/history', params })
   }
 
   // ── Local session ─────────────────────────────────────────────────────

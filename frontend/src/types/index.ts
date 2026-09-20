@@ -93,3 +93,75 @@ export interface UpdateUserRequest {
   role?: Role
   is_active?: boolean
 }
+
+// ── Products & rates ──────────────────────────────────────────────────────
+
+export interface Product {
+  id: string
+  name: string
+  sku: string | null
+  sell_by: 'weight' | 'unit'
+  unit_label: string
+  rate: number
+  hs_code: string | null
+  fbr_uom: string | null
+  sort_order: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ProductListParams {
+  active?: boolean
+}
+
+/** sell_by is always 'weight' and unit_label always 'kg' in v1; the server sets both. */
+export interface CreateProductRequest {
+  name: string
+  sku?: string
+  rate: number
+  hs_code?: string
+  fbr_uom?: string
+  sort_order?: number
+}
+
+/** Every field optional; omit to leave unchanged. No rate here — see UpdateRatesRequest. */
+export interface UpdateProductRequest {
+  name?: string
+  sku?: string
+  hs_code?: string
+  fbr_uom?: string
+  sort_order?: number
+  is_active?: boolean
+}
+
+export interface RateChange {
+  product_id: string
+  rate: number
+}
+
+export interface UpdateRatesRequest {
+  changes: RateChange[]
+  note?: string
+}
+
+export interface UpdateRatesResponse {
+  updated: number
+  products: Product[]
+}
+
+export interface RateHistoryEntry {
+  id: string
+  product_id: string
+  product_name: string
+  old_rate: number
+  new_rate: number
+  changed_by_name: string | null
+  changed_at: string
+  note: string | null
+}
+
+export interface RateHistoryParams {
+  product_id?: string
+  limit?: number
+}
