@@ -244,3 +244,195 @@ export interface StatementParams {
   from?: string
   to?: string
 }
+
+// ── Business day (the till only reads it; /day-close owns the writes) ─────
+
+export type DayStatus = 'open' | 'closed' | 'reopened'
+
+/** One business_days row. Every nullable number is null until the day is
+ * closed — the till reads status and business_date and nothing else. */
+export interface BusinessDay {
+  id: string
+  business_date: string
+  status: DayStatus
+  opened_at: string
+  opened_by: string | null
+  opened_by_name: string | null
+  opening_cash: number
+  opening_notes: string | null
+  closed_at: string | null
+  closed_by: string | null
+  closed_by_name: string | null
+  counted_cash: number | null
+  counted_card: number | null
+  counted_online: number | null
+  expected_cash: number | null
+  expected_card: number | null
+  expected_online: number | null
+  cash_variance: number | null
+  card_variance: number | null
+  online_variance: number | null
+  gross_sales: number | null
+  discounts: number | null
+  tax_collected: number | null
+  net_sales: number | null
+  on_account_sales: number | null
+  receipts_collected: number | null
+  invoice_count: number | null
+  void_count: number | null
+  closing_notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Live recomputation of what should be in the drawer. */
+export interface DayExpected {
+  opening_cash: number
+  cash_sales: number
+  card_sales: number
+  online_sales: number
+  on_account_sales: number
+  cash_receipts: number
+  card_receipts: number
+  online_receipts: number
+  receipts_collected: number
+  paid_in: number
+  paid_out: number
+  cash: number
+  card: number
+  online: number
+  gross_sales: number
+  discounts: number
+  tax_collected: number
+  net_sales: number
+  invoice_count: number
+  void_count: number
+}
+
+export interface CashMovement {
+  id: string
+  business_day_id: string
+  movement_type: 'paid_in' | 'paid_out'
+  amount: number
+  reason: string
+  notes: string | null
+  created_by: string | null
+  created_by_name: string | null
+  created_at: string
+}
+
+/** GET /day/current. `day` is the day holding the open slot; failing that,
+ * today's row even when it is already closed (a sale then reopens it for a
+ * late sale, §6.7 branch 3); null only when today has never been opened. */
+export interface DayCurrent {
+  day: BusinessDay | null
+  expected: DayExpected | null
+  movements: CashMovement[]
+}
+
+// ── Invoices ──────────────────────────────────────────────────────────────
+
+export type PaymentMethod = 'cash' | 'card' | 'online' | 'credit'
+export type PaymentSubMethod = 'easypaisa' | 'jazzcash' | 'bank_transfer'
+export type InvoiceStatus = 'completed' | 'voided'
+/** How the cashier rang the line up; matches invoice_lines_entered_as_check. */
+export type EnteredAs = 'kg' | 'tonne' | 'amount' | 'gross_tare'
+export type PrintDocument = 'thermal' | 'a4'
+
+/** Every money field was computed server-side from products.rate — none of
+ * them can be set by a client (see backend/internal/models/invoice.go). */
+export interface InvoiceLine {
+  id: string
+  invoice_id: string
+  product_id: string | null
+  product_name: string
+  hs_code: string | null
+  fbr_uom: string | null
+  quantity: number
+  entered_as: EnteredAs | null
+  gross_weight: number | null
+  tare_weight: number | null
+  unit_price: number
+  line_total: number
+  line_discount: number
+  line_tax: number
+  sort_order: number
+}
+
+/** `lines` is omitted from listings and present on the single reads and on
+ * the create/void responses. `total_payable` is whole rupees — the figure
+ * the customer pays. `customer_balance_after` is set only on the responses
+ * that moved a balance. */
+export interface Invoice {
+  id: string
+  invoice_number: string
+  client_op_id: string | null
+  business_day_id: string
+  business_date: string
+  status: InvoiceStatus
+  cashier_id: string | null
+  cashier_name: string
+  customer_id: string | null
+  customer_name: string | null
+  customer_phone: string | null
+  customer_ntn: string | null
+  customer_cnic: string | null
+  subtotal: number
+  discount_amount: number
+  discount_percent: number | null
+  tax_rate: number
+  tax_amount: number
+  further_tax_amount: number
+  total_amount: number
+  rounding_adjustment: number
+  total_payable: number
+  payment_method: PaymentMethod
+  payment_reference: string | null
+  payment_sub_method: string | null
+  notes: string | null
+  fiscal_status: string
+  fiscal_invoice_number: string | null
+  created_at: string
+  voided_at: string | null
+  voided_by: string | null
+  void_reason: string | null
+  lines?: InvoiceLine[]
+  customer_balance_after: number | null
+}
+
+/** One cart line as submitted. There is deliberately no money field: the
+ * server prices every line from products.rate. */
+export interface InvoiceLineRequest {
+  product_id: string
+  quantity: number
+  entered_as: EnteredAs
+  gross_weight?: number
+  tare_weight?: number
+}
+
+/** POST /invoices — create and settle in one call. `client_op_id` is the
+ * till's idempotency key: a repeat POST with the same UUID returns the
+ * invoice already created (200) rather than ringing the sale twice, which
+ * is what makes the retry-with-PIN after credit_limit_exceeded safe. `pin`
+ * is the admin credit-limit override and is never stored. */
+export interface CreateInvoiceRequest {
+  client_op_id: string
+  lines: InvoiceLineRequest[]
+  discount_amount: number
+  discount_percent?: number | null
+  customer_id?: string
+  payment_method: PaymentMethod
+  payment_sub_method?: string
+  payment_reference?: string
+  notes?: string
+  pin?: string
+}
+
+export interface VoidInvoiceRequest {
+  reason: string
+  pin: string
+}
+
+export interface RecentInvoiceParams {
+  limit?: number
+}

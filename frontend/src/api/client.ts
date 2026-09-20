@@ -1,9 +1,10 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type {
-  APIResponse, AppSettings, CreateCustomerRequest, CreateProductRequest, CreateUserRequest, Customer,
-  CustomerListParams, LoginRequest, LoginResponse, PaginatedResponse, Product, ProductListParams,
-  RateHistoryEntry, RateHistoryParams, SettingsPatch, StatementParams, StatementRow, UpdateCustomerRequest,
-  UpdateProductRequest, UpdateRatesRequest, UpdateRatesResponse, UpdateUserRequest, User, UserListParams,
+  APIResponse, AppSettings, CreateCustomerRequest, CreateInvoiceRequest, CreateProductRequest, CreateUserRequest,
+  Customer, CustomerListParams, DayCurrent, Invoice, LoginRequest, LoginResponse, PaginatedResponse, Product,
+  ProductListParams, RateHistoryEntry, RateHistoryParams, RecentInvoiceParams, SettingsPatch, StatementParams,
+  StatementRow, UpdateCustomerRequest, UpdateProductRequest, UpdateRatesRequest, UpdateRatesResponse,
+  UpdateUserRequest, User, UserListParams, VoidInvoiceRequest,
 } from '@/types'
 
 export const TOKEN_KEY = 'elevon_token'
@@ -170,6 +171,25 @@ class APIClient {
   }
   updateCustomer(id: string, req: UpdateCustomerRequest) {
     return this.request<Customer>({ method: 'PUT', url: `/admin/customers/${id}`, data: req })
+  }
+
+  // ── Business day (the till reads it to know whether it may sell) ───────
+  getDayCurrent() {
+    return this.request<DayCurrent>({ method: 'GET', url: '/day/current' })
+  }
+
+  // ── Invoices (the money core; voids carry an admin PIN in the body) ────
+  createInvoice(req: CreateInvoiceRequest) {
+    return this.request<Invoice>({ method: 'POST', url: '/invoices', data: req })
+  }
+  getRecentInvoices(params: RecentInvoiceParams = {}) {
+    return this.request<Invoice[]>({ method: 'GET', url: '/invoices/recent', params })
+  }
+  getInvoice(id: string) {
+    return this.request<Invoice>({ method: 'GET', url: `/invoices/${id}` })
+  }
+  voidInvoice(id: string, req: VoidInvoiceRequest) {
+    return this.request<Invoice>({ method: 'POST', url: `/invoices/${id}/void`, data: req })
   }
 
   // ── Local session ─────────────────────────────────────────────────────
