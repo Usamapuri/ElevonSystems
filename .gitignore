@@ -35,3 +35,6 @@ frontend/vite.config.ts.timestamp-*.mjs
 *.pem
 *.cer
 *.key
+
+# SDD scratch (ledgers, briefs, review packages)
+.superpowers/
