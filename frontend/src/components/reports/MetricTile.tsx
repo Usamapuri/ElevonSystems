@@ -4,7 +4,7 @@
  * Reports tabs can show the selected window's own headline figures without
  * duplicating the markup per tab.
  *
- * RETAIL's `MetricTile` compares the figure against a previous period
+ * The retail POS's `MetricTile` compares the figure against a previous period
  * (delta, percentage, a sparkline) via `MetricLabel`/`financeGlossary`,
  * neither of which exists in this codebase, and this backend does not
  * compute a "previous window" for a report the way the dashboard's 7d/30d

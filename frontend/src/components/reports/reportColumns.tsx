@@ -186,6 +186,15 @@ function statusLabel(status: DayCloseRow['status']): string {
   }
 }
 
+/** A signed money figure — mirrors `ZReportView`'s own local `signedMoney`,
+ * so a variance carries the same `+`/`-` sign convention wherever it is
+ * shown (the day-close screen's tender table and this report row for the
+ * same day should read identically). */
+function signedMoney(n: number): string {
+  if (n === 0) return formatMoney(0)
+  return (n > 0 ? '+' : '-') + formatMoney(Math.abs(n))
+}
+
 /** `onOpenZReport` is supplied by the tab, which owns the dialog's open
  * state — this module stays free of any component state of its own. */
 export function dayCloseColumns(onOpenZReport: (row: DayCloseRow) => void): ReportColumn<DayCloseRow>[] {
@@ -195,9 +204,9 @@ export function dayCloseColumns(onOpenZReport: (row: DayCloseRow) => void): Repo
     { key: 'closed_by', label: 'Closed By', format: (r) => r.closed_by || DASH },
     { key: 'expected_cash', label: 'Expected Cash', align: 'right', format: (r) => formatMoney(r.expected_cash) },
     { key: 'counted_cash', label: 'Counted Cash', align: 'right', format: (r) => formatMoney(r.counted_cash) },
-    { key: 'cash_variance', label: 'Cash Variance', align: 'right', format: (r) => formatMoney(r.cash_variance) },
-    { key: 'card_variance', label: 'Card Variance', align: 'right', format: (r) => formatMoney(r.card_variance) },
-    { key: 'online_variance', label: 'Online Variance', align: 'right', format: (r) => formatMoney(r.online_variance) },
+    { key: 'cash_variance', label: 'Cash Variance', align: 'right', format: (r) => signedMoney(r.cash_variance) },
+    { key: 'card_variance', label: 'Card Variance', align: 'right', format: (r) => signedMoney(r.card_variance) },
+    { key: 'online_variance', label: 'Online Variance', align: 'right', format: (r) => signedMoney(r.online_variance) },
     { key: 'net', label: 'Net', align: 'right', format: (r) => formatMoney(r.net) },
     {
       key: 'z_report',

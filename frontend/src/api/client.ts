@@ -52,6 +52,41 @@ export function isSessionExpiryCode(code: string | undefined): boolean {
   return code !== undefined && SESSION_EXPIRY_CODES.has(code)
 }
 
+/**
+ * Unwraps an axios error response body to the `APIResponse` the server
+ * actually sent, whether it arrived as already-parsed JSON (the normal
+ * case) or as a `Blob` — any request made with `responseType: 'blob'`
+ * (`downloadReport`) gets its error body back as a `Blob` too, even though
+ * the server still wrote the usual `{message, error}` JSON into it. Returns
+ * undefined when there is nothing recoverable (no response, or a body that
+ * is not JSON at all — an HTML proxy error page, say).
+ */
+async function parseErrorResponseBody(data: unknown): Promise<APIResponse | undefined> {
+  if (data instanceof Blob) {
+    if (!data.type || !data.type.toLowerCase().includes('json')) return undefined
+    try {
+      return JSON.parse(await data.text()) as APIResponse
+    } catch {
+      return undefined
+    }
+  }
+  return data as APIResponse | undefined
+}
+
+/**
+ * The session-expiry code off an axios error response, unwrapping a `Blob`
+ * body first (see `parseErrorResponseBody`). Without this, a 401 on a
+ * `responseType: 'blob'` request — a report export with an expired token —
+ * reads its code as `undefined` and never ends the session: the interceptor
+ * below and `downloadReport`'s own catch block both go through this one
+ * function so a blob error body is unwrapped exactly once, the same way,
+ * everywhere.
+ */
+export async function errorCodeFromResponse(response: { data?: unknown } | undefined): Promise<string | undefined> {
+  const parsed = await parseErrorResponseBody(response?.data)
+  return parsed?.error
+}
+
 class APIClient {
   private client: AxiosInstance
 
@@ -71,9 +106,12 @@ class APIClient {
     })
     this.client.interceptors.response.use(
       (r) => r,
-      (error) => {
+      async (error) => {
         if (error.response?.status === 401) {
-          const code = (error.response?.data as APIResponse | undefined)?.error
+          // async so a blob-bodied 401 (any report download,
+          // responseType: 'blob') is unwrapped the same as a JSON one —
+          // see errorCodeFromResponse.
+          const code = await errorCodeFromResponse(error.response)
           // Only a genuinely expired/invalid session ends it. PIN gates
           // (invalid_pin), a stripped proxy header (missing_auth_header) and
           // a bad login attempt (invalid_credentials) must not log the
@@ -315,16 +353,7 @@ class APIClient {
       downloadBlob(res.data, filename)
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        let parsed: APIResponse | undefined
-        const data = err.response?.data as Blob | APIResponse | undefined
-        if (data instanceof Blob) {
-          try {
-            parsed = JSON.parse(await data.text()) as APIResponse
-          } catch {
-            // The error body was not JSON (an HTML proxy error page, say) —
-            // fall through to the generic axios message below.
-          }
-        }
+        const parsed = await parseErrorResponseBody(err.response?.data)
         const e = new ApiClientError(parsed?.message || err.message || 'Export failed')
         e.code = parsed?.error
         e.status = err.response?.status

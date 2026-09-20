@@ -1,6 +1,6 @@
 /**
  * The Reports screen's global filter bar (spec §6.8): preset buttons plus
- * two plain date inputs for a custom range. Ported from RETAIL's
+ * two plain date inputs for a custom range. Ported from the retail POS's
  * `DateRangeFilter` (calendar popover + `date-fns`), but this project has
  * no `Calendar` UI primitive vendored and the invoice browser already
  * proved the simpler pattern — preset buttons next to native `<input

@@ -74,6 +74,9 @@ export function ReportTable<T>({
           </TableRow>
         ))}
       </TableBody>
+      {/* rows.length > 0 on purpose: a zeroed totals row under an empty
+          state row would read as "nothing sold, and here are its figures",
+          which is a contradiction, not a summary. */}
       {totals && rows.length > 0 && (
         <TableFooter>
           <TableRow>
