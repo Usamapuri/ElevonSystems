@@ -20,13 +20,22 @@ func TestRoutes_EveryRouteIsRoleGated(t *testing.T) {
 	if !strings.Contains(routesSource, `admin := r.Group("/admin", auth, middleware.RequireRoles([]string{util.RoleAdmin}))`) {
 		t.Fatal("admin group must be defined with auth + RequireRoles(admin)")
 	}
+	// The only routes that may exist without a session (spec §6.1).
+	publicAllowed := map[string]bool{
+		`public.POST("/login", authH.Login)`:                    true,
+		`public.POST("/forgot-password", authH.ForgotPassword)`: true,
+		`public.POST("/reset-password", authH.ResetPassword)`:   true,
+	}
 	for i, line := range strings.Split(routesSource, "\n") {
 		m := reg.FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}
 		group := m[1]
-		if strings.Contains(line, `public.POST("/login"`) {
+		if group == "public" {
+			if !publicAllowed[strings.TrimSpace(line)] {
+				t.Errorf("routes.go:%d registers an unexpected public route: %s", i+1, strings.TrimSpace(line))
+			}
 			continue
 		}
 		if group != "staff" && group != "admin" {

@@ -3,10 +3,16 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -129,4 +135,207 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, models.OK("OK", u))
+}
+
+// resetTokenTTL is short enough that a leaked inbox item expires before most
+// attackers notice, long enough for someone checking mail on a phone.
+const resetTokenTTL = time.Hour
+
+// ForgotPassword starts the reset flow. Always 200 with the same message,
+// whether or not the email exists, so the login page cannot enumerate
+// staff. Throttled per IP and per email before the lookup.
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req models.ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.Fail("Email is required", "missing_email"))
+		return
+	}
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if email == "" {
+		c.JSON(http.StatusBadRequest, models.Fail("Email is required", "missing_email"))
+		return
+	}
+	if !h.forgotRL.Allow("ip:"+c.ClientIP()) || !h.forgotRL.Allow("email:"+email) {
+		c.JSON(http.StatusTooManyRequests, models.Fail("Too many reset requests. Try again in a few minutes.", "rate_limited"))
+		return
+	}
+	generic := models.OK("If that email is registered, a reset link has been sent.", nil)
+
+	var id uuid.UUID
+	var firstName string
+	err := h.db.QueryRow(`SELECT id, first_name FROM users WHERE lower(email) = $1 AND is_active = true`, email).Scan(&id, &firstName)
+	if errors.Is(err, sql.ErrNoRows) {
+		c.JSON(http.StatusOK, generic)
+		return
+	}
+	if err != nil {
+		log.Printf("forgot-password: lookup: %v", err)
+		c.JSON(http.StatusOK, generic)
+		return
+	}
+	token, err := generateResetToken()
+	if err != nil {
+		log.Printf("forgot-password: token: %v", err)
+		c.JSON(http.StatusOK, generic)
+		return
+	}
+	if _, err := h.db.Exec(`UPDATE users SET password_reset_token_hash = $1, password_reset_expires_at = $2, updated_at = now() WHERE id = $3`,
+		hashResetToken(token), time.Now().Add(resetTokenTTL), id); err != nil {
+		log.Printf("forgot-password: store token for %s: %v", id, err)
+		c.JSON(http.StatusOK, generic)
+		return
+	}
+	link := buildResetURL(token)
+	if h.mailer == nil {
+		log.Printf("forgot-password: no mailer configured; reset URL for %s: %s", email, link)
+	} else {
+		business := h.businessName()
+		// Detached from the request so a slow mail API cannot reveal, by
+		// response time, that the address exists.
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			if err := h.mailer.SendPasswordReset(ctx, email, firstName, link, business); err != nil {
+				log.Printf("forgot-password: send to %s: %v", email, err)
+			}
+		}()
+	}
+	c.JSON(http.StatusOK, generic)
+}
+
+// ResetPassword completes the flow. The token hash is compared in constant
+// time against every unexpired hash; success clears the token (single use)
+// and revokes existing sessions.
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req models.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Token) == "" {
+		c.JSON(http.StatusBadRequest, models.Fail("Reset token is required", "missing_token"))
+		return
+	}
+	if code := checkPassword(req.NewPassword); code != "" {
+		c.JSON(http.StatusBadRequest, models.Fail(passwordMessage(code), code))
+		return
+	}
+	want := []byte(hashResetToken(strings.TrimSpace(req.Token)))
+	rows, err := h.db.Query(`SELECT id, password_reset_token_hash FROM users
+		WHERE password_reset_token_hash IS NOT NULL AND password_reset_expires_at > now() AND is_active = true`)
+	if err != nil {
+		log.Printf("reset-password: query: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not reset the password right now", "internal_error"))
+		return
+	}
+	defer rows.Close()
+	var matched uuid.UUID
+	found := false
+	for rows.Next() {
+		var id uuid.UUID
+		var stored string
+		if err := rows.Scan(&id, &stored); err != nil {
+			continue
+		}
+		if subtle.ConstantTimeCompare([]byte(stored), want) == 1 && !found {
+			matched, found = id, true
+		}
+	}
+	if !found {
+		c.JSON(http.StatusBadRequest, models.Fail("This reset link is invalid or has expired. Request a new one.", "invalid_or_expired_token"))
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("reset-password: hash: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not reset the password right now", "internal_error"))
+		return
+	}
+	if _, err := h.db.Exec(`UPDATE users SET password_hash = $1, password_reset_token_hash = NULL, password_reset_expires_at = NULL,
+		token_revoked_at = now(), updated_at = now() WHERE id = $2`, string(hash), matched); err != nil {
+		log.Printf("reset-password: update %s: %v", matched, err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not reset the password right now", "internal_error"))
+		return
+	}
+	c.JSON(http.StatusOK, models.OK("Password updated. Sign in with your new password.", nil))
+}
+
+// ChangePassword rotates the caller's own password. Needs the current
+// password as well as a valid session, and revokes every other session.
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	id, _, _, ok := middleware.UserFromContext(c)
+	if !ok || id == uuid.Nil {
+		c.JSON(http.StatusUnauthorized, models.Fail("Not signed in", "auth_required"))
+		return
+	}
+	var req models.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.CurrentPassword == "" {
+		c.JSON(http.StatusBadRequest, models.Fail("Current password is required", "missing_current_password"))
+		return
+	}
+	if code := checkPassword(req.NewPassword); code != "" {
+		c.JSON(http.StatusBadRequest, models.Fail(passwordMessage(code), code))
+		return
+	}
+	if req.CurrentPassword == req.NewPassword {
+		c.JSON(http.StatusBadRequest, models.Fail("New password must differ from the current one", "password_unchanged"))
+		return
+	}
+	var current string
+	err := h.db.QueryRow(`SELECT password_hash FROM users WHERE id = $1 AND is_active = true`, id).Scan(&current)
+	if errors.Is(err, sql.ErrNoRows) {
+		c.JSON(http.StatusUnauthorized, models.Fail("Account is not active.", "user_inactive"))
+		return
+	}
+	if err != nil {
+		log.Printf("change-password: query: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not change the password right now", "internal_error"))
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(current), []byte(req.CurrentPassword)) != nil {
+		c.JSON(http.StatusUnauthorized, models.Fail("Current password is incorrect", "invalid_current_password"))
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("change-password: hash: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not change the password right now", "internal_error"))
+		return
+	}
+	if _, err := h.db.Exec(`UPDATE users SET password_hash = $1, token_revoked_at = now(), updated_at = now() WHERE id = $2`, string(hash), id); err != nil {
+		log.Printf("change-password: update %s: %v", id, err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not change the password right now", "internal_error"))
+		return
+	}
+	c.JSON(http.StatusOK, models.OK("Password updated. Sign in again with the new password.", nil))
+}
+
+// businessName reads settings.business_name for the email subject.
+func (h *AuthHandler) businessName() string {
+	var name string
+	if err := h.db.QueryRow(`SELECT value #>> '{}' FROM settings WHERE key = 'business_name'`).Scan(&name); err == nil && strings.TrimSpace(name) != "" {
+		return name
+	}
+	return "Elevon POS"
+}
+
+// generateResetToken: 32 random bytes → 43 URL-safe chars (~256 bits).
+func generateResetToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// hashResetToken: only sha256(token) is ever stored.
+func hashResetToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// buildResetURL points at the frontend's reset page. APP_URL is the public
+// frontend origin; read per call so tests can override it.
+func buildResetURL(token string) string {
+	base := strings.TrimRight(strings.TrimSpace(os.Getenv("APP_URL")), "/")
+	if base == "" {
+		base = "http://localhost:3000"
+	}
+	return base + "/reset-password?token=" + token
 }
