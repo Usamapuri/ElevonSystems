@@ -37,6 +37,7 @@ import { computeTotals, taxRateFor, type Totals } from '@/lib/pricing'
 import { printInvoice } from '@/lib/print/printInvoice'
 import { cartDiscount, cartReducer, emptyCart, pricingLines, requestLines, type CartLine } from '@/components/pos/cart'
 import { evaluateDayGate, gateBlocks, gateFromErrorCode, type DayGate } from '@/components/pos/dayGate'
+import { dialogIsOpen, shouldOpenTender } from '@/components/pos/chargeGuard'
 import type { CreateInvoiceRequest, Customer, PaymentMethod, PrintDocument, Product } from '@/types'
 
 export const Route = createFileRoute('/_app/pos')({ component: PosPage })
@@ -262,9 +263,12 @@ function PosPage() {
   )
 
   // Hotkeys: / focuses the product search, F2 opens the tender dialog. Esc is
-  // Radix's job (every dialog here closes on it).
+  // Radix's job (every dialog here closes on it), and both hotkeys stand
+  // down entirely while a dialog owns the screen — F2 through a live
+  // attempt is exactly the double-press that must not re-key it.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (dialogIsOpen({ tenderOpen, pinOpen })) return
       const target = e.target as HTMLElement | null
       const typing =
         !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
@@ -275,17 +279,22 @@ function PosPage() {
       }
       if (e.key === 'F2') {
         e.preventDefault()
-        if (!chargeDisabled) openTender()
+        openTender()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  /**
+   * Starts a NEW charge attempt — and only a new one. Opening the dialog
+   * throws away the current client_op_id and the next POST mints a fresh
+   * one, so a second press while the dialog is up, while the PIN modal is
+   * up, or while the POST is in flight has to be a no-op: re-keying a live
+   * attempt is what turns a lost response into a double-charge.
+   */
   const openTender = () => {
-    if (chargeDisabled) return
-    // A fresh press is a fresh attempt: a new idempotency key, and no stale
-    // error from the last one.
+    if (!shouldOpenTender({ tenderOpen, pinOpen, pending: charge.isPending, chargeDisabled })) return
     clientOpId.current = null
     setChargeError(null)
     setPinError(null)
@@ -321,7 +330,10 @@ function PosPage() {
           taxRate={taxRate}
           onEditLine={openPadForLine}
           onCharge={openTender}
-          chargeDisabled={chargeDisabled}
+          // Also off while a POST is in flight: the button is the other way
+          // into openTender, and a second press must not re-key a live
+          // attempt.
+          chargeDisabled={chargeDisabled || charge.isPending}
           chargeHint={chargeHint}
         />
       </div>
@@ -341,6 +353,10 @@ function PosPage() {
       <TenderDialog
         open={tenderOpen}
         onOpenChange={(open) => {
+          // TenderDialog already refuses to close while pending; the key is
+          // only released once nothing is in flight and no PIN retry of
+          // this attempt is still pending.
+          if (!open && (charge.isPending || pinOpen)) return
           setTenderOpen(open)
           if (!open) {
             clientOpId.current = null
@@ -364,6 +380,9 @@ function PosPage() {
       <PinEntryModal
         open={pinOpen}
         onOpenChange={(open) => {
+          // Dismissing this while the override POST is in flight would
+          // strand the attempt with its key half-released.
+          if (charge.isPending) return
           setPinOpen(open)
           if (!open) setPinError(null)
         }}

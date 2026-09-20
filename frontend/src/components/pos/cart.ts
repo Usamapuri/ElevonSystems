@@ -11,7 +11,7 @@
  * is actually charged is recomputed by the server from products.rate.
  */
 import type { EnteredAs, InvoiceLineRequest } from '@/types'
-import type { LineIn } from '@/lib/pricing'
+import { round2, type LineIn } from '@/lib/pricing'
 import { round3 } from '@/lib/weight'
 
 export interface CartLine {
@@ -93,11 +93,6 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
       // reuses a key a pending render still holds.
       return { ...emptyCart, nextKey: state.nextKey }
   }
-}
-
-/** Rounds rupees to paisa the same way the server's validRate expects. */
-function round2(v: number): number {
-  return Math.round(v * 100) / 100
 }
 
 export interface CartDiscount {

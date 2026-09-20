@@ -145,6 +145,8 @@ export function RecentInvoices() {
       <PinEntryModal
         open={!!voiding}
         onOpenChange={(open) => {
+          // Esc and outside-click stay inert while the void is in flight.
+          if (voidMutation.isPending) return
           if (!open) {
             setVoiding(null)
             setVoidError(null)
