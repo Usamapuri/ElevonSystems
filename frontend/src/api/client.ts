@@ -30,6 +30,25 @@ export function resolveApiBaseUrl(raw: string | undefined): string {
   return /\/api\/v1$/i.test(base) ? base : `${base}/api/v1`
 }
 
+/** 401 codes that mean the *session* is over: emitted only by
+ * `backend/internal/middleware/auth.go` and the handlers' "Not signed in"
+ * branches (`auth_required`). Everything else that answers 401 — PIN gates
+ * (`invalid_pin`), a stripped proxy header (`missing_auth_header`), a bad
+ * login attempt (`invalid_credentials`) — is not a reason to end the
+ * session, so it must stay off this list. */
+const SESSION_EXPIRY_CODES = new Set([
+  'invalid_auth_format',
+  'invalid_token',
+  'token_revoked',
+  'user_inactive',
+  'auth_check_failed',
+  'auth_required',
+])
+
+export function isSessionExpiryCode(code: string | undefined): boolean {
+  return code !== undefined && SESSION_EXPIRY_CODES.has(code)
+}
+
 class APIClient {
   private client: AxiosInstance
 
@@ -51,9 +70,12 @@ class APIClient {
       (r) => r,
       (error) => {
         if (error.response?.status === 401) {
-          const code = (error.response?.data as APIResponse | undefined)?.error ?? ''
-          // A stripped header is a proxy problem, not an expired session.
-          if (code !== 'missing_auth_header') {
+          const code = (error.response?.data as APIResponse | undefined)?.error
+          // Only a genuinely expired/invalid session ends it. PIN gates
+          // (invalid_pin), a stripped proxy header (missing_auth_header) and
+          // a bad login attempt (invalid_credentials) must not log the
+          // cashier out or drop an in-progress cart.
+          if (isSessionExpiryCode(code)) {
             this.clearAuth()
             if (window.location.pathname !== '/login') window.location.href = '/login'
           }
