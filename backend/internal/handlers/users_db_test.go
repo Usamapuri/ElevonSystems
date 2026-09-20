@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"elevon-backend/internal/testdb"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func usersRouter(h *UsersHandler, a actor) *gin.Engine {
@@ -150,5 +152,92 @@ func TestUsers_SetPin(t *testing.T) {
 	}
 	if w := doJSON(r, http.MethodPut, "/admin/users/"+secondID.String()+"/pin", models.SetPinRequest{Pin: "12a4"}); errCode(decodeEnvelope(t, w)) != "invalid_pin_format" {
 		t.Fatalf("format: %s", w.Body.String())
+	}
+}
+
+// TestUsers_SetPinIsSerialised guards against two concurrent SetPin
+// requests for two different admins both observing "no match" for the same
+// PIN and both committing — which would leave two admins sharing a PIN.
+// The advisory lock in SetPin forces every request through one at a time,
+// so the DB never ends up with more than one holder of a given PIN.
+func TestUsers_SetPinIsSerialised(t *testing.T) {
+	db := testdb.Fresh(t)
+	aID := seedUser(t, db, "admin-a", "admin", "owner-pass-1", nil)
+	bID := seedUser(t, db, "admin-b", "admin", "owner-pass-2", nil)
+	r := usersRouter(NewUsersHandler(db), actor{id: aID, username: "admin-a", role: "admin"})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		target := aID
+		if i%2 == 1 {
+			target = bID
+		}
+		wg.Add(1)
+		go func(id uuid.UUID) {
+			defer wg.Done()
+			doJSON(r, http.MethodPut, "/admin/users/"+id.String()+"/pin", models.SetPinRequest{Pin: "2468"})
+		}(target)
+	}
+	wg.Wait()
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM users WHERE pin_hash IS NOT NULL`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("expected exactly one admin to hold the PIN, got %d", count)
+	}
+	if _, err := staffpin.Identify(db, "2468", staffpin.AdminOnly); err != nil {
+		t.Fatalf("identify: %v", err)
+	}
+}
+
+// TestUsers_LastAdminGuardIsSerialised guards against two concurrent
+// deactivate requests, each targeting the other of exactly two active
+// admins, both observing "1 other active admin" and both committing — which
+// would leave zero active admins. The advisory lock in Update forces one
+// request to see the other's committed change before its own last-admin
+// count runs.
+func TestUsers_LastAdminGuardIsSerialised(t *testing.T) {
+	db := testdb.Fresh(t)
+	aID := seedUser(t, db, "admin-a", "admin", "owner-pass-1", nil)
+	bID := seedUser(t, db, "admin-b", "admin", "owner-pass-2", nil)
+	rAsB := usersRouter(NewUsersHandler(db), actor{id: bID, username: "admin-b", role: "admin"})
+	rAsA := usersRouter(NewUsersHandler(db), actor{id: aID, username: "admin-a", role: "admin"})
+	f := false
+
+	codes := make([]int, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		w := doJSON(rAsB, http.MethodPut, "/admin/users/"+aID.String(), models.UpdateUserRequest{IsActive: &f})
+		codes[0] = w.Code
+	}()
+	go func() {
+		defer wg.Done()
+		w := doJSON(rAsA, http.MethodPut, "/admin/users/"+bID.String(), models.UpdateUserRequest{IsActive: &f})
+		codes[1] = w.Code
+	}()
+	wg.Wait()
+
+	var active int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active`).Scan(&active); err != nil {
+		t.Fatal(err)
+	}
+	if active != 1 {
+		t.Fatalf("expected exactly one active admin left, got %d", active)
+	}
+	successes, conflicts := 0, 0
+	for _, code := range codes {
+		switch code {
+		case http.StatusOK:
+			successes++
+		case http.StatusConflict:
+			conflicts++
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("expected one 200 and one 409, got codes=%v", codes)
 	}
 }

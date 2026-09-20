@@ -32,6 +32,16 @@ var (
 	pinRe      = regexp.MustCompile(`^[0-9]{4}$`)
 )
 
+// adminMutationLockKey is the Postgres advisory-lock key that serialises
+// admin-account mutations (PIN writes in SetPin, role/active changes in
+// Update) across concurrent requests. Held for the duration of the
+// transaction (pg_advisory_xact_lock), so a second request checking
+// "does anyone else hold this PIN" or "is there another active admin"
+// always sees the first request's write — a unique index can't do this for
+// the PIN because bcrypt salts differ per hash. The value has no meaning
+// beyond being a fixed, collision-free key for this one lock.
+const adminMutationLockKey = 74391
+
 // normaliseUsername trims, lowercases and validates (same rule as the
 // initial admin: 3–50 of a-z 0-9 . _ -, starting alphanumeric).
 func normaliseUsername(s string) (string, bool) {
@@ -266,6 +276,11 @@ func (h *UsersHandler) Update(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock($1)`, adminMutationLockKey); err != nil {
+		log.Printf("users update: advisory lock: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not update the user", "internal_error"))
+		return
+	}
 	var curRole string
 	var curActive bool
 	err = tx.QueryRow(`SELECT role, is_active FROM users WHERE id = $1 FOR UPDATE`, id).Scan(&curRole, &curActive)
@@ -330,9 +345,21 @@ func (h *UsersHandler) SetPin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.Fail("PIN must be exactly 4 digits", "invalid_pin_format"))
 		return
 	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		log.Printf("users pin: begin: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not set the PIN", "internal_error"))
+		return
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock($1)`, adminMutationLockKey); err != nil {
+		log.Printf("users pin: advisory lock: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not set the PIN", "internal_error"))
+		return
+	}
 	var role string
 	var active bool
-	err = h.db.QueryRow(`SELECT role, is_active FROM users WHERE id = $1`, id).Scan(&role, &active)
+	err = tx.QueryRow(`SELECT role, is_active FROM users WHERE id = $1`, id).Scan(&role, &active)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.JSON(http.StatusNotFound, models.Fail("User not found", "user_not_found"))
 		return
@@ -346,7 +373,7 @@ func (h *UsersHandler) SetPin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.Fail("Only active admins can hold a PIN", "pin_not_allowed_for_role"))
 		return
 	}
-	existing, err := staffpin.Identify(h.db, req.Pin, staffpin.AdminOnly)
+	existing, err := staffpin.Identify(tx, req.Pin, staffpin.AdminOnly)
 	if err == nil && existing.UserID != id {
 		c.JSON(http.StatusConflict, models.Fail("Another admin already uses this PIN", "pin_in_use"))
 		return
@@ -362,8 +389,13 @@ func (h *UsersHandler) SetPin(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.Fail("Could not set the PIN", "internal_error"))
 		return
 	}
-	if _, err := h.db.Exec(`UPDATE users SET pin_hash = $1, updated_at = now() WHERE id = $2`, string(hash), id); err != nil {
+	if _, err := tx.Exec(`UPDATE users SET pin_hash = $1, updated_at = now() WHERE id = $2`, string(hash), id); err != nil {
 		log.Printf("users pin: update: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not set the PIN", "internal_error"))
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("users pin: commit: %v", err)
 		c.JSON(http.StatusInternalServerError, models.Fail("Could not set the PIN", "internal_error"))
 		return
 	}
