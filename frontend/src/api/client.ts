@@ -1,5 +1,8 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
-import type { APIResponse, LoginRequest, LoginResponse, User } from '@/types'
+import type {
+  APIResponse, AppSettings, CreateUserRequest, LoginRequest, LoginResponse, PaginatedResponse,
+  SettingsPatch, UpdateUserRequest, User, UserListParams,
+} from '@/types'
 
 export const TOKEN_KEY = 'elevon_token'
 export const USER_KEY = 'elevon_user'
@@ -73,12 +76,64 @@ class APIClient {
     }
   }
 
+  private async requestPaginated<T>(config: AxiosRequestConfig): Promise<PaginatedResponse<T>> {
+    try {
+      const res = await this.client.request<PaginatedResponse<T>>(config)
+      return res.data
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data as APIResponse | undefined
+        const e = new ApiClientError(data?.message || err.message || 'Request failed')
+        e.code = data?.error
+        e.status = err.response?.status
+        e.isNetworkError = !err.response
+        throw e
+      }
+      throw err
+    }
+  }
+
   // ── Auth ──────────────────────────────────────────────────────────────
   login(req: LoginRequest) {
     return this.request<LoginResponse>({ method: 'POST', url: '/auth/login', data: req })
   }
   getCurrentUser() {
     return this.request<User>({ method: 'GET', url: '/auth/me' })
+  }
+  forgotPassword(email: string) {
+    return this.request<never>({ method: 'POST', url: '/auth/forgot-password', data: { email } })
+  }
+  resetPassword(token: string, newPassword: string) {
+    return this.request<never>({ method: 'POST', url: '/auth/reset-password', data: { token, new_password: newPassword } })
+  }
+  changePassword(currentPassword: string, newPassword: string) {
+    return this.request<never>({
+      method: 'POST',
+      url: '/auth/change-password',
+      data: { current_password: currentPassword, new_password: newPassword },
+    })
+  }
+
+  // ── Settings ──────────────────────────────────────────────────────────
+  getSettings() {
+    return this.request<AppSettings>({ method: 'GET', url: '/settings' })
+  }
+  updateSettings(patch: SettingsPatch) {
+    return this.request<AppSettings>({ method: 'PUT', url: '/admin/settings', data: patch })
+  }
+
+  // ── Users (admin) ─────────────────────────────────────────────────────
+  getUsers(params: UserListParams = {}) {
+    return this.requestPaginated<User>({ method: 'GET', url: '/admin/users', params })
+  }
+  createUser(req: CreateUserRequest) {
+    return this.request<User>({ method: 'POST', url: '/admin/users', data: req })
+  }
+  updateUser(id: string, req: UpdateUserRequest) {
+    return this.request<User>({ method: 'PUT', url: `/admin/users/${id}`, data: req })
+  }
+  setUserPin(id: string, pin: string) {
+    return this.request<never>({ method: 'PUT', url: `/admin/users/${id}/pin`, data: { pin } })
   }
 
   // ── Local session ─────────────────────────────────────────────────────
