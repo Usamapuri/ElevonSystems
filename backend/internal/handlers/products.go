@@ -402,7 +402,7 @@ func (h *ProductsHandler) RateHistory(c *gin.Context) {
 	args = append(args, limit)
 	rows, err := h.db.Query(`
 		SELECT h.id, h.product_id, p.name, h.old_rate::float8, h.new_rate::float8,
-		       NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), h.changed_at, h.note
+		       COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), u.username), h.changed_at, h.note
 		FROM product_rate_history h
 		JOIN products p ON p.id = h.product_id
 		LEFT JOIN users u ON u.id = h.changed_by

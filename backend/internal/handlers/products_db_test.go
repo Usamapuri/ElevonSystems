@@ -8,6 +8,7 @@ import (
 	"elevon-backend/internal/testdb"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func productsRouter(h *ProductsHandler, a actor) *gin.Engine {
@@ -201,5 +202,36 @@ func TestProducts_RateHistoryReturnsActorName(t *testing.T) {
 	dataAs(t, decodeEnvelope(t, w), &entries)
 	if len(entries) != 1 {
 		t.Fatalf("limit=1: %+v", entries)
+	}
+}
+
+// M5: a user with no first/last name on file (only a username) must still be
+// named in the rate history, not show up as a blank actor.
+func TestProducts_RateHistoryFallsBackToUsername(t *testing.T) {
+	db := testdb.Fresh(t)
+	var blankID uuid.UUID
+	if err := db.QueryRow(`INSERT INTO users (username, password_hash, first_name, last_name, role)
+		VALUES ('nameless', 'x', '', '', 'admin') RETURNING id`).Scan(&blankID); err != nil {
+		t.Fatalf("seed nameless user: %v", err)
+	}
+	r := productsRouter(NewProductsHandler(db), actor{id: blankID, username: "nameless", role: "admin"})
+
+	var a models.Product
+	dataAs(t, decodeEnvelope(t, doJSON(r, http.MethodPost, "/admin/products", models.CreateProductRequest{Name: "A", Rate: 100})), &a)
+	if w := doJSON(r, http.MethodPut, "/admin/rates", models.UpdateRatesRequest{
+		Changes: []models.RateChange{{ProductID: a.ID, Rate: 150}}, Note: "bump",
+	}); w.Code != http.StatusOK {
+		t.Fatalf("rate change: %d %s", w.Code, w.Body.String())
+	}
+
+	w := doJSON(r, http.MethodGet, "/admin/rates/history?product_id="+a.ID.String(), nil)
+	var entries []models.RateHistoryEntry
+	dataAs(t, decodeEnvelope(t, w), &entries)
+	if len(entries) != 2 {
+		t.Fatalf("history entries: %+v", entries)
+	}
+	latest := entries[0]
+	if latest.ChangedByName == nil || *latest.ChangedByName != "nameless" {
+		t.Fatalf("blank name must fall back to username: %+v", latest)
 	}
 }

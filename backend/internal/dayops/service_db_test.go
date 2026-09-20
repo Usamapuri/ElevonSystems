@@ -705,10 +705,16 @@ func TestZData_ClosedDaySealsAgainstALaterVoid(t *testing.T) {
 	date := day.DateKey()
 	seedInvoice(t, db, day.ID, date, "20260920-001", "cash", "completed", 1000, 0, 0, 1000, nil)
 	seedInvoice(t, db, day.ID, date, "20260920-002", "cash", "completed", 500, 0, 0, 500, nil)
+	if _, err := AddMovement(db, actor, day.ID, "paid_in", 300, "change float top-up", nil); err != nil {
+		t.Fatalf("paid_in: %v", err)
+	}
+	if _, err := AddMovement(db, actor, day.ID, "paid_out", 100, "cylinder delivery fuel", nil); err != nil {
+		t.Fatalf("paid_out: %v", err)
+	}
 
-	// 1000 opening + 1000 + 500 cash sales = 2500, counted exactly — no
-	// variance note needed.
-	if _, err := Close(db, actor, day.ID, Counted{Cash: 2500, Card: 0, Online: 0}, nil, 100); err != nil {
+	// 1000 opening + 1000 + 500 cash sales + 300 in − 100 out = 2700, counted
+	// exactly — no variance note needed.
+	if _, err := Close(db, actor, day.ID, Counted{Cash: 2700, Card: 0, Online: 0}, nil, 100); err != nil {
 		t.Fatalf("close: %v", err)
 	}
 
@@ -719,9 +725,14 @@ func TestZData_ClosedDaySealsAgainstALaterVoid(t *testing.T) {
 	if before.Day.Status != StatusClosed {
 		t.Fatalf("day should be closed: %+v", before.Day)
 	}
-	if !near(before.Expected.Cash, 2500) || !near(before.Expected.NetSales, 1500) ||
+	if !near(before.Expected.Cash, 2700) || !near(before.Expected.NetSales, 1500) ||
 		before.Expected.InvoiceCount != 2 || before.Expected.VoidCount != 0 {
 		t.Fatalf("sealed z before the void: %+v", before.Expected)
+	}
+	// I1/I2: a closed day's Z-report must carry the real paid-in/out, not the
+	// zero sealedExpected used to leave them at.
+	if !near(before.Expected.PaidIn, 300) || !near(before.Expected.PaidOut, 100) {
+		t.Fatalf("sealed z paid-in/out: %+v", before.Expected)
 	}
 
 	// Void one of the two invoices directly in SQL, as an operator correcting
@@ -743,6 +754,11 @@ func TestZData_ClosedDaySealsAgainstALaterVoid(t *testing.T) {
 		after.Expected.InvoiceCount != before.Expected.InvoiceCount || after.Expected.VoidCount != before.Expected.VoidCount {
 		t.Fatalf("a void after close changed the sealed z report: before %+v, after %+v", before.Expected, after.Expected)
 	}
+	// Movements never change after the seal, so paid-in/out must read the
+	// same before and after the void too.
+	if !near(after.Expected.PaidIn, before.Expected.PaidIn) || !near(after.Expected.PaidOut, before.Expected.PaidOut) {
+		t.Fatalf("paid-in/out must not move after the seal: before %+v, after %+v", before.Expected, after.Expected)
+	}
 
 	// A live recomputation, by contrast, does see the void — proving the
 	// difference above is ZData sealing the figures, not the void somehow
@@ -751,9 +767,9 @@ func TestZData_ClosedDaySealsAgainstALaterVoid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 1000 opening + the one surviving 1000 cash sale = 2000, down from the
-	// sealed 2500.
-	if !near(live.Cash, 2000) || live.InvoiceCount != 1 || live.VoidCount != 1 {
+	// 1000 opening + the one surviving 1000 cash sale + 300 in − 100 out =
+	// 2200, down from the sealed 2700.
+	if !near(live.Cash, 2200) || live.InvoiceCount != 1 || live.VoidCount != 1 {
 		t.Fatalf("live recomputation should see the void: %+v", live)
 	}
 }

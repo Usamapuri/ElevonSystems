@@ -215,9 +215,16 @@ type Movement struct {
 }
 
 // ZReport is everything the printable Z slip needs in one round-trip. Counted
-// amounts and variances live on Day (they are nil until the day is closed);
-// Expected is recomputed live, so for a sealed day the two agree and any
-// divergence means rows changed after the seal.
+// amounts and variances live on Day (they are nil until the day is closed).
+// For an open or reopened day, Expected is the live ComputeExpected, so it
+// moves with every new sale, receipt or movement. For a closed day, Expected
+// is sealed: the tender totals and sales summary are exactly what Close (or
+// ForceClose) wrote onto the row at seal time, not a fresh recomputation — a
+// void entered afterwards must not silently restate a document that already
+// went out (see sealedExpected). PaidIn/PaidOut are the one figure that was
+// never separately sealed onto the row, so they are read from
+// cash_drawer_movements even for a closed day; that is safe because
+// movements for a sealed day are never edited or deleted.
 type ZReport struct {
 	GeneratedAt time.Time  `json:"generated_at"`
 	Day         Day        `json:"day"`
@@ -422,7 +429,10 @@ func ZData(q Querier, dayID uuid.UUID) (ZReport, error) {
 	}
 	var expected Expected
 	if day.Status == StatusClosed {
-		expected = sealedExpected(day)
+		expected, err = sealedExpected(q, day)
+		if err != nil {
+			return ZReport{}, err
+		}
 	} else {
 		expected, err = ComputeExpected(q, dayID)
 		if err != nil {
@@ -445,12 +455,28 @@ func ZData(q Querier, dayID uuid.UUID) (ZReport, error) {
 // a nil here would otherwise panic a printed report instead of degrading to a
 // visibly wrong zero.
 //
-// The per-tender breakdown that ComputeExpected also returns (CashSales vs.
-// CashReceipts, PaidIn/PaidOut) was never separately sealed — only the
+// The rest of the per-tender breakdown that ComputeExpected also returns
+// (CashSales vs. CashReceipts) was never separately sealed — only the
 // combined expected_cash/card/online were — so those fields are left at zero
 // on a closed day's Expected rather than recomputed live, which would mix a
 // sealed total with an unsealed breakdown of it.
-func sealedExpected(day Day) Expected {
+//
+// PaidIn/PaidOut are the exception: they are read live from
+// cash_drawer_movements for this day even though the day is sealed. That is
+// safe specifically because movements are never edited or deleted once
+// written — AddMovement only ever inserts, and there is no update/delete
+// path for a movement row — so summing them for a closed day returns the
+// same figure at any later read, unlike invoices, which a void can still
+// change after the seal.
+func sealedExpected(q Querier, day Day) (Expected, error) {
+	var paidIn, paidOut float64
+	err := q.QueryRow(`
+		SELECT COALESCE(SUM(amount) FILTER (WHERE movement_type = 'paid_in'), 0)::float8,
+		       COALESCE(SUM(amount) FILTER (WHERE movement_type = 'paid_out'), 0)::float8
+		FROM cash_drawer_movements WHERE business_day_id = $1`, day.ID).Scan(&paidIn, &paidOut)
+	if err != nil {
+		return Expected{}, err
+	}
 	return Expected{
 		OpeningCash:       day.OpeningCash,
 		Cash:              floatOrZero(day.ExpectedCash),
@@ -458,13 +484,15 @@ func sealedExpected(day Day) Expected {
 		Online:            floatOrZero(day.ExpectedOnline),
 		OnAccountSales:    floatOrZero(day.OnAccountSales),
 		ReceiptsCollected: floatOrZero(day.ReceiptsCollected),
+		PaidIn:            round2(paidIn),
+		PaidOut:           round2(paidOut),
 		GrossSales:        floatOrZero(day.GrossSales),
 		Discounts:         floatOrZero(day.Discounts),
 		TaxCollected:      floatOrZero(day.TaxCollected),
 		NetSales:          floatOrZero(day.NetSales),
 		InvoiceCount:      intOrZero(day.InvoiceCount),
 		VoidCount:         intOrZero(day.VoidCount),
-	}
+	}, nil
 }
 
 func floatOrZero(v *float64) float64 {

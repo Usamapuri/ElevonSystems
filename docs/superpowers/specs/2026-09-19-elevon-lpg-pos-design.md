@@ -286,7 +286,7 @@ Port `middleware/auth.go` (HS256 JWT, 24 h, `Issuer`, `IssuedAt`, `X-POS-JWT` fa
 line_total_i    = round2(qty_i × rate_i)                          -- qty to 3 dp first
 subtotal        = Σ line_total_i
 discount        = percent ? round2(subtotal × pct/100) : min(amount, subtotal)
-line_discount_i = pro-rata share of discount, last line absorbs the paisa remainder
+line_discount_i = largest-remainder (Hamilton) share of discount in paisa, each line capped at its own line_total
 line_taxable_i  = line_total_i − line_discount_i
 line_tax_i      = round2(line_taxable_i × tax_rate(tender))
 tax             = Σ line_tax_i

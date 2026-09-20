@@ -467,7 +467,7 @@ func failPricing(c *gin.Context, err error) {
 	case errors.Is(err, pricing.ErrInvalidRate):
 		// A product priced at 0 or worse: a data problem, not a client one,
 		// but the sale cannot proceed and the cashier has to be told why.
-		c.JSON(http.StatusBadRequest, models.Fail("A product on this sale has no usable rate — set its rate first", "invalid_request"))
+		c.JSON(http.StatusBadRequest, models.Fail("A product on this sale has no usable rate — set its rate first", "invalid_rate"))
 	case errors.Is(err, pricing.ErrInvalidTaxRate):
 		log.Printf("invoice create: pricing rejected the configured tax rate — check settings.tax_rate_*/further_tax_rate: %v", err)
 		c.JSON(http.StatusInternalServerError, models.Fail("The configured tax rate is not usable — check Settings", "internal_error"))

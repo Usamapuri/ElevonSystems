@@ -95,7 +95,7 @@ export function TenderDialog({
     if (blocked || pending) return
     onCharge({
       payment_method: tender,
-      payment_sub_method: tender === 'online' && subMethod ? subMethod : undefined,
+      payment_sub_method: needsReference && subMethod ? subMethod : undefined,
       payment_reference: needsReference && reference.trim() ? reference.trim() : undefined,
       notes: notes.trim() || undefined,
       document,
@@ -132,7 +132,7 @@ export function TenderDialog({
           ))}
         </div>
 
-        {tender === 'online' && (
+        {needsReference && (
           <div className="space-y-1.5">
             <Label>Channel</Label>
             <Select value={subMethod} onValueChange={setSubMethod}>
