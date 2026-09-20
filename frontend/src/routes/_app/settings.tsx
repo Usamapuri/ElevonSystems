@@ -6,6 +6,7 @@ import { CreditForm } from '@/components/settings/CreditForm'
 import { DayCloseForm } from '@/components/settings/DayCloseForm'
 import { ReceiptForm } from '@/components/settings/ReceiptForm'
 import { TaxForm } from '@/components/settings/TaxForm'
+import { UsersPanel } from '@/components/settings/UsersPanel'
 import { useSettings } from '@/components/settings/useSettings'
 
 export const Route = createFileRoute('/_app/settings')({ component: SettingsPage })
@@ -45,7 +46,7 @@ function SettingsPage() {
           </>
         )}
         <TabsContent value="users">
-          <p className="text-sm text-muted-foreground">Users arrive in the next task.</p>
+          <UsersPanel />
         </TabsContent>
       </Tabs>
     </div>
