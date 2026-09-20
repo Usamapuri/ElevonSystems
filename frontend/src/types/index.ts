@@ -447,3 +447,65 @@ export interface VoidInvoiceRequest {
 export interface RecentInvoiceParams {
   limit?: number
 }
+
+// ── Day close writes and the invoice browser's filters ────────────────────
+
+/** POST /day/open. `opening_cash` is required and is not defaulted: zero is
+ * a real answer a person typed, an omitted field is not, and the server
+ * refuses the second (backend models.OpenDayRequest). */
+export interface OpenDayRequest {
+  opening_cash: number
+  notes?: string
+}
+
+/** POST /day/movements — one paid-in or paid-out against the open day. */
+export interface CashMovementRequest {
+  type: 'paid_in' | 'paid_out'
+  amount: number
+  reason: string
+  notes?: string
+}
+
+/** POST /day/close. All three counts are required — enter 0 for a tender
+ * that took nothing, so a null counted column can only ever mean
+ * "force-closed, nobody counted". 400 `variance_note_required` when a
+ * tender is off by more than `day_close_variance_threshold` and
+ * `closing_notes` is blank. */
+export interface CloseDayRequest {
+  counted_cash: number
+  counted_card: number
+  counted_online: number
+  closing_notes?: string
+}
+
+/** POST /admin/day/reopen. Without `day_id` it means today. */
+export interface ReopenDayRequest {
+  pin: string
+  day_id?: string
+}
+
+/** POST /admin/day/force-close — seals a day nobody counted. Without
+ * `day_id` it means whichever day holds the open slot. */
+export interface ForceCloseDayRequest {
+  pin: string
+  reason: string
+  day_id?: string
+}
+
+export interface DayHistoryParams {
+  limit?: number
+}
+
+/** GET /invoices. `from`/`to` are bare `YYYY-MM-DD` business dates — the
+ * server filters on `business_date`, never on `created_at`. */
+export interface InvoiceListParams {
+  from?: string
+  to?: string
+  search?: string
+  customer_id?: string
+  cashier_id?: string
+  payment_method?: PaymentMethod
+  status?: InvoiceStatus
+  page?: number
+  per_page?: number
+}

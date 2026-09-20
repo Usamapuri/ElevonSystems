@@ -1,10 +1,11 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type {
-  APIResponse, AppSettings, CreateCustomerRequest, CreateInvoiceRequest, CreateProductRequest, CreateUserRequest,
-  Customer, CustomerListParams, DayCurrent, Invoice, LoginRequest, LoginResponse, PaginatedResponse, Product,
-  ProductListParams, RateHistoryEntry, RateHistoryParams, RecentInvoiceParams, SettingsPatch, StatementParams,
-  StatementRow, UpdateCustomerRequest, UpdateProductRequest, UpdateRatesRequest, UpdateRatesResponse,
-  UpdateUserRequest, User, UserListParams, VoidInvoiceRequest, ZReport,
+  APIResponse, AppSettings, BusinessDay, CashMovement, CashMovementRequest, CloseDayRequest, CreateCustomerRequest,
+  CreateInvoiceRequest, CreateProductRequest, CreateUserRequest, Customer, CustomerListParams, DayCurrent,
+  DayHistoryParams, ForceCloseDayRequest, Invoice, InvoiceListParams, LoginRequest, LoginResponse, OpenDayRequest,
+  PaginatedResponse, Product, ProductListParams, RateHistoryEntry, RateHistoryParams, RecentInvoiceParams,
+  ReopenDayRequest, SettingsPatch, StatementParams, StatementRow, UpdateCustomerRequest, UpdateProductRequest,
+  UpdateRatesRequest, UpdateRatesResponse, UpdateUserRequest, User, UserListParams, VoidInvoiceRequest, ZReport,
 } from '@/types'
 
 export const TOKEN_KEY = 'elevon_token'
@@ -182,6 +183,30 @@ class APIClient {
   getZReport(dayId: string) {
     return this.request<ZReport>({ method: 'GET', url: `/day/${dayId}/z` })
   }
+  /** Declares the cash in the drawer and starts today. 409 `day_already_open`
+   * or `previous_day_open` when a day is already holding the slot. */
+  openDay(req: OpenDayRequest) {
+    return this.request<BusinessDay>({ method: 'POST', url: '/day/open', data: req })
+  }
+  addMovement(req: CashMovementRequest) {
+    return this.request<CashMovement>({ method: 'POST', url: '/day/movements', data: req })
+  }
+  /** Counts and seals the open day. 400 `variance_note_required`, 409
+   * `day_not_open` / `day_closed`. */
+  closeDay(req: CloseDayRequest) {
+    return this.request<BusinessDay>({ method: 'POST', url: '/day/close', data: req })
+  }
+  /** Admin PIN paths. Both omit `day_id` to mean "the obvious day": today
+   * for a reopen, whichever day holds the open slot for a force close. */
+  reopenDay(req: ReopenDayRequest) {
+    return this.request<BusinessDay>({ method: 'POST', url: '/admin/day/reopen', data: req })
+  }
+  forceCloseDay(req: ForceCloseDayRequest) {
+    return this.request<BusinessDay>({ method: 'POST', url: '/admin/day/force-close', data: req })
+  }
+  getDayHistory(params: DayHistoryParams = {}) {
+    return this.request<BusinessDay[]>({ method: 'GET', url: '/admin/day/history', params })
+  }
 
   // ── Invoices (the money core; voids carry an admin PIN in the body) ────
   createInvoice(req: CreateInvoiceRequest) {
@@ -189,6 +214,11 @@ class APIClient {
   }
   getRecentInvoices(params: RecentInvoiceParams = {}) {
     return this.request<Invoice[]>({ method: 'GET', url: '/invoices/recent', params })
+  }
+  /** The invoice browser. Listings carry no `lines` — a reprint re-reads the
+   * invoice with getInvoice first. */
+  getInvoices(params: InvoiceListParams = {}) {
+    return this.requestPaginated<Invoice>({ method: 'GET', url: '/invoices', params })
   }
   getInvoice(id: string) {
     return this.request<Invoice>({ method: 'GET', url: `/invoices/${id}` })
