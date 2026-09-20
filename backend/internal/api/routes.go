@@ -32,5 +32,9 @@ func SetupRoutes(r *gin.RouterGroup, db *sql.DB, auth gin.HandlerFunc) {
 
 	// Admin only.
 	admin := r.Group("/admin", auth, middleware.RequireRoles([]string{util.RoleAdmin}))
-	_ = admin
+	usersH := handlers.NewUsersHandler(db)
+	admin.GET("/users", usersH.List)
+	admin.POST("/users", usersH.Create)
+	admin.PUT("/users/:id", usersH.Update)
+	admin.PUT("/users/:id/pin", usersH.SetPin)
 }

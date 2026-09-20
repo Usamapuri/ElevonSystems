@@ -88,3 +88,6 @@ func dataAs(t *testing.T, env models.APIResponse, out any) {
 		t.Fatalf("data: %v", err)
 	}
 }
+
+// jsonUnmarshal decodes a PaginatedResponse body (Data stays interface{}).
+func jsonUnmarshal(b []byte, out any) error { return json.Unmarshal(b, out) }

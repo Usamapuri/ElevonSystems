@@ -49,3 +49,29 @@ type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
 }
+
+// CreateUserRequest — admin creates a staff account. Email is optional.
+type CreateUserRequest struct {
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Role      string `json:"role"`
+}
+
+// UpdateUserRequest — every field optional; nil means "leave as is".
+// Username is immutable. Password sets a new one (admin reset).
+type UpdateUserRequest struct {
+	Email     *string `json:"email"`
+	Password  *string `json:"password"`
+	FirstName *string `json:"first_name"`
+	LastName  *string `json:"last_name"`
+	Role      *string `json:"role"`
+	IsActive  *bool   `json:"is_active"`
+}
+
+// SetPinRequest sets an admin's 4-digit elevation PIN.
+type SetPinRequest struct {
+	Pin string `json:"pin"`
+}
