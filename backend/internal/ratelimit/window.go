@@ -19,11 +19,16 @@ type Window struct {
 	max     int
 	window  time.Duration
 	now     func() time.Time // swapped in tests
+	// sweepAt bounds map growth: a key touched once (an attacker rotating
+	// usernames or source IPs) is only pruned when looked up again, so
+	// without a periodic full sweep the map grows without bound under
+	// hostile traffic.
+	sweepAt int
 }
 
 // New builds a limiter allowing max events per key per window.
 func New(max int, window time.Duration) *Window {
-	return &Window{buckets: map[string][]time.Time{}, max: max, window: window, now: time.Now}
+	return &Window{buckets: map[string][]time.Time{}, max: max, window: window, now: time.Now, sweepAt: 10_000}
 }
 
 // prune drops hits older than the window. Caller holds mu.
@@ -43,11 +48,32 @@ func (w *Window) prune(key string, now time.Time) []time.Time {
 	return kept
 }
 
+// sweepAll prunes every key, deleting those left empty. Caller holds mu.
+func (w *Window) sweepAll(now time.Time) {
+	cutoff := now.Add(-w.window)
+	for key, hits := range w.buckets {
+		kept := hits[:0]
+		for _, t := range hits {
+			if t.After(cutoff) {
+				kept = append(kept, t)
+			}
+		}
+		if len(kept) == 0 {
+			delete(w.buckets, key)
+		} else {
+			w.buckets[key] = kept
+		}
+	}
+}
+
 // Allow reports whether key is under the limit and records the hit if so.
 func (w *Window) Allow(key string) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	now := w.now()
+	if len(w.buckets) >= w.sweepAt {
+		w.sweepAll(now)
+	}
 	if len(w.prune(key, now)) >= w.max {
 		return false
 	}
@@ -67,6 +93,9 @@ func (w *Window) Record(key string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	now := w.now()
+	if len(w.buckets) >= w.sweepAt {
+		w.sweepAll(now)
+	}
 	w.prune(key, now)
 	w.buckets[key] = append(w.buckets[key], now)
 }

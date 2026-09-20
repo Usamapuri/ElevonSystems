@@ -39,3 +39,28 @@ func TestWindow_CheckNeverConsumes_RecordDoes(t *testing.T) {
 		t.Fatal("two recorded failures reach max=2; Check must refuse")
 	}
 }
+
+func TestWindow_SweepsStaleKeysWhenMapIsLarge(t *testing.T) {
+	w := New(1, time.Minute)
+	w.sweepAt = 3
+	clock := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	w.now = func() time.Time { return clock }
+	for _, k := range []string{"a", "b", "c"} {
+		if !w.Allow(k) {
+			t.Fatalf("Allow(%q) must succeed", k)
+		}
+	}
+	if !w.Allow("x") {
+		t.Fatal(`Allow("x") must succeed`)
+	}
+	if len(w.buckets) != 4 {
+		t.Fatalf("sweep must not evict still-live keys: got %d buckets, want 4", len(w.buckets))
+	}
+	clock = clock.Add(61 * time.Second)
+	if !w.Allow("fresh") {
+		t.Fatal(`Allow("fresh") must succeed`)
+	}
+	if len(w.buckets) != 1 {
+		t.Fatalf("sweep must evict stale keys once map is large: got %d buckets, want 1", len(w.buckets))
+	}
+}
