@@ -1,7 +1,8 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type {
-  APIResponse, AppSettings, CreateProductRequest, CreateUserRequest, LoginRequest, LoginResponse,
-  PaginatedResponse, Product, ProductListParams, RateHistoryEntry, RateHistoryParams, SettingsPatch,
+  APIResponse, AppSettings, CreateCustomerRequest, CreateProductRequest, CreateUserRequest, Customer,
+  CustomerListParams, LoginRequest, LoginResponse, PaginatedResponse, Product, ProductListParams,
+  RateHistoryEntry, RateHistoryParams, SettingsPatch, StatementParams, StatementRow, UpdateCustomerRequest,
   UpdateProductRequest, UpdateRatesRequest, UpdateRatesResponse, UpdateUserRequest, User, UserListParams,
 } from '@/types'
 
@@ -152,6 +153,23 @@ class APIClient {
   }
   getRateHistory(params: RateHistoryParams = {}) {
     return this.request<RateHistoryEntry[]>({ method: 'GET', url: '/admin/rates/history', params })
+  }
+
+  // ── Customers & ledger (reads for any staff, writes admin only) ────────
+  getCustomers(params: CustomerListParams = {}) {
+    return this.requestPaginated<Customer>({ method: 'GET', url: '/customers', params })
+  }
+  getCustomer(id: string) {
+    return this.request<Customer>({ method: 'GET', url: `/customers/${id}` })
+  }
+  getCustomerStatement(id: string, params: StatementParams = {}) {
+    return this.request<StatementRow[]>({ method: 'GET', url: `/customers/${id}/statement`, params })
+  }
+  createCustomer(req: CreateCustomerRequest) {
+    return this.request<Customer>({ method: 'POST', url: '/admin/customers', data: req })
+  }
+  updateCustomer(id: string, req: UpdateCustomerRequest) {
+    return this.request<Customer>({ method: 'PUT', url: `/admin/customers/${id}`, data: req })
   }
 
   // ── Local session ─────────────────────────────────────────────────────

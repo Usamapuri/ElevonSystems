@@ -165,3 +165,82 @@ export interface RateHistoryParams {
   product_id?: string
   limit?: number
 }
+
+// ── Customers & ledger ────────────────────────────────────────────────────
+
+export type BuyerRegistrationType = 'Registered' | 'Unregistered'
+
+/** balance = Σ debit − Σ credit; positive means the customer owes money. */
+export interface Customer {
+  id: string
+  name: string
+  phone: string | null
+  ntn: string | null
+  cnic: string | null
+  buyer_registration_type: BuyerRegistrationType
+  address: string | null
+  province: string | null
+  credit_allowed: boolean
+  credit_limit: number | null
+  is_active: boolean
+  notes: string | null
+  balance: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CustomerListParams {
+  page?: number
+  per_page?: number
+  search?: string
+  active?: boolean
+}
+
+/** A blank buyer_registration_type defaults to "Unregistered" server-side. */
+export interface CreateCustomerRequest {
+  name: string
+  phone?: string
+  ntn?: string
+  cnic?: string
+  buyer_registration_type?: BuyerRegistrationType
+  address?: string
+  province?: string
+  credit_allowed?: boolean
+  credit_limit?: number
+  notes?: string
+}
+
+/** Every field optional; omit to leave unchanged. There is no way to null
+ * out an existing credit_limit through this endpoint — set it to 0. */
+export interface UpdateCustomerRequest {
+  name?: string
+  phone?: string
+  ntn?: string
+  cnic?: string
+  buyer_registration_type?: BuyerRegistrationType
+  address?: string
+  province?: string
+  credit_allowed?: boolean
+  credit_limit?: number
+  is_active?: boolean
+  notes?: string
+}
+
+export type LedgerEntryType = 'invoice' | 'invoice_void' | 'receipt' | 'receipt_void' | 'adjustment'
+
+export interface StatementRow {
+  id: string
+  business_date: string
+  entry_type: LedgerEntryType
+  invoice_number: string | null
+  receipt_number: string | null
+  debit: number
+  credit: number
+  running_balance: number
+  note: string | null
+}
+
+export interface StatementParams {
+  from?: string
+  to?: string
+}
