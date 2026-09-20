@@ -2,25 +2,57 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"elevon-backend/internal/middleware"
 	"elevon-backend/internal/models"
+	"elevon-backend/internal/ratelimit"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// AuthHandler serves login and the current-user lookup.
-type AuthHandler struct{ db *sql.DB }
+// ResetMailer delivers the password-reset link. Nil is allowed: the URL is
+// then only logged (dev, tests).
+type ResetMailer interface {
+	SendPasswordReset(ctx context.Context, toEmail, firstName, resetURL, businessName string) error
+}
 
-// NewAuthHandler builds an AuthHandler.
-func NewAuthHandler(db *sql.DB) *AuthHandler { return &AuthHandler{db: db} }
+const (
+	// /auth/login throttle keyed by (identifier, client IP). Only failures
+	// consume the bucket (spec §6.1: 10 failures per 15 min).
+	loginMaxFailures = 10
+	loginWindow      = 15 * time.Minute
+	// /auth/forgot-password throttle: every request counts, checked before
+	// the DB lookup so timing cannot reveal which emails exist.
+	forgotMaxRequests = 5
+	forgotWindow      = 5 * time.Minute
+)
+
+// AuthHandler serves login, the current-user lookup and the password flows.
+type AuthHandler struct {
+	db       *sql.DB
+	mailer   ResetMailer
+	loginRL  *ratelimit.Window
+	forgotRL *ratelimit.Window
+}
+
+// NewAuthHandler builds an AuthHandler. mailer may be nil.
+func NewAuthHandler(db *sql.DB, mailer ResetMailer) *AuthHandler {
+	return &AuthHandler{
+		db:       db,
+		mailer:   mailer,
+		loginRL:  ratelimit.New(loginMaxFailures, loginWindow),
+		forgotRL: ratelimit.New(forgotMaxRequests, forgotWindow),
+	}
+}
 
 const userColumns = `id, username, email, first_name, last_name, role, is_active,
 	(pin_hash IS NOT NULL) AS has_pin, last_login_at, created_at, updated_at`
@@ -32,7 +64,9 @@ func scanUser(row interface{ Scan(dest ...interface{}) error }) (models.User, er
 	return u, err
 }
 
-// Login accepts a username or email plus password and returns a JWT.
+// Login accepts a username or email plus password and returns a JWT. Failed
+// attempts are throttled per identifier+IP; the same key is used for
+// "no such user" and "wrong password" so the limiter is not an oracle.
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -44,6 +78,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.Fail("Username and password are required", "missing_credentials"))
 		return
 	}
+	rlKey := ident + "|" + c.ClientIP()
+	if !h.loginRL.Check(rlKey) {
+		c.JSON(http.StatusTooManyRequests, models.Fail("Too many failed sign-in attempts. Wait a few minutes and try again.", "rate_limited"))
+		return
+	}
 	var hash string
 	row := h.db.QueryRow(`SELECT `+userColumns+`, password_hash FROM users
 		WHERE (lower(username) = $1 OR lower(email) = $1) AND is_active = true`, ident)
@@ -51,6 +90,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.FirstName, &u.LastName, &u.Role, &u.IsActive,
 		&u.HasPin, &u.LastLoginAt, &u.CreatedAt, &u.UpdatedAt, &hash)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil) {
+		h.loginRL.Record(rlKey)
 		c.JSON(http.StatusUnauthorized, models.Fail("Invalid username or password", "invalid_credentials"))
 		return
 	}

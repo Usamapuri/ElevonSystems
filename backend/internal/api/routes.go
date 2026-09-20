@@ -15,7 +15,7 @@ import (
 
 // SetupRoutes mounts the API under r (normally /api/v1).
 func SetupRoutes(r *gin.RouterGroup, db *sql.DB, auth gin.HandlerFunc) {
-	authH := handlers.NewAuthHandler(db)
+	authH := handlers.NewAuthHandler(db, nil)
 
 	public := r.Group("/auth")
 	public.POST("/login", authH.Login)
