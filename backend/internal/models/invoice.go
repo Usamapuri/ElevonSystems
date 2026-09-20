@@ -116,7 +116,9 @@ type InvoiceLineRequest struct {
 // CreateInvoiceRequest is POST /invoices: create and settle in one call.
 //
 // ClientOpID is the till's idempotency key: a repeat POST with the same UUID
-// returns the invoice already created rather than ringing the sale twice.
+// returns the invoice already created rather than ringing the sale twice. It
+// is mandatory — blank or not a UUID is refused with invalid_request, since
+// an optional idempotency key is no guarantee at all.
 // Pin is the admin credit-limit override and is never stored.
 type CreateInvoiceRequest struct {
 	ClientOpID       string               `json:"client_op_id"`

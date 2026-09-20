@@ -690,3 +690,70 @@ func TestGetAndExpected_UnknownDay(t *testing.T) {
 		t.Fatalf("z: %v", err)
 	}
 }
+
+// A void entered after close must never restate a Z-report that has already
+// been printed and handed to the owner: ZData for a closed day returns the
+// figures Close sealed onto the row, not a fresh ComputeExpected that would
+// see the void.
+func TestZData_ClosedDaySealsAgainstALaterVoid(t *testing.T) {
+	db := testdb.Fresh(t)
+	actor, _ := admin(t, db, "1234")
+	day, err := Open(db, actor, 1000, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	date := day.DateKey()
+	seedInvoice(t, db, day.ID, date, "20260920-001", "cash", "completed", 1000, 0, 0, 1000, nil)
+	seedInvoice(t, db, day.ID, date, "20260920-002", "cash", "completed", 500, 0, 0, 500, nil)
+
+	// 1000 opening + 1000 + 500 cash sales = 2500, counted exactly — no
+	// variance note needed.
+	if _, err := Close(db, actor, day.ID, Counted{Cash: 2500, Card: 0, Online: 0}, nil, 100); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	before, err := ZData(db, day.ID)
+	if err != nil {
+		t.Fatalf("z before void: %v", err)
+	}
+	if before.Day.Status != StatusClosed {
+		t.Fatalf("day should be closed: %+v", before.Day)
+	}
+	if !near(before.Expected.Cash, 2500) || !near(before.Expected.NetSales, 1500) ||
+		before.Expected.InvoiceCount != 2 || before.Expected.VoidCount != 0 {
+		t.Fatalf("sealed z before the void: %+v", before.Expected)
+	}
+
+	// Void one of the two invoices directly in SQL, as an operator correcting
+	// a mistake days after the day was sealed would.
+	var invID uuid.UUID
+	if err := db.QueryRow(`SELECT id FROM invoices WHERE invoice_number = $1`, "20260920-002").Scan(&invID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE invoices SET status = 'voided', voided_at = now() WHERE id = $1`, invID); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := ZData(db, day.ID)
+	if err != nil {
+		t.Fatalf("z after void: %v", err)
+	}
+	if !near(after.Expected.Cash, before.Expected.Cash) || !near(after.Expected.NetSales, before.Expected.NetSales) ||
+		!near(after.Expected.GrossSales, before.Expected.GrossSales) ||
+		after.Expected.InvoiceCount != before.Expected.InvoiceCount || after.Expected.VoidCount != before.Expected.VoidCount {
+		t.Fatalf("a void after close changed the sealed z report: before %+v, after %+v", before.Expected, after.Expected)
+	}
+
+	// A live recomputation, by contrast, does see the void — proving the
+	// difference above is ZData sealing the figures, not the void somehow
+	// failing to register anywhere.
+	live, err := ComputeExpected(db, day.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 1000 opening + the one surviving 1000 cash sale = 2000, down from the
+	// sealed 2500.
+	if !near(live.Cash, 2000) || live.InvoiceCount != 1 || live.VoidCount != 1 {
+		t.Fatalf("live recomputation should see the void: %+v", live)
+	}
+}

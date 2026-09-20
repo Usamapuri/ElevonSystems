@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"math"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -463,6 +465,60 @@ func TestInvoice_CreditWritesLedgerAndRespectsTheLimit(t *testing.T) {
 	}
 }
 
+// Two credit sales racing on one account must not both pass the credit-limit
+// check: lockCustomer takes FOR UPDATE for a credit tender, so the second
+// sale's balance read has to wait behind the first one's commit and sees its
+// debit. Without that lock both requests can read a zero balance, both price
+// under the limit and both succeed — over-extending the account.
+func TestInvoice_ConcurrentCreditSalesRespectLimit(t *testing.T) {
+	db := testdb.Fresh(t)
+	ownerID := seedUser(t, db, "owner", "admin", "owner-pass-1", nil)
+	openBusinessDay(t, db, ownerID, businessToday())
+	productID := seedProductRow(t, db, "LPG bulk", 1000) // 3 kg = Rs 3 000 a sale
+	setSetting(t, db, "credit_limit_enforced", "true")
+	limit := 5000.0
+	customerID := seedCustomerRow(t, db, "Ali Traders", true, &limit)
+	r := moneyRouter(db, actor{id: ownerID, username: "owner", role: "admin"})
+
+	const n = 2
+	results := make([]*httptest.ResponseRecorder, n)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			results[i] = doJSON(r, http.MethodPost, "/invoices", models.CreateInvoiceRequest{
+				ClientOpID:    uuid.NewString(),
+				CustomerID:    customerID.String(),
+				PaymentMethod: "credit",
+				Lines:         []models.InvoiceLineRequest{{ProductID: productID.String(), Quantity: 3, EnteredAs: "kg"}},
+			})
+		}(i)
+	}
+	close(start) // release both goroutines together
+	wg.Wait()
+
+	var created, exceeded int
+	for _, w := range results {
+		switch {
+		case w.Code == http.StatusCreated:
+			created++
+		case w.Code == http.StatusConflict && errCode(decodeEnvelope(t, w)) == "credit_limit_exceeded":
+			exceeded++
+		default:
+			t.Fatalf("unexpected response: %d %s", w.Code, w.Body.String())
+		}
+	}
+	if created != 1 || exceeded != 1 {
+		t.Fatalf("want exactly one 201 and one 409 credit_limit_exceeded, got %d created and %d exceeded", created, exceeded)
+	}
+	if b := mustBalance(t, db, customerID); !sameMoney(b, 3000) {
+		t.Fatalf("final balance = %v, want 3000 — only one of the two sales should have landed", b)
+	}
+}
+
 // A receipt is money arriving against the account: it takes the same day gate
 // as a sale, gets its own R- number and lowers the balance.
 func TestReceipt_LowersTheBalanceAndItsVoidRaisesItBack(t *testing.T) {
@@ -739,6 +795,7 @@ func TestInvoice_ValidationRefusals(t *testing.T) {
 		return []models.InvoiceLineRequest{{ProductID: id, Quantity: qty, EnteredAs: "kg"}}
 	}
 	pct := 150.0
+	pct3dp := 12.345
 	cases := []struct {
 		name string
 		body models.CreateInvoiceRequest
@@ -757,6 +814,7 @@ func TestInvoice_ValidationRefusals(t *testing.T) {
 		{"inactive product", models.CreateInvoiceRequest{PaymentMethod: "cash", Lines: line(inactiveID.String(), 1)}, "product_not_found", http.StatusNotFound},
 		{"negative discount", models.CreateInvoiceRequest{PaymentMethod: "cash", Lines: line(productID.String(), 1), DiscountAmount: -10}, "invalid_discount", http.StatusBadRequest},
 		{"discount over 100%", models.CreateInvoiceRequest{PaymentMethod: "cash", Lines: line(productID.String(), 1), DiscountPercent: &pct}, "invalid_discount", http.StatusBadRequest},
+		{"discount percent with 3 decimal places", models.CreateInvoiceRequest{PaymentMethod: "cash", Lines: line(productID.String(), 1), DiscountPercent: &pct3dp}, "invalid_discount", http.StatusBadRequest},
 		{"unknown customer", models.CreateInvoiceRequest{PaymentMethod: "cash", CustomerID: uuid.NewString(), Lines: line(productID.String(), 1)}, "customer_not_found", http.StatusNotFound},
 	}
 	for _, tc := range cases {
@@ -765,6 +823,40 @@ func TestInvoice_ValidationRefusals(t *testing.T) {
 		if w.Code != tc.want || errCode(decodeEnvelope(t, w)) != tc.code {
 			t.Errorf("%s: got %d %s, want %d %s", tc.name, w.Code, w.Body.String(), tc.want, tc.code)
 		}
+	}
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM invoices`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("refused requests wrote %d invoices", count)
+	}
+}
+
+// client_op_id is mandatory: a blank one or one that is not a UUID is refused
+// before the request is looked at any further, not silently accepted as "no
+// idempotency key given".
+func TestInvoice_ClientOpIDIsMandatory(t *testing.T) {
+	db := testdb.Fresh(t)
+	ownerID := seedUser(t, db, "owner", "admin", "owner-pass-1", nil)
+	openBusinessDay(t, db, ownerID, businessToday())
+	productID := seedProductRow(t, db, "LPG bulk", 250)
+	r := moneyRouter(db, actor{id: ownerID, username: "owner", role: "admin"})
+
+	body := models.CreateInvoiceRequest{
+		PaymentMethod: "cash",
+		Lines:         []models.InvoiceLineRequest{{ProductID: productID.String(), Quantity: 1, EnteredAs: "kg"}},
+	}
+	w := doJSON(r, http.MethodPost, "/invoices", body)
+	if w.Code != http.StatusBadRequest || errCode(decodeEnvelope(t, w)) != "invalid_request" {
+		t.Fatalf("blank client_op_id: %d %s", w.Code, w.Body.String())
+	}
+
+	body.ClientOpID = "not-a-uuid"
+	w = doJSON(r, http.MethodPost, "/invoices", body)
+	if w.Code != http.StatusBadRequest || errCode(decodeEnvelope(t, w)) != "invalid_request" {
+		t.Fatalf("malformed client_op_id: %d %s", w.Code, w.Body.String())
 	}
 
 	var count int

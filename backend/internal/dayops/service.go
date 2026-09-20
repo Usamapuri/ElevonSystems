@@ -409,21 +409,76 @@ func ComputeExpected(q Querier, dayID uuid.UUID) (Expected, error) {
 	return e, nil
 }
 
-// ZData assembles the Z-report payload for one day.
+// ZData assembles the Z-report payload for one day. A closed day returns the
+// figures Close (or ForceClose) sealed onto its business_days row rather than
+// a live recomputation: the Z slip is printed and handed to the owner at
+// close, and a void entered afterwards must not silently restate a document
+// that already went out. An open or reopened day has no seal yet, so its
+// figures are still the live ComputeExpected.
 func ZData(q Querier, dayID uuid.UUID) (ZReport, error) {
 	day, err := Get(q, dayID)
 	if err != nil {
 		return ZReport{}, err
 	}
-	expected, err := ComputeExpected(q, dayID)
-	if err != nil {
-		return ZReport{}, err
+	var expected Expected
+	if day.Status == StatusClosed {
+		expected = sealedExpected(day)
+	} else {
+		expected, err = ComputeExpected(q, dayID)
+		if err != nil {
+			return ZReport{}, err
+		}
 	}
 	movements, err := ListMovements(q, dayID)
 	if err != nil {
 		return ZReport{}, err
 	}
 	return ZReport{GeneratedAt: time.Now(), Day: day, Expected: expected, Movements: movements}, nil
+}
+
+// sealedExpected rebuilds Expected from the figures a closed day sealed onto
+// its own row at close time: expected_cash/card/online, gross_sales,
+// discounts, tax_collected, net_sales, on_account_sales, receipts_collected,
+// invoice_count and void_count. Close and ForceClose always write these
+// together (never one without the others), so a closed row has them all —
+// but the pointers are read defensively rather than dereferenced blind, since
+// a nil here would otherwise panic a printed report instead of degrading to a
+// visibly wrong zero.
+//
+// The per-tender breakdown that ComputeExpected also returns (CashSales vs.
+// CashReceipts, PaidIn/PaidOut) was never separately sealed — only the
+// combined expected_cash/card/online were — so those fields are left at zero
+// on a closed day's Expected rather than recomputed live, which would mix a
+// sealed total with an unsealed breakdown of it.
+func sealedExpected(day Day) Expected {
+	return Expected{
+		OpeningCash:       day.OpeningCash,
+		Cash:              floatOrZero(day.ExpectedCash),
+		Card:              floatOrZero(day.ExpectedCard),
+		Online:            floatOrZero(day.ExpectedOnline),
+		OnAccountSales:    floatOrZero(day.OnAccountSales),
+		ReceiptsCollected: floatOrZero(day.ReceiptsCollected),
+		GrossSales:        floatOrZero(day.GrossSales),
+		Discounts:         floatOrZero(day.Discounts),
+		TaxCollected:      floatOrZero(day.TaxCollected),
+		NetSales:          floatOrZero(day.NetSales),
+		InvoiceCount:      intOrZero(day.InvoiceCount),
+		VoidCount:         intOrZero(day.VoidCount),
+	}
+}
+
+func floatOrZero(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func intOrZero(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 // ── writes ───────────────────────────────────────────────────────────────

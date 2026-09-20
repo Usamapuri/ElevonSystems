@@ -198,13 +198,15 @@ func validWeight(v float64) bool {
 func parseCreateInvoice(req models.CreateInvoiceRequest) (parsedInvoice, *apiError) {
 	var p parsedInvoice
 
-	if s := strings.TrimSpace(req.ClientOpID); s != "" {
-		id, err := uuid.Parse(s)
-		if err != nil {
-			return p, badRequest("invalid_request", "client_op_id must be a UUID")
-		}
-		p.clientOpID = &id
+	// client_op_id is mandatory: the till's idempotency key is what lets a
+	// retried POST (a dropped response, a doubled tap) return the sale
+	// already rung instead of ringing it twice, and that guarantee only
+	// holds if every submission carries one.
+	id, err := uuid.Parse(strings.TrimSpace(req.ClientOpID))
+	if err != nil {
+		return p, badRequest("invalid_request", "client_op_id is required")
 	}
+	p.clientOpID = &id
 
 	p.method = strings.TrimSpace(req.PaymentMethod)
 	if !validPaymentMethod(p.method) {
@@ -268,8 +270,12 @@ func parseCreateInvoice(req models.CreateInvoiceRequest) (parsedInvoice, *apiErr
 
 	if req.DiscountPercent != nil {
 		pct := *req.DiscountPercent
-		if math.IsNaN(pct) || math.IsInf(pct, 0) || pct < 0 || pct > 100 {
-			return p, badRequest("invalid_discount", "Discount percent must be between 0 and 100")
+		// discount_percent is NUMERIC(5,2): a third decimal place would price
+		// against the value the cashier saw and store a different one, so it
+		// gets the same 2 dp check as discount_amount, plus its own 0–100
+		// range.
+		if pct < 0 || pct > 100 || !validRate(pct) {
+			return p, badRequest("invalid_discount", "Discount percent must be between 0 and 100 with at most 2 decimal places")
 		}
 		p.discountPercent = &pct
 	} else {
@@ -393,13 +399,24 @@ type lockedCustomer struct {
 	isActive      bool
 }
 
-// lockCustomer loads one customer FOR SHARE so their credit terms cannot
-// change between the limit check and the ledger entry.
-func lockCustomer(tx *sql.Tx, id uuid.UUID) (lockedCustomer, error) {
+// lockCustomer loads one customer, locked so their credit terms cannot
+// change between the limit check and the ledger entry. A credit sale takes
+// FOR UPDATE: the limit check reads the ledger balance and the sale it is
+// about to add to it, so two credit sales on the same account racing each
+// other must serialize on this row — the second one's balance read has to
+// see the first one's ledger debit, or both can pass a limit that only one
+// of them fits under. Every other tender only needs a stable snapshot of the
+// name and tax identity for the invoice, so it takes the lighter FOR SHARE
+// and stays free to run alongside another sale on the same account.
+func lockCustomer(tx *sql.Tx, id uuid.UUID, method string) (lockedCustomer, error) {
+	lockClause := "FOR SHARE"
+	if method == "credit" {
+		lockClause = "FOR UPDATE"
+	}
 	var cu lockedCustomer
 	err := tx.QueryRow(`SELECT id, name, phone, ntn, cnic, buyer_registration_type,
 		credit_allowed, credit_limit::float8, is_active
-		FROM customers WHERE id = $1 FOR SHARE`, id).Scan(
+		FROM customers WHERE id = $1 `+lockClause, id).Scan(
 		&cu.id, &cu.name, &cu.phone, &cu.ntn, &cu.cnic, &cu.buyerType,
 		&cu.creditAllowed, &cu.creditLimit, &cu.isActive)
 	return cu, err
@@ -479,7 +496,8 @@ func failDayGate(c *gin.Context, err error) bool {
 
 // Create rings a sale and settles it in one call (spec §6.2), in this order:
 //
-//  1. validate the shape — ids, quantities, entry modes, discount;
+//  1. validate the shape — ids, quantities, entry modes, discount; a mandatory
+//     client_op_id among them;
 //  2. idempotency: a client_op_id already used returns that invoice (200);
 //  3. allocate the invoice number in its own short transaction, OUTSIDE the
 //     one below (see package invoice for why, and for why the gap a later
@@ -596,7 +614,7 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 	// 8 — the customer and their credit terms.
 	var customer *lockedCustomer
 	if p.customerID != nil {
-		cu, err := lockCustomer(tx, *p.customerID)
+		cu, err := lockCustomer(tx, *p.customerID, p.method)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 			c.JSON(http.StatusNotFound, models.Fail("Customer not found", "customer_not_found"))
