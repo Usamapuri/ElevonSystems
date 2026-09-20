@@ -4,7 +4,7 @@ import type {
   Customer, CustomerListParams, DayCurrent, Invoice, LoginRequest, LoginResponse, PaginatedResponse, Product,
   ProductListParams, RateHistoryEntry, RateHistoryParams, RecentInvoiceParams, SettingsPatch, StatementParams,
   StatementRow, UpdateCustomerRequest, UpdateProductRequest, UpdateRatesRequest, UpdateRatesResponse,
-  UpdateUserRequest, User, UserListParams, VoidInvoiceRequest,
+  UpdateUserRequest, User, UserListParams, VoidInvoiceRequest, ZReport,
 } from '@/types'
 
 export const TOKEN_KEY = 'elevon_token'
@@ -176,6 +176,11 @@ class APIClient {
   // ── Business day (the till reads it to know whether it may sell) ───────
   getDayCurrent() {
     return this.request<DayCurrent>({ method: 'GET', url: '/day/current' })
+  }
+  /** The printable Z slip for one day: the row, the live expectation and the
+   * drawer movements in one round-trip. */
+  getZReport(dayId: string) {
+    return this.request<ZReport>({ method: 'GET', url: `/day/${dayId}/z` })
   }
 
   // ── Invoices (the money core; voids carry an admin PIN in the body) ────

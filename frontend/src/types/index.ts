@@ -321,6 +321,17 @@ export interface CashMovement {
   created_at: string
 }
 
+/** GET /day/:id/z — everything the printable Z slip needs in one round-trip.
+ * `day` carries the counted amounts and variances (null until the day is
+ * closed); `expected` is recomputed live, so on a sealed day the two agree and
+ * any divergence means rows changed after the seal. */
+export interface ZReport {
+  generated_at: string
+  day: BusinessDay
+  expected: DayExpected
+  movements: CashMovement[]
+}
+
 /** GET /day/current. `day` is the day holding the open slot; failing that,
  * today's row even when it is already closed (a sale then reopens it for a
  * late sale, §6.7 branch 3); null only when today has never been opened. */
