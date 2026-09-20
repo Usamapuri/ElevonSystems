@@ -40,6 +40,16 @@ func TestSettings_GetUpdateValidateAndReloadBoundary(t *testing.T) {
 		t.Fatalf("partial save leaked: %s", all["business_name"])
 	}
 
+	// tax_rate_cash is not nullable — only tax_rate_credit may be null.
+	w = doJSON(r, http.MethodPut, "/admin/settings", map[string]any{"tax_rate_cash": nil})
+	if w.Code != http.StatusBadRequest || errCode(decodeEnvelope(t, w)) != "invalid_setting_value" {
+		t.Fatalf("null tax_rate_cash: %d %s", w.Code, w.Body.String())
+	}
+	dataAs(t, decodeEnvelope(t, doJSON(r, http.MethodGet, "/settings", nil)), &all)
+	if string(all["tax_rate_cash"]) != "0" {
+		t.Fatalf("null tax_rate_cash must not be saved: %s", all["tax_rate_cash"])
+	}
+
 	w = doJSON(r, http.MethodPut, "/admin/settings", map[string]any{"fiscal_config": map[string]any{}})
 	if errCode(decodeEnvelope(t, w)) != "unknown_setting" {
 		t.Fatalf("unknown key: %s", w.Body.String())

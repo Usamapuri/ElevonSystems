@@ -55,12 +55,16 @@ func (h *SettingsHandler) Update(c *gin.Context) {
 	}
 	for k, v := range req {
 		if err := settings.Validate(k, v); err != nil {
-			// err is a *settings.ValueError: a curated "key: rule" message,
-			// never a raw system error. Split across lines so the message
-			// text doesn't sit on the same line as .Error() (see
-			// no_raw_error_contract_test.go's textual scan).
-			msg := err.Error()
-			c.JSON(http.StatusBadRequest, models.Fail(msg, "invalid_setting_value"))
+			var ve *settings.ValueError
+			if !errors.As(err, &ve) {
+				log.Printf("settings update: validate %s: %v", k, err)
+				c.JSON(http.StatusInternalServerError, models.Fail("Could not save settings", "internal_error"))
+				return
+			}
+			// ve.Key/ve.Message are curated, person-facing text — never a
+			// raw system error — so building the message from those fields
+			// is safe to send to the client.
+			c.JSON(http.StatusBadRequest, models.Fail(ve.Key+": "+ve.Message, "invalid_setting_value"))
 			return
 		}
 		current[k] = v
@@ -68,8 +72,7 @@ func (h *SettingsHandler) Update(c *gin.Context) {
 	if err := settings.CheckConsistency(current); err != nil {
 		var ve *settings.ValueError
 		if errors.As(err, &ve) {
-			msg := ve.Error()
-			c.JSON(http.StatusBadRequest, models.Fail(msg, "invalid_setting_value"))
+			c.JSON(http.StatusBadRequest, models.Fail(ve.Key+": "+ve.Message, "invalid_setting_value"))
 			return
 		}
 		log.Printf("settings update: consistency: %v", err)

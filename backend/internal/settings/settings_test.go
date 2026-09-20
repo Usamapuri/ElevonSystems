@@ -45,6 +45,25 @@ func TestValidate_PerKeyRules(t *testing.T) {
 	}
 }
 
+func TestValidate_RejectsNullForNonNullableKeys(t *testing.T) {
+	for _, k := range Keys() {
+		err := Validate(k, json.RawMessage("null"))
+		if k == "tax_rate_credit" {
+			if err != nil {
+				t.Errorf("%s: null must be allowed, got %v", k, err)
+			}
+			continue
+		}
+		if err == nil {
+			t.Errorf("%s: null must be rejected", k)
+			continue
+		}
+		if ve, ok := err.(*ValueError); !ok || ve.Key != k {
+			t.Errorf("%s: want *ValueError naming the key, got %v", k, err)
+		}
+	}
+}
+
 func TestCheckConsistency_PrintableAreaFitsPaper(t *testing.T) {
 	all := map[string]json.RawMessage{"receipt_paper_width_mm": json.RawMessage(`58`), "receipt_printable_area_mm": json.RawMessage(`72`)}
 	if err := CheckConsistency(all); err == nil {

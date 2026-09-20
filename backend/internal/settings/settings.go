@@ -28,32 +28,34 @@ type rule func(raw json.RawMessage) error
 
 var hsCodeRe = regexp.MustCompile(`^[0-9]{4}\.[0-9]{4}$`)
 
-// rules covers exactly the keys seeded in migrations/001_init.sql.
+// rules covers exactly the keys seeded in migrations/001_init.sql. Every
+// entry is wrapped in notNull except tax_rate_credit, the one key the spec
+// allows to be null.
 var rules = map[string]rule{
-	"business_name":     text(1, 120),
-	"business_address":  text(0, 300),
-	"business_phone":    text(0, 30),
-	"business_ntn":      text(0, 20),
-	"business_strn":     text(0, 30),
-	"business_province": text(0, 40),
-	"day_boundary_hour": integer(0, 12),
+	"business_name":     notNull(text(1, 120)),
+	"business_address":  notNull(text(0, 300)),
+	"business_phone":    notNull(text(0, 30)),
+	"business_ntn":      notNull(text(0, 20)),
+	"business_strn":     notNull(text(0, 30)),
+	"business_province": notNull(text(0, 40)),
+	"day_boundary_hour": notNull(integer(0, 12)),
 
-	"tax_rate_cash":    number(0, 1),
-	"tax_rate_card":    number(0, 1),
-	"tax_rate_online":  number(0, 1),
+	"tax_rate_cash":    notNull(number(0, 1)),
+	"tax_rate_card":    notNull(number(0, 1)),
+	"tax_rate_online":  notNull(number(0, 1)),
 	"tax_rate_credit":  nullable(number(0, 1)),
-	"further_tax_rate": number(0, 1),
-	"default_hs_code":  hsCode,
+	"further_tax_rate": notNull(number(0, 1)),
+	"default_hs_code":  notNull(hsCode),
 
-	"receipt_paper_width_mm":    oneOfInt(58, 80),
-	"receipt_printable_area_mm": integer(40, 80),
-	"receipt_logo_url":          logoURL,
-	"receipt_header_lines":      stringList(6, 64),
-	"receipt_footer_lines":      stringList(6, 64),
-	"receipt_default_document":  oneOf("thermal", "a4"),
+	"receipt_paper_width_mm":    notNull(oneOfInt(58, 80)),
+	"receipt_printable_area_mm": notNull(integer(40, 80)),
+	"receipt_logo_url":          notNull(logoURL),
+	"receipt_header_lines":      notNull(stringList(6, 64)),
+	"receipt_footer_lines":      notNull(stringList(6, 64)),
+	"receipt_default_document":  notNull(oneOf("thermal", "a4")),
 
-	"day_close_variance_threshold": number(0, 1_000_000),
-	"credit_limit_enforced":        boolean,
+	"day_close_variance_threshold": notNull(number(0, 1_000_000)),
+	"credit_limit_enforced":        notNull(boolean),
 }
 
 // Keys lists every known setting, sorted.
@@ -190,6 +192,19 @@ func nullable(inner rule) rule {
 	return func(raw json.RawMessage) error {
 		if strings.TrimSpace(string(raw)) == "null" {
 			return nil
+		}
+		return inner(raw)
+	}
+}
+
+// notNull rejects the JSON literal null (and an empty value) before handing
+// off to inner. json.Unmarshal("null", &x) silently succeeds and leaves the
+// zero value, so every rule needs this guard except tax_rate_credit, the one
+// key the spec allows to be null.
+func notNull(inner rule) rule {
+	return func(raw json.RawMessage) error {
+		if s := strings.TrimSpace(string(raw)); s == "" || s == "null" {
+			return errors.New("is required")
 		}
 		return inner(raw)
 	}
