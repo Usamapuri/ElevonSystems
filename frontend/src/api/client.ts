@@ -2,11 +2,11 @@ import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type {
   APIResponse, AppSettings, BusinessDay, CashMovement, CashMovementRequest, CloseDayRequest, CreateCustomerRequest,
   CreateInvoiceRequest, CreateProductRequest, CreateReceiptRequest, CreateUserRequest, Customer, CustomerAgeing,
-  CustomerListParams, DayCurrent, DayHistoryParams, ForceCloseDayRequest, Invoice, InvoiceListParams, LoginRequest,
-  LoginResponse, OpenDayRequest, PaginatedResponse, Product, ProductListParams, RateHistoryEntry, RateHistoryParams,
-  Receipt, RecentInvoiceParams, ReopenDayRequest, SettingsPatch, StatementParams, StatementRow,
-  UpdateCustomerRequest, UpdateProductRequest, UpdateRatesRequest, UpdateRatesResponse, UpdateUserRequest, User,
-  UserListParams, VoidInvoiceRequest, VoidReceiptRequest, ZReport,
+  CustomerListParams, DashboardResponse, DayCurrent, DayHistoryParams, ForceCloseDayRequest, Invoice,
+  InvoiceListParams, LoginRequest, LoginResponse, OpenDayRequest, PaginatedResponse, Product, ProductListParams,
+  RateHistoryEntry, RateHistoryParams, Receipt, RecentInvoiceParams, ReopenDayRequest, SettingsPatch,
+  StatementParams, StatementRow, UpdateCustomerRequest, UpdateProductRequest, UpdateRatesRequest,
+  UpdateRatesResponse, UpdateUserRequest, User, UserListParams, VoidInvoiceRequest, VoidReceiptRequest, ZReport,
 } from '@/types'
 
 export const TOKEN_KEY = 'elevon_token'
@@ -266,6 +266,14 @@ class APIClient {
   }
   voidInvoice(id: string, req: VoidInvoiceRequest) {
     return this.request<Invoice>({ method: 'POST', url: `/invoices/${id}/void`, data: req })
+  }
+
+  // ── Dashboard (admin-only) ──────────────────────────────────────────────
+  /** Today's KPIs, the 7d/30d revenue+kg series, the last 30 days' top
+   * products, recent invoices and the day banner, in one round trip. The
+   * dashboard route polls this every 30s. */
+  getDashboard() {
+    return this.request<DashboardResponse>({ method: 'GET', url: '/admin/dashboard' })
   }
 
   // ── Local session ─────────────────────────────────────────────────────

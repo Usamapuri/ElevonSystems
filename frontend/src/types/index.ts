@@ -568,3 +568,90 @@ export interface InvoiceListParams {
   page?: number
   per_page?: number
 }
+
+// ── Dashboard & reports (GET /admin/dashboard, GET /admin/reports/:name) ──
+
+/** Money by how it arrived. OnAccount is credit sales — billed, not
+ * collected — so it never belongs in a drawer count, but it is still part
+ * of `net` (backend/internal/reports/summary.go): the four fields partition
+ * `PeriodSummary.net` exactly. */
+export interface TenderSplit {
+  cash: number
+  card: number
+  online: number
+  on_account: number
+}
+
+/** The one set of figures behind the dashboard KPIs, the daily report's
+ * totals row and the Excel period pack (spec §6.8). `from`/`to` are ISO
+ * dates. `net = taxable + tax + further_tax + rounding` by construction. */
+export interface PeriodSummary {
+  from: string
+  to: string
+  invoices: number
+  voids: number
+  kg_sold: number
+  gross: number
+  discount: number
+  taxable: number
+  tax: number
+  further_tax: number
+  rounding: number
+  net: number
+  tenders: TenderSplit
+  receipts: TenderSplit
+  receipts_total: number
+}
+
+/** One business date's summary — the embedded PeriodSummary carries
+ * `from === to === business_date`. `label` is `DD-MM-YYYY`. */
+export interface DailyRow extends PeriodSummary {
+  business_date: string
+  label: string
+}
+
+/** One product's slice of a window, biggest gross first. `product_id` is
+ * null when the product has since been deleted; `share` is a percentage of
+ * the window's gross. */
+export interface ProductRow {
+  product_id: string | null
+  name: string
+  kg: number
+  invoices: number
+  gross: number
+  share: number
+}
+
+/** The dashboard's recent-sales row — deliberately not the full Invoice
+ * shape (no lines, no fiscal columns): the dashboard lists ten sales and
+ * polls every 30s. */
+export interface DashboardInvoice {
+  id: string
+  invoice_number: string
+  business_date: string
+  status: InvoiceStatus
+  cashier_name: string
+  customer_name: string | null
+  payment_method: PaymentMethod
+  total_payable: number
+  created_at: string
+}
+
+/** The dashboard's day banner: whatever is open, else today's sealed row,
+ * else null (the till has not been started today). */
+export interface DashboardDay {
+  status: DayStatus
+  opened_at: string
+}
+
+/** GET /admin/dashboard — the whole screen in one round trip (spec §3).
+ * `top_products` is the last 30 days, not today — label it as such. */
+export interface DashboardResponse {
+  today: PeriodSummary
+  receivables_outstanding: number
+  series_7d: DailyRow[]
+  series_30d: DailyRow[]
+  top_products: ProductRow[]
+  recent_invoices: DashboardInvoice[]
+  day: DashboardDay | null
+}
