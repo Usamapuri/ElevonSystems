@@ -4,10 +4,12 @@ import type {
   CreateInvoiceRequest, CreateProductRequest, CreateReceiptRequest, CreateUserRequest, Customer, CustomerAgeing,
   CustomerListParams, DashboardResponse, DayCurrent, DayHistoryParams, ForceCloseDayRequest, Invoice,
   InvoiceListParams, LoginRequest, LoginResponse, OpenDayRequest, PaginatedResponse, Product, ProductListParams,
-  RateHistoryEntry, RateHistoryParams, Receipt, RecentInvoiceParams, ReopenDayRequest, SettingsPatch,
-  StatementParams, StatementRow, UpdateCustomerRequest, UpdateProductRequest, UpdateRatesRequest,
-  UpdateRatesResponse, UpdateUserRequest, User, UserListParams, VoidInvoiceRequest, VoidReceiptRequest, ZReport,
+  RateHistoryEntry, RateHistoryParams, Receipt, RecentInvoiceParams, ReopenDayRequest, ReportName, ReportParams,
+  ReportResponse, SettingsPatch, StatementParams, StatementRow, UpdateCustomerRequest, UpdateProductRequest,
+  UpdateRatesRequest, UpdateRatesResponse, UpdateUserRequest, User, UserListParams, VoidInvoiceRequest,
+  VoidReceiptRequest, ZReport,
 } from '@/types'
+import { downloadBlob, parseContentDispositionFilename } from '@/lib/download'
 
 export const TOKEN_KEY = 'elevon_token'
 export const USER_KEY = 'elevon_user'
@@ -274,6 +276,63 @@ class APIClient {
    * dashboard route polls this every 30s. */
   getDashboard() {
     return this.request<DashboardResponse>({ method: 'GET', url: '/admin/dashboard' })
+  }
+
+  // ── Reports (admin-only, spec §6.8) ─────────────────────────────────────
+  /** GET /admin/reports/:name in JSON. `data.totals` is null for
+   * `receivables` and `day-closes`. 400 `invalid_range`, 404
+   * `report_not_found`. */
+  getReport<T>(name: ReportName, params: ReportParams = {}) {
+    return this.request<ReportResponse<T>>({ method: 'GET', url: `/admin/reports/${name}`, params })
+  }
+
+  /**
+   * Streams a CSV or `.xlsx` export and saves it under the filename the
+   * server names in `Content-Disposition` (exposed via CORS —
+   * backend/main.go `ExposeHeaders`). `pack` is only meaningful for
+   * `daily`+`xlsx`: the six-sheet period pack. This bypasses `request()`
+   * because the success path is a file save, not JSON — but a failure still
+   * comes back as the usual `APIResponse` body, just wrapped in a blob, so
+   * it is unwrapped the same way before being thrown as an `ApiClientError`.
+   */
+  async downloadReport(
+    name: ReportName,
+    params: ReportParams & { format: 'csv' | 'xlsx'; pack?: boolean },
+  ): Promise<void> {
+    try {
+      const res = await this.client.request<Blob>({
+        method: 'GET',
+        url: `/admin/reports/${name}`,
+        responseType: 'blob',
+        params: {
+          from: params.from,
+          to: params.to,
+          format: params.format,
+          ...(params.pack ? { pack: 1 } : {}),
+        },
+      })
+      const filename = parseContentDispositionFilename(res.headers['content-disposition']) ?? `${name}.${params.format}`
+      downloadBlob(res.data, filename)
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        let parsed: APIResponse | undefined
+        const data = err.response?.data as Blob | APIResponse | undefined
+        if (data instanceof Blob) {
+          try {
+            parsed = JSON.parse(await data.text()) as APIResponse
+          } catch {
+            // The error body was not JSON (an HTML proxy error page, say) —
+            // fall through to the generic axios message below.
+          }
+        }
+        const e = new ApiClientError(parsed?.message || err.message || 'Export failed')
+        e.code = parsed?.error
+        e.status = err.response?.status
+        e.isNetworkError = !err.response
+        throw e
+      }
+      throw err
+    }
   }
 
   // ── Local session ─────────────────────────────────────────────────────

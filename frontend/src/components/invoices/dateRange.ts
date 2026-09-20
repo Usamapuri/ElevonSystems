@@ -14,7 +14,7 @@
  */
 import { businessDateKey } from '@/components/pos/dayGate'
 
-export type DatePreset = 'today' | 'yesterday' | 'last7' | 'custom'
+export type DatePreset = 'today' | 'yesterday' | 'last7' | 'this_week' | 'this_month' | 'last_month' | 'custom'
 
 export interface DateRange {
   from: string
@@ -29,6 +29,12 @@ export function presetLabel(preset: DatePreset): string {
       return 'Yesterday'
     case 'last7':
       return 'Last 7 days'
+    case 'this_week':
+      return 'This week'
+    case 'this_month':
+      return 'This month'
+    case 'last_month':
+      return 'Last month'
     case 'custom':
       return 'Custom'
   }
@@ -37,6 +43,17 @@ export function presetLabel(preset: DatePreset): string {
 /** The presets offered as buttons, in order. `custom` is what the two date
  * inputs select and is never a button. */
 export const DATE_PRESETS: readonly DatePreset[] = ['today', 'yesterday', 'last7'] as const
+
+/** The Reports screen's wider preset set (spec §6.8). Kept in this file
+ * rather than a second copy so both screens compute "today" — and now
+ * "this month" — off the same boundary-hour arithmetic. */
+export const REPORT_DATE_PRESETS: readonly DatePreset[] = [
+  'today',
+  'yesterday',
+  'this_week',
+  'this_month',
+  'last_month',
+] as const
 
 export function isDateKey(value: string | null | undefined): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value ?? '')
@@ -59,11 +76,28 @@ export function shiftDateKey(key: string, days: number): string {
   return `${yy}-${mm}-${dd}`
 }
 
+/** 0 (Sunday) – 6 (Saturday) for a `YYYY-MM-DD` key, read off a fixed UTC
+ * calendar date so no local zone can shift which weekday it lands on. */
+function weekdayOf(key: string): number {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+}
+
+/** The first of the month a `YYYY-MM-DD` key falls in — string slicing, not
+ * a Date: the key is already `YYYY-MM-DD`, so its month start is its first
+ * eight characters plus `01`. */
+function monthStart(key: string): string {
+  return key.slice(0, 8) + '01'
+}
+
 /**
  * The inclusive `from`/`to` for a preset, against today's business date.
  * `last7` is the last seven business days *including* today, which is what
  * an owner means by "the last week" when they are standing at the till.
- * `custom` has no computable range — the caller keeps whatever is typed.
+ * `this_week` (Monday start) and `this_month` are both clipped to today —
+ * neither ever reaches into the future. `last_month` is the *previous*
+ * calendar month in full. `custom` has no computable range — the caller
+ * keeps whatever is typed.
  */
 export function presetRange(preset: DatePreset, now: Date, boundaryHour: number): DateRange | null {
   if (preset === 'custom') return null
@@ -77,13 +111,32 @@ export function presetRange(preset: DatePreset, now: Date, boundaryHour: number)
     }
     case 'last7':
       return { from: shiftDateKey(today, -6), to: today }
+    case 'this_week': {
+      const mondayOffset = (weekdayOf(today) + 6) % 7
+      return { from: shiftDateKey(today, -mondayOffset), to: today }
+    }
+    case 'this_month':
+      return { from: monthStart(today), to: today }
+    case 'last_month': {
+      // One day before this month's 1st lands in last month; that key's own
+      // month start, through that key itself, is last month in full.
+      const lastMonthEnd = shiftDateKey(monthStart(today), -1)
+      return { from: monthStart(lastMonthEnd), to: lastMonthEnd }
+    }
   }
 }
 
 /** Which preset a range corresponds to, so the buttons stay lit after a
- * reload or a hand-typed date that happens to match one. */
-export function matchPreset(range: DateRange, now: Date, boundaryHour: number): DatePreset {
-  for (const preset of DATE_PRESETS) {
+ * reload or a hand-typed date that happens to match one. `presets` defaults
+ * to the invoice browser's three; the Reports screen passes
+ * `REPORT_DATE_PRESETS` for its wider set. */
+export function matchPreset(
+  range: DateRange,
+  now: Date,
+  boundaryHour: number,
+  presets: readonly DatePreset[] = DATE_PRESETS,
+): DatePreset {
+  for (const preset of presets) {
     const candidate = presetRange(preset, now, boundaryHour)
     if (candidate && candidate.from === range.from && candidate.to === range.to) return preset
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DATE_PRESETS,
+  REPORT_DATE_PRESETS,
   matchPreset,
   presetLabel,
   presetRange,
@@ -48,6 +49,29 @@ describe('presetRange', () => {
   it('has no computable range for a custom one', () => {
     expect(presetRange('custom', noon, 0)).toBeNull()
   })
+  it('this_week starts Monday and never reaches past today', () => {
+    // 2026-09-16 is a Wednesday; the week's Monday is 2026-09-14.
+    const wednesday = new Date(2026, 8, 16, 12, 0, 0)
+    expect(presetRange('this_week', wednesday, 0)).toEqual({ from: '2026-09-14', to: '2026-09-16' })
+  })
+  it('this_week rolls back onto a Monday when today already is one', () => {
+    const monday = new Date(2026, 8, 14, 12, 0, 0)
+    expect(presetRange('this_week', monday, 0)).toEqual({ from: '2026-09-14', to: '2026-09-14' })
+  })
+  it('this_month starts the 1st and is clipped to today', () => {
+    expect(presetRange('this_month', noon, 0)).toEqual({ from: '2026-09-01', to: '2026-09-20' })
+  })
+  it('last_month is the previous calendar month in full', () => {
+    expect(presetRange('last_month', noon, 0)).toEqual({ from: '2026-08-01', to: '2026-08-31' })
+  })
+  it('last_month crosses a year boundary', () => {
+    const midJan = new Date(2026, 0, 15, 12, 0, 0)
+    expect(presetRange('last_month', midJan, 0)).toEqual({ from: '2025-12-01', to: '2025-12-31' })
+  })
+  it('last_month lands on a leap-year February', () => {
+    const earlyMarch2024 = new Date(2024, 2, 1, 12, 0, 0)
+    expect(presetRange('last_month', earlyMarch2024, 0)).toEqual({ from: '2024-02-01', to: '2024-02-29' })
+  })
 })
 
 describe('matchPreset', () => {
@@ -59,6 +83,13 @@ describe('matchPreset', () => {
   it('falls back to custom for anything else', () => {
     expect(matchPreset({ from: '2026-09-01', to: '2026-09-20' }, noon, 0)).toBe('custom')
     expect(matchPreset({ from: '', to: '' }, noon, 0)).toBe('custom')
+  })
+  it('checks the Reports screen preset set when it is passed in', () => {
+    expect(matchPreset({ from: '2026-09-01', to: '2026-09-20' }, noon, 0, REPORT_DATE_PRESETS)).toBe('this_month')
+    expect(matchPreset({ from: '2026-08-01', to: '2026-08-31' }, noon, 0, REPORT_DATE_PRESETS)).toBe('last_month')
+    // Not any Reports preset for this date (2026-09-20 is a Sunday, so its
+    // this_week happens to equal last7's span — pick a range none of them hit).
+    expect(matchPreset({ from: '2026-09-10', to: '2026-09-20' }, noon, 0, REPORT_DATE_PRESETS)).toBe('custom')
   })
 })
 
@@ -77,5 +108,14 @@ describe('range plumbing', () => {
   })
   it('labels every preset it offers', () => {
     expect(DATE_PRESETS.map(presetLabel)).toEqual(['Today', 'Yesterday', 'Last 7 days'])
+  })
+  it('labels the Reports screen presets too', () => {
+    expect(REPORT_DATE_PRESETS.map(presetLabel)).toEqual([
+      'Today',
+      'Yesterday',
+      'This week',
+      'This month',
+      'Last month',
+    ])
   })
 })

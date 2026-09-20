@@ -655,3 +655,94 @@ export interface DashboardResponse {
   recent_invoices: DashboardInvoice[]
   day: DashboardDay | null
 }
+
+// ── Reports (GET /admin/reports/:name) — Daily/Products/Tax/Cashiers/Hourly/
+//    Receivables/Day closes tabs (spec §6.8) ───────────────────────────────
+
+/** `:name` in `GET /admin/reports/:name`; also the CSV/xlsx export name and
+ * the `report_not_found` gate (backend/internal/handlers/reports.go
+ * reportSheets). */
+export type ReportName = 'daily' | 'products' | 'tax' | 'cashiers' | 'hourly' | 'receivables' | 'day-closes'
+
+/** Both bare `YYYY-MM-DD` business dates; the server defaults each to today
+ * when omitted (`invalid_range` on a reversed or >366-day window). */
+export interface ReportParams {
+  from?: string
+  to?: string
+}
+
+/** GET /admin/reports/:name in JSON. `totals` is null for `receivables` and
+ * `day-closes` — a balance as of a date and a set of sealed rows are not a
+ * period to sum (backend/internal/handlers/reports.go reportView). */
+export interface ReportResponse<T> {
+  rows: T[]
+  totals: PeriodSummary | null
+}
+
+/** One effective tax-rate band over the window (backend
+ * internal/reports/queries.go TaxBand). `rate` is a fraction (0.18),
+ * matching `settings.tax_rate_*` — never a bare percentage; render it with
+ * `percentLabel`. Σ TaxBand.tax over every band equals the window's
+ * PeriodSummary.tax by construction. */
+export interface TaxBand {
+  rate: number
+  invoices: number
+  taxable: number
+  tax: number
+  further_tax: number
+}
+
+/** One cashier's window, biggest gross first. `cashier_id` is null when the
+ * user row was deleted; the invoice's own `cashier_name` snapshot names
+ * them. `average` is gross ÷ completed invoices for that cashier. */
+export interface CashierRow {
+  cashier_id: string | null
+  name: string
+  invoices: number
+  gross: number
+  average: number
+  voids: number
+}
+
+/** One hour-of-day bucket, 0–23 in the business timezone. All 24 hours are
+ * always present, including empty ones, so a chart has a fixed x-axis. */
+export interface HourRow {
+  hour: number
+  invoices: number
+  net: number
+}
+
+/** One customer's outstanding account as of the window's `to` date — a
+ * position, not a period. The four buckets age the *unpaid* part of the
+ * balance (FIFO by business_date) and sum to `balance` whenever it is
+ * positive (backend internal/reports/queries.go Receivables). Same shape
+ * as `CustomerAgeing` but for every customer with a non-zero balance. */
+export interface ReceivableRow {
+  customer_id: string
+  name: string
+  phone: string
+  balance: number
+  b0_30: number
+  b31_60: number
+  b61_90: number
+  b90: number
+  last_receipt: string | null
+}
+
+/** One business day's close row (backend internal/reports/queries.go
+ * DayCloseRow). An open or reopened day in the window is listed with its
+ * variance columns at zero rather than hidden. `net` is the sealed
+ * net_sales for a closed day — what the Z-report printed. */
+export interface DayCloseRow {
+  id: string
+  business_date: string
+  label: string
+  status: DayStatus
+  closed_by: string
+  expected_cash: number
+  counted_cash: number
+  cash_variance: number
+  card_variance: number
+  online_variance: number
+  net: number
+}
