@@ -1075,9 +1075,20 @@ func (h *InvoicesHandler) Void(c *gin.Context) {
 		return
 	}
 
-	if _, err := tx.Exec(`UPDATE invoices
+	var voidedID uuid.UUID
+	err = tx.QueryRow(`UPDATE invoices
 		SET status = 'voided', voided_at = now(), voided_by = $2, void_reason = $3
-		WHERE id = $1 AND status = 'completed'`, id, actorOrNil(actor.ID), reason); err != nil {
+		WHERE id = $1 AND status = 'completed'
+		RETURNING id`, id, actorOrNil(actor.ID), reason).Scan(&voidedID)
+	if errors.Is(err, sql.ErrNoRows) {
+		// Unreachable in practice — the FOR UPDATE lock taken above already
+		// serializes against a concurrent void of the same row — but
+		// defensive: a race here means the invoice was already voided, not a
+		// server fault.
+		c.JSON(http.StatusConflict, models.Fail("That invoice is already voided", "invoice_already_voided"))
+		return
+	}
+	if err != nil {
 		log.Printf("invoice void: update: %v", err)
 		c.JSON(http.StatusInternalServerError, models.Fail("Could not void the invoice", "internal_error"))
 		return

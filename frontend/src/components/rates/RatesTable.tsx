@@ -127,7 +127,7 @@ export function RatesTable() {
                     />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(p)} title="Edit">
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(p)} title="Edit" aria-label={`Edit ${p.name}`}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                   </TableCell>

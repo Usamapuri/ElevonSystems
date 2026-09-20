@@ -38,6 +38,17 @@ type ProductRow struct {
 // Rows are grouped by product_id, not by name, so renaming a product
 // mid-window does not split its row; the current products.name wins over the
 // line snapshot for the label.
+//
+// Deliberately, every deleted product collapses into ONE row: product_id is
+// NULL for a line whose product has since been deleted, and Postgres GROUP BY
+// treats every NULL as the same group, so `GROUP BY l.product_id, p.name`
+// bundles all of them together rather than one row per (now-gone) product.
+// That row's label falls back to MIN(l.product_name) — whichever deleted
+// product's snapshot name sorts first — which reads oddly with more than one
+// deleted product in the window, but the kg/gross/invoices it totals are
+// still exactly right; a report cannot single out which deleted product a
+// past line belonged to without the row that named it, and merging them is
+// preferable to silently dropping their money from the total.
 func Products(ctx context.Context, db Querier, r Range) ([]ProductRow, error) {
 	from, to := r.keys()
 	rows, err := db.QueryContext(ctx, `
@@ -145,6 +156,14 @@ type CashierRow struct {
 }
 
 // Cashiers returns per-cashier totals over the window, biggest first.
+//
+// Deliberately, every invoice whose cashier's user row has since been deleted
+// collapses into ONE row, the same way Products bundles deleted products:
+// cashier_id is NULL for those invoices, GROUP BY treats every NULL as one
+// group, and the label falls back to MIN(i.cashier_name) — whichever
+// invoice's cashier_name snapshot sorts first — rather than the individual
+// deleted user. The totals are still exact; only the single label is a
+// stand-in for however many different deleted cashiers are in the window.
 func Cashiers(ctx context.Context, db Querier, r Range) ([]CashierRow, error) {
 	from, to := r.keys()
 	rows, err := db.QueryContext(ctx, `

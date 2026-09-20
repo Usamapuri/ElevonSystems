@@ -134,9 +134,9 @@ export function TenderDialog({
 
         {needsReference && (
           <div className="space-y-1.5">
-            <Label>Channel</Label>
+            <Label htmlFor="tender-channel">Channel</Label>
             <Select value={subMethod} onValueChange={setSubMethod}>
-              <SelectTrigger>
+              <SelectTrigger id="tender-channel">
                 <SelectValue placeholder="Easypaisa, JazzCash, bank transfer…" />
               </SelectTrigger>
               <SelectContent>

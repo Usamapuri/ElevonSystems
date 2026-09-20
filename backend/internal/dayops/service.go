@@ -643,7 +643,11 @@ func EnsureOpenDayForInvoice(tx *sql.Tx, actor Actor, now time.Time) (Day, error
 	return Get(tx, today.ID)
 }
 
-// AddMovement records a paid-in or paid-out against an open day.
+// AddMovement records a paid-in or paid-out against an open day. The day is
+// read and locked inside the same transaction the movement is inserted in
+// (lockDay, the pattern Close uses): without it, a movement racing a close
+// could read "open" and then insert into a day that sealed a moment later,
+// landing a paid-in/paid-out the Z-report's seal never counted.
 func AddMovement(db *sql.DB, actor Actor, dayID uuid.UUID, kind string, amount float64, reason string, notes *string) (Movement, error) {
 	if kind != "paid_in" && kind != "paid_out" {
 		return Movement{}, fmt.Errorf("%w: type must be paid_in or paid_out", ErrInvalidMovement)
@@ -655,19 +659,20 @@ func AddMovement(db *sql.DB, actor Actor, dayID uuid.UUID, kind string, amount f
 	if reason == "" || len(reason) > 200 {
 		return Movement{}, fmt.Errorf("%w: a reason of 1–200 characters is required", ErrInvalidMovement)
 	}
-	day, err := Get(db, dayID)
-	if err != nil {
-		return Movement{}, err
-	}
-	if !day.IsOpen() {
-		return Movement{}, ErrDayNotOpen
-	}
 
 	tx, err := db.Begin()
 	if err != nil {
 		return Movement{}, err
 	}
 	defer tx.Rollback() //nolint:errcheck
+
+	day, err := lockDay(tx, dayID)
+	if err != nil {
+		return Movement{}, err
+	}
+	if !day.IsOpen() {
+		return Movement{}, ErrDayClosed
+	}
 
 	var id uuid.UUID
 	if err := tx.QueryRow(`
@@ -824,6 +829,13 @@ func Close(db *sql.DB, actor Actor, dayID uuid.UUID, counted Counted, closingNot
 //
 // actor is the signed-in user doing it; the PIN holder who authorised it is
 // recorded in the audit metadata.
+//
+// The day is read and locked inside the same transaction it is unsealed in
+// (lockDay, the pattern Close uses) rather than with a plain Get before
+// Begin: a reopen racing a close must either see the day still open (and
+// no-op) or wait for the close to finish and then see it closed, never read
+// "closed" a moment before the close's own commit and unseal a row that is
+// about to be sealed out from under it.
 func Reopen(db *sql.DB, actor Actor, dayID uuid.UUID, pin string) (Day, error) {
 	identity, err := staffpin.Identify(db, pin, staffpin.AdminOnly)
 	if errors.Is(err, staffpin.ErrNoMatch) {
@@ -832,7 +844,14 @@ func Reopen(db *sql.DB, actor Actor, dayID uuid.UUID, pin string) (Day, error) {
 	if err != nil {
 		return Day{}, err
 	}
-	day, err := Get(db, dayID)
+
+	tx, err := db.Begin()
+	if err != nil {
+		return Day{}, err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	day, err := lockDay(tx, dayID)
 	if err != nil {
 		return Day{}, err
 	}
@@ -842,19 +861,13 @@ func Reopen(db *sql.DB, actor Actor, dayID uuid.UUID, pin string) (Day, error) {
 
 	// uniq_business_days_single_open allows exactly one open row, so name the
 	// blocker before the UPDATE rather than letting a 23505 surface as a 500.
-	current, err := Current(db)
+	current, err := Current(tx)
 	if err != nil {
 		return Day{}, err
 	}
 	if current != nil && current.ID != day.ID {
 		return Day{}, fmt.Errorf("%w (open day %s)", ErrPreviousDayOpen, current.DateKey())
 	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		return Day{}, err
-	}
-	defer tx.Rollback() //nolint:errcheck
 
 	if _, err := tx.Exec(`
 		UPDATE business_days SET status = 'reopened', closed_at = NULL, closed_by = NULL, updated_at = now()

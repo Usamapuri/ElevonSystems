@@ -545,8 +545,8 @@ func TestMovements_NeedAnOpenDay(t *testing.T) {
 	if _, err := Close(db, actor, day.ID, Counted{Cash: 1250.5}, nil, 1000); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if _, err := AddMovement(db, actor, day.ID, "paid_out", 50, "after close", nil); !errors.Is(err, ErrDayNotOpen) {
-		t.Fatalf("movement on a closed day: want ErrDayNotOpen, got %v", err)
+	if _, err := AddMovement(db, actor, day.ID, "paid_out", 50, "after close", nil); !errors.Is(err, ErrDayClosed) {
+		t.Fatalf("movement on a closed day: want ErrDayClosed, got %v", err)
 	}
 	if _, err := AddMovement(db, actor, uuid.New(), "paid_out", 50, "unknown day", nil); !errors.Is(err, ErrDayNotFound) {
 		t.Fatalf("movement on an unknown day: want ErrDayNotFound, got %v", err)

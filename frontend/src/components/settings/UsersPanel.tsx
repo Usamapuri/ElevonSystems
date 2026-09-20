@@ -14,9 +14,12 @@ import type { User } from '@/types'
 
 const PER_PAGE = 50
 
+// Pinned to Asia/Karachi rather than the browser's zone: an owner checking
+// this screen from outside the shop (or a machine whose clock is set wrong)
+// must see the same last-sign-in time the till itself would show.
 function formatLastLogin(iso: string | null): string {
   if (!iso) return 'Never'
-  return new Date(iso).toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short' })
+  return new Date(iso).toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Karachi' })
 }
 
 export function UsersPanel() {
@@ -96,11 +99,17 @@ export function UsersPanel() {
                 <TableCell className="text-right">
                   <div className="inline-flex gap-1">
                     {u.role === 'admin' && u.is_active && (
-                      <Button variant="ghost" size="sm" onClick={() => setPinUser(u)} title={u.has_pin ? 'Change PIN' : 'Set PIN'}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setPinUser(u)}
+                        title={u.has_pin ? 'Change PIN' : 'Set PIN'}
+                        aria-label={`${u.has_pin ? 'Change PIN' : 'Set PIN'} for ${u.username}`}
+                      >
                         <KeyRound className="h-4 w-4" />
                       </Button>
                     )}
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(u)} title="Edit">
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(u)} title="Edit" aria-label={`Edit ${u.username}`}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                   </div>

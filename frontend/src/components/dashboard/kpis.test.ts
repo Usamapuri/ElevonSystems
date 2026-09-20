@@ -15,6 +15,7 @@ describe('averageInvoice', () => {
   })
   it('is 0 for a negative or zero invoice count too', () => {
     expect(averageInvoice(500, 0)).toBe(0)
+    expect(averageInvoice(500, -3)).toBe(0)
   })
 })
 

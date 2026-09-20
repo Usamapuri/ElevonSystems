@@ -39,22 +39,39 @@ function day(over: Partial<BusinessDay>): BusinessDay {
   }
 }
 
-/** Local-time noon, so the boundary-hour shift never crosses a date by
- * accident on the machine running the suite. */
-const noon = new Date(2026, 8, 20, 12, 0, 0)
+/**
+ * A UTC instant for a given Asia/Karachi (UTC+5, no DST) wall-clock moment.
+ * businessDateKey is now pinned to Asia/Karachi regardless of the machine
+ * running the suite, so these tests build instants from the business
+ * timezone's clock rather than `new Date(y, m, d, h)`, which is the
+ * machine's local clock and would make the suite's pass/fail depend on
+ * where it runs.
+ */
+function karachi(y: number, m: number, d: number, h: number, min = 0): Date {
+  return new Date(Date.UTC(y, m - 1, d, h - 5, min))
+}
+
+/** Karachi noon, so the boundary-hour shift never crosses a date by accident. */
+const noon = karachi(2026, 9, 20, 12, 0)
 
 describe('businessDateKey', () => {
   it('is the calendar date at a zero boundary hour', () => {
     expect(businessDateKey(noon, 0)).toBe('2026-09-20')
   })
   it('keeps the previous date before the boundary hour', () => {
-    expect(businessDateKey(new Date(2026, 8, 20, 3, 0, 0), 6)).toBe('2026-09-19')
-    expect(businessDateKey(new Date(2026, 8, 20, 7, 0, 0), 6)).toBe('2026-09-20')
+    expect(businessDateKey(karachi(2026, 9, 20, 3, 0), 6)).toBe('2026-09-19')
+    expect(businessDateKey(karachi(2026, 9, 20, 7, 0), 6)).toBe('2026-09-20')
   })
   it('clamps a nonsense boundary hour rather than shifting a report', () => {
     expect(businessDateKey(noon, -5)).toBe('2026-09-20')
     expect(businessDateKey(noon, 99)).toBe('2026-09-20')
     expect(businessDateKey(noon, NaN)).toBe('2026-09-20')
+  })
+  it('is pinned to Asia/Karachi regardless of the machine running the suite', () => {
+    // 2026-09-20T20:00:00Z is 2026-09-21 01:00 in Karachi (UTC+5) — a
+    // machine whose local zone is UTC or west of it would read this same
+    // instant as still 20 September if this read the local clock.
+    expect(businessDateKey(new Date('2026-09-20T20:00:00Z'), 0)).toBe('2026-09-21')
   })
 })
 

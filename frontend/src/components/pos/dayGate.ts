@@ -24,17 +24,27 @@ export type DayGate =
 
 /**
  * The business date as util.BusinessDate computes it: shift back by the
- * boundary hour, then take the calendar date. Uses the browser's own clock
- * and zone — the till runs in the shop, on Asia/Karachi, and a browser in
- * another zone only ever gets the banner wrong, never the invoice.
+ * boundary hour, then take the calendar date.
+ *
+ * Pinned to Asia/Karachi via Intl rather than the browser's own clock and
+ * zone: this feeds the invoice/reports date presets (components/invoices
+ * /dateRange.ts) as well as the till's own day gate, and an owner checking
+ * reports from outside the shop — or a demo machine whose zone was never
+ * set — must land on the same "today" the server does, not a banner that
+ * merely "gets it wrong" for the till alone.
  */
+const businessDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Karachi',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
 export function businessDateKey(now: Date, boundaryHour: number): string {
   const h = Number.isFinite(boundaryHour) ? Math.min(Math.max(Math.trunc(boundaryHour), 0), 12) : 0
   const shifted = new Date(now.getTime() - h * 3_600_000)
-  const y = shifted.getFullYear()
-  const m = String(shifted.getMonth() + 1).padStart(2, '0')
-  const d = String(shifted.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+  // en-CA formats as YYYY-MM-DD, which is what every caller here expects.
+  return businessDateFormatter.format(shifted)
 }
 
 /** The day's own date, read off the wire string rather than through Date —

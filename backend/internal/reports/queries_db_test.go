@@ -272,6 +272,46 @@ func TestReceivablesBucketBoundaries(t *testing.T) {
 	}
 }
 
+// A customer who has paid more than they currently owe carries a negative
+// balance (an advance) rather than dropping out of the report the way a
+// perfectly settled account (Balance == 0) does — an advance is still worth
+// the owner's attention, just in the other direction. FIFO settles the one
+// credit against the one debit in full, so every ageing bucket is empty:
+// there is nothing unpaid left to age.
+func TestReceivablesCustomerInAdvance(t *testing.T) {
+	db := testdb.Fresh(t)
+
+	today := util.BusinessDate(time.Now())
+	key := func(daysAgo int) string { return today.AddDate(0, 0, -daysAgo).Format(dateLayout) }
+
+	customer := seedCustomer(t, db, "Advance Co", "03005554433")
+	day := seedDay(t, db, key(5), dayops.StatusClosed, 0)
+
+	seedLedger(t, db, customer, "invoice", 500, 0, key(10), nil)
+	receipt := seedReceipt(t, db, "REC-9100", day, key(5), customer, 700, "cash", false)
+	seedLedger(t, db, customer, "receipt", 0, 700, key(5), &receipt)
+
+	rows, err := Receivables(ctx(), db, today)
+	if err != nil {
+		t.Fatalf("Receivables: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1 (an advance is still a receivable row): %+v", len(rows), rows)
+	}
+	r := rows[0]
+	if r.CustomerID != customer {
+		t.Fatalf("row is customer %v, want %v", r.CustomerID, customer)
+	}
+	eq(t, "balance", r.Balance, -200)
+	eq(t, "0–30", r.B0_30, 0)
+	eq(t, "31–60", r.B31_60, 0)
+	eq(t, "61–90", r.B61_90, 0)
+	eq(t, "90+", r.B90, 0)
+	if r.LastReceipt == nil || *r.LastReceipt != key(5) {
+		t.Errorf("last receipt = %v, want %s", r.LastReceipt, key(5))
+	}
+}
+
 func TestDayCloses(t *testing.T) {
 	db := testdb.Fresh(t)
 	f := seedPeriod(t, db)

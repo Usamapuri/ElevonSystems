@@ -10,9 +10,19 @@ import {
   shiftDateKey,
 } from './dateRange'
 
-/** Local-time noon, so the boundary-hour shift never crosses a date by
- * accident on the machine running the suite (same convention as dayGate). */
-const noon = new Date(2026, 8, 20, 12, 0, 0)
+/**
+ * A UTC instant for a given Asia/Karachi (UTC+5, no DST) wall-clock moment
+ * (same convention as dayGate.test.ts): businessDateKey is pinned to
+ * Asia/Karachi via Intl, so these tests build instants from the business
+ * timezone's clock rather than `new Date(y, m, d, h)`, which is the machine's
+ * local clock and would make the suite's pass/fail depend on where it runs.
+ */
+function karachi(y: number, m: number, d: number, h: number, min = 0): Date {
+  return new Date(Date.UTC(y, m - 1, d, h - 5, min))
+}
+
+/** Karachi noon, so the boundary-hour shift never crosses a date by accident. */
+const noon = karachi(2026, 9, 20, 12, 0)
 
 describe('shiftDateKey', () => {
   it('walks days without leaving the date domain', () => {
@@ -42,7 +52,7 @@ describe('presetRange', () => {
   })
   it('follows the business-day boundary hour, not the wall clock', () => {
     // 03:00 with a 06:00 boundary is still the previous business day.
-    const earlyHours = new Date(2026, 8, 20, 3, 0, 0)
+    const earlyHours = karachi(2026, 9, 20, 3, 0)
     expect(presetRange('today', earlyHours, 6)).toEqual({ from: '2026-09-19', to: '2026-09-19' })
     expect(presetRange('last7', earlyHours, 6)).toEqual({ from: '2026-09-13', to: '2026-09-19' })
   })
@@ -51,11 +61,11 @@ describe('presetRange', () => {
   })
   it('this_week starts Monday and never reaches past today', () => {
     // 2026-09-16 is a Wednesday; the week's Monday is 2026-09-14.
-    const wednesday = new Date(2026, 8, 16, 12, 0, 0)
+    const wednesday = karachi(2026, 9, 16, 12, 0)
     expect(presetRange('this_week', wednesday, 0)).toEqual({ from: '2026-09-14', to: '2026-09-16' })
   })
   it('this_week rolls back onto a Monday when today already is one', () => {
-    const monday = new Date(2026, 8, 14, 12, 0, 0)
+    const monday = karachi(2026, 9, 14, 12, 0)
     expect(presetRange('this_week', monday, 0)).toEqual({ from: '2026-09-14', to: '2026-09-14' })
   })
   it('this_month starts the 1st and is clipped to today', () => {
@@ -65,11 +75,11 @@ describe('presetRange', () => {
     expect(presetRange('last_month', noon, 0)).toEqual({ from: '2026-08-01', to: '2026-08-31' })
   })
   it('last_month crosses a year boundary', () => {
-    const midJan = new Date(2026, 0, 15, 12, 0, 0)
+    const midJan = karachi(2026, 1, 15, 12, 0)
     expect(presetRange('last_month', midJan, 0)).toEqual({ from: '2025-12-01', to: '2025-12-31' })
   })
   it('last_month lands on a leap-year February', () => {
-    const earlyMarch2024 = new Date(2024, 2, 1, 12, 0, 0)
+    const earlyMarch2024 = karachi(2024, 3, 1, 12, 0)
     expect(presetRange('last_month', earlyMarch2024, 0)).toEqual({ from: '2024-02-01', to: '2024-02-29' })
   })
 })

@@ -262,10 +262,28 @@ function PosPage() {
     [products.data],
   )
 
+  /**
+   * Starts a NEW charge attempt — and only a new one. Opening the dialog
+   * throws away the current client_op_id and the next POST mints a fresh
+   * one, so a second press while the dialog is up, while the PIN modal is
+   * up, or while the POST is in flight has to be a no-op: re-keying a live
+   * attempt is what turns a lost response into a double-charge.
+   */
+  const openTender = () => {
+    if (!shouldOpenTender({ tenderOpen, pinOpen, pending: charge.isPending, chargeDisabled })) return
+    clientOpId.current = null
+    setChargeError(null)
+    setPinError(null)
+    setTenderOpen(true)
+  }
+
   // Hotkeys: / focuses the product search, F2 opens the tender dialog. Esc is
   // Radix's job (every dialog here closes on it), and both hotkeys stand
   // down entirely while a dialog owns the screen — F2 through a live
-  // attempt is exactly the double-press that must not re-key it.
+  // attempt is exactly the double-press that must not re-key it. openTender
+  // is not memoized — it closes over chargeDisabled, which is cheap to
+  // recompute every render — so it is listed here rather than wrapped in its
+  // own useCallback just to satisfy this array.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (dialogIsOpen({ tenderOpen, pinOpen })) return
@@ -284,22 +302,7 @@ function PosPage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  })
-
-  /**
-   * Starts a NEW charge attempt — and only a new one. Opening the dialog
-   * throws away the current client_op_id and the next POST mints a fresh
-   * one, so a second press while the dialog is up, while the PIN modal is
-   * up, or while the POST is in flight has to be a no-op: re-keying a live
-   * attempt is what turns a lost response into a double-charge.
-   */
-  const openTender = () => {
-    if (!shouldOpenTender({ tenderOpen, pinOpen, pending: charge.isPending, chargeDisabled })) return
-    clientOpId.current = null
-    setChargeError(null)
-    setPinError(null)
-    setTenderOpen(true)
-  }
+  }, [tenderOpen, pinOpen, openTender])
 
   return (
     <div className="flex min-h-0 flex-col gap-4 p-4 md:p-6 lg:h-full">

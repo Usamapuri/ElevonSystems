@@ -28,7 +28,6 @@ export default defineConfig({
           vendor: ['react', 'react-dom'],
           router: ['@tanstack/react-router'],
           query: ['@tanstack/react-query'],
-          charts: ['recharts'],
         },
       },
     },

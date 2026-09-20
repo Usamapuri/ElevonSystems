@@ -572,24 +572,6 @@ func (h *CustomersHandler) CreateReceipt(c *gin.Context) {
 		return
 	}
 
-	// Check the account before burning a receipt number on it.
-	var customerName string
-	var isActive bool
-	err = h.db.QueryRow(`SELECT name, is_active FROM customers WHERE id = $1`, customerID).Scan(&customerName, &isActive)
-	if errors.Is(err, sql.ErrNoRows) {
-		c.JSON(http.StatusNotFound, models.Fail("Customer not found", "customer_not_found"))
-		return
-	}
-	if err != nil {
-		log.Printf("receipt create: customer: %v", err)
-		c.JSON(http.StatusInternalServerError, models.Fail("Could not record the receipt", "internal_error"))
-		return
-	}
-	if !isActive {
-		c.JSON(http.StatusConflict, models.Fail("That customer is no longer active", "customer_inactive"))
-		return
-	}
-
 	actor := invoiceActor(c)
 	now := time.Now()
 	number, err := invoice.AllocateReceiptNumber(h.db, util.BusinessDate(now))
@@ -614,6 +596,30 @@ func (h *CustomersHandler) CreateReceipt(c *gin.Context) {
 		}
 		log.Printf("receipt create: day gate: %v", err)
 		c.JSON(http.StatusInternalServerError, models.Fail("Could not record the receipt", "internal_error"))
+		return
+	}
+
+	// The account is checked inside the transaction, locked FOR UPDATE: a
+	// concurrent admin deactivating this customer between the check and the
+	// insert must not race the receipt onto an account that just went
+	// inactive. A receipt number already burned on a customer that turns out
+	// to be gone or inactive is the same acceptable gap the invoice number
+	// leaves (package invoice) — the row is never written, so nothing but the
+	// number itself goes unused.
+	var customerName string
+	var isActive bool
+	err = tx.QueryRow(`SELECT name, is_active FROM customers WHERE id = $1 FOR UPDATE`, customerID).Scan(&customerName, &isActive)
+	if errors.Is(err, sql.ErrNoRows) {
+		c.JSON(http.StatusNotFound, models.Fail("Customer not found", "customer_not_found"))
+		return
+	}
+	if err != nil {
+		log.Printf("receipt create: customer: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not record the receipt", "internal_error"))
+		return
+	}
+	if !isActive {
+		c.JSON(http.StatusConflict, models.Fail("That customer is no longer active", "customer_inactive"))
 		return
 	}
 
@@ -739,6 +745,14 @@ func (h *CustomersHandler) VoidReceipt(c *gin.Context) {
 		SET voided_at = now(), voided_by = $2, void_reason = $3
 		WHERE id = $1 AND voided_at IS NULL
 		RETURNING `+receiptColumns, receiptID, actorOrNil(actor.ID), reason))
+	if errors.Is(err, sql.ErrNoRows) {
+		// Unreachable in practice — the FOR UPDATE lock taken above already
+		// serializes against a concurrent void of the same row — but
+		// defensive: a race here means the receipt was already voided, not a
+		// server fault.
+		c.JSON(http.StatusConflict, models.Fail("That receipt is already voided", "receipt_already_voided"))
+		return
+	}
 	if err != nil {
 		log.Printf("receipt void: update: %v", err)
 		c.JSON(http.StatusInternalServerError, models.Fail("Could not void the receipt", "internal_error"))

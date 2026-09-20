@@ -403,7 +403,6 @@ export interface DayCurrent {
 // ── Invoices ──────────────────────────────────────────────────────────────
 
 export type PaymentMethod = 'cash' | 'card' | 'online' | 'credit'
-export type PaymentSubMethod = 'easypaisa' | 'jazzcash' | 'bank_transfer'
 export type InvoiceStatus = 'completed' | 'voided'
 /** How the cashier rang the line up; matches invoice_lines_entered_as_check. */
 export type EnteredAs = 'kg' | 'tonne' | 'amount' | 'gross_tare'

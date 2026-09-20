@@ -25,7 +25,7 @@ import {
 } from 'recharts'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatMoney } from '@/lib/money'
+import { formatKg, formatMoney } from '@/lib/money'
 import { dayMonthLabel } from './kpis'
 import type { DailyRow } from '@/types'
 
@@ -53,14 +53,10 @@ function toChartRow(row: DailyRow): ChartRow {
   return { label: dayMonthLabel(row.label), net: row.net, kg: row.kg_sold }
 }
 
-function formatKgTick(v: number): string {
-  return `${v.toLocaleString('en-PK', { maximumFractionDigits: 0 })} kg`
-}
-
 function tooltipValue(value: unknown, name: unknown): [string, string] {
   const n = typeof value === 'number' ? value : Number(Array.isArray(value) ? value[0] : value)
   const label = String(name ?? '')
-  if (label === 'Kg sold') return [`${n.toLocaleString('en-PK', { maximumFractionDigits: 3 })} kg`, label]
+  if (label === 'Kg sold') return [formatKg(n), label]
   return [formatMoney(n), label]
 }
 
@@ -78,6 +74,7 @@ export function TrendChart({ series7d, series30d }: Props) {
             size="sm"
             variant={range === '7d' ? 'default' : 'ghost'}
             className="h-7 px-3 text-xs"
+            aria-pressed={range === '7d'}
             onClick={() => setRange('7d')}
           >
             7 days
@@ -87,6 +84,7 @@ export function TrendChart({ series7d, series30d }: Props) {
             size="sm"
             variant={range === '30d' ? 'default' : 'ghost'}
             className="h-7 px-3 text-xs"
+            aria-pressed={range === '30d'}
             onClick={() => setRange('30d')}
           >
             30 days
@@ -118,7 +116,7 @@ export function TrendChart({ series7d, series30d }: Props) {
                   orientation="right"
                   tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                   stroke="hsl(var(--border))"
-                  tickFormatter={formatKgTick}
+                  tickFormatter={formatKg}
                   width={72}
                 />
                 <Tooltip

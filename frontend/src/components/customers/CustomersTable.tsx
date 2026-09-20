@@ -105,6 +105,7 @@ export function CustomersTable({ role }: Props) {
                       variant="ghost"
                       size="sm"
                       title="Edit"
+                      aria-label={`Edit ${cust.name}`}
                       onClick={(e) => {
                         e.stopPropagation()
                         setEditing(cust)

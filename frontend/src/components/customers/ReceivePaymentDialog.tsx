@@ -174,9 +174,9 @@ export function ReceivePaymentDialog({ open, onOpenChange, customer }: Props) {
 
         {needsReference && (
           <div className="space-y-1.5">
-            <Label>Channel (optional)</Label>
+            <Label htmlFor="receipt-channel">Channel (optional)</Label>
             <Select value={subMethod} onValueChange={setSubMethod}>
-              <SelectTrigger>
+              <SelectTrigger id="receipt-channel">
                 <SelectValue placeholder="Easypaisa, JazzCash, bank transfer…" />
               </SelectTrigger>
               <SelectContent>

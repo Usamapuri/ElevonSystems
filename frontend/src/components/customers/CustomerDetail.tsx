@@ -9,6 +9,7 @@ import { AgeingCard } from '@/components/customers/AgeingCard'
 import { ReceiptsList } from '@/components/customers/ReceiptsList'
 import { ReceivePaymentDialog } from '@/components/customers/ReceivePaymentDialog'
 import { formatMoney } from '@/lib/money'
+import { formatBusinessDate } from '@/lib/print/format'
 import type { LedgerEntryType } from '@/types'
 
 interface Props {
@@ -32,10 +33,6 @@ function entryTypeLabel(t: LedgerEntryType): string {
     default:
       return t
   }
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-PK', { dateStyle: 'medium' })
 }
 
 /** Detail sheet for one customer: profile fields, ageing, receipts (with
@@ -171,7 +168,7 @@ export function CustomerDetail({ customerId, onOpenChange }: Props) {
                   )}
                   {rows.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="text-muted-foreground">{formatDate(row.business_date)}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatBusinessDate(row.business_date)}</TableCell>
                       <TableCell>{entryTypeLabel(row.entry_type)}</TableCell>
                       <TableCell className="hidden sm:table-cell text-muted-foreground">{row.invoice_number ?? row.receipt_number ?? row.note ?? '—'}</TableCell>
                       <TableCell className="text-right">{row.debit ? formatMoney(row.debit) : '—'}</TableCell>

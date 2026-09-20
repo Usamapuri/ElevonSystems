@@ -18,7 +18,7 @@
 import type { AppSettings, Invoice, PrintDocument, ZReport } from '@/types'
 import apiClient from '@/api/client'
 import { buildReceiptHtml } from '@/lib/print/receipt'
-import { buildInvoiceA4Html } from '@/lib/print/invoiceA4'
+import { type A4BuyerDetails, buildInvoiceA4Html } from '@/lib/print/invoiceA4'
 import { buildZReportHtml } from '@/lib/print/zReport'
 import { printDebug } from '@/lib/print/printDebug'
 import { pageSizeForWidth, printHtml } from '@/lib/print/transport'
@@ -68,12 +68,35 @@ async function loadSettings(): Promise<AppSettings> {
   return FALLBACK_SETTINGS
 }
 
+/**
+ * The A4 invoice's buyer block wants the customer's address, province and
+ * registration type, none of which the invoice payload carries — it only
+ * snapshots name/phone/NTN/CNIC at the moment of sale (see
+ * `A4BuyerDetails` in invoiceA4.ts). When the sale was against an account,
+ * fetch the live customer record for those three fields; a walk-in sale (no
+ * customer_id) or a failed fetch prints the A4 invoice without them rather
+ * than failing the print, the same trade `loadSettings` above makes.
+ */
+async function loadBuyerDetails(invoice: Invoice): Promise<A4BuyerDetails> {
+  if (!invoice.customer_id) return {}
+  try {
+    const res = await apiClient.getCustomer(invoice.customer_id)
+    if (!res.success || !res.data) return {}
+    const { address, province, buyer_registration_type } = res.data
+    return { address, province, buyer_registration_type }
+  } catch (err) {
+    printDebug.error('invoice', 'loading buyer details for ' + invoice.invoice_number + ' failed', err)
+    return {}
+  }
+}
+
 /** Print one invoice as a thermal receipt or an A4 tax invoice. */
 export async function printInvoice(invoice: Invoice, document: PrintDocument): Promise<void> {
   const settings = await loadSettings()
   try {
     if (document === 'a4') {
-      await printHtml(buildInvoiceA4Html(invoice, settings), { pageSize: 'a4' })
+      const buyer = await loadBuyerDetails(invoice)
+      await printHtml(buildInvoiceA4Html(invoice, settings, buyer), { pageSize: 'a4' })
       return
     }
     await printHtml(buildReceiptHtml(invoice, settings), {

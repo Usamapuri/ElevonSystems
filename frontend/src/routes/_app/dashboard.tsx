@@ -10,6 +10,7 @@
  * Route access is gated in `_app.tsx`'s `beforeLoad` via `lib/roles.ts`
  * (`dashboard` is admin-only there already) — nothing to add here.
  */
+import { lazy, Suspense } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
@@ -17,8 +18,14 @@ import apiClient from '@/api/client'
 import { KpiRow } from '@/components/dashboard/KpiRow'
 import { RecentInvoices } from '@/components/dashboard/RecentInvoices'
 import { TopProducts } from '@/components/dashboard/TopProducts'
-import { TrendChart } from '@/components/dashboard/TrendChart'
 import { formatBusinessDate } from '@/lib/print/format'
+
+// recharts is a big dependency (~SVG chart engine) that only this one card
+// needs — lazy-loading it keeps it out of the bundle every other route,
+// including the till, pulls in on first paint.
+const TrendChart = lazy(() =>
+  import('@/components/dashboard/TrendChart').then((m) => ({ default: m.TrendChart })),
+)
 
 export const Route = createFileRoute('/_app/dashboard')({ component: DashboardPage })
 
@@ -66,7 +73,9 @@ function DashboardPage() {
       {data && (
         <>
           <KpiRow today={data.today} receivablesOutstanding={data.receivables_outstanding} day={data.day} />
-          <TrendChart series7d={data.series_7d} series30d={data.series_30d} />
+          <Suspense fallback={<div className="h-72 w-full animate-pulse rounded-lg border bg-muted/40" />}>
+            <TrendChart series7d={data.series_7d} series30d={data.series_30d} />
+          </Suspense>
           <div className="grid gap-4 xl:grid-cols-2">
             <TopProducts products={data.top_products} />
             <RecentInvoices invoices={data.recent_invoices} />
