@@ -92,7 +92,15 @@ export function ReceiptForm({ settings }: { settings: AppSettings }) {
                 onChange={(e) => onPickLogo(e.target.files?.[0])}
               />
               {logo && (
-                <Button type="button" variant="ghost" size="sm" onClick={() => form.setValue('receipt_logo_url', '', { shouldDirty: true })}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    form.setValue('receipt_logo_url', '', { shouldDirty: true })
+                    if (fileRef.current) fileRef.current.value = ''
+                  }}
+                >
                   Remove
                 </Button>
               )}

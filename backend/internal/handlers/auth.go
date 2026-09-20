@@ -36,8 +36,13 @@ const (
 	// consume the bucket (spec §6.1: 10 failures per 15 min).
 	loginMaxFailures = 10
 	loginWindow      = 15 * time.Minute
-	// /auth/forgot-password throttle: every request counts, checked before
-	// the DB lookup so timing cannot reveal which emails exist.
+	// /auth/forgot-password throttle: per email only. The backend sits
+	// behind nginx with SetTrustedProxies(nil), so c.ClientIP() resolves to
+	// the proxy for every request — an IP-keyed bucket would be one
+	// store-wide budget, not a per-client one. An unknown email is a no-op
+	// (no mail, no DB write beyond the lookup), so the bound that matters is
+	// how many reset attempts a given address can absorb, checked before the
+	// DB lookup so timing cannot reveal which emails exist.
 	forgotMaxRequests = 5
 	forgotWindow      = 5 * time.Minute
 )
@@ -70,6 +75,20 @@ func scanUser(row interface{ Scan(dest ...interface{}) error }) (models.User, er
 	return u, err
 }
 
+// dummyHash is compared against on an unknown username/email so a lookup
+// miss costs the same bcrypt work as a real password check — otherwise the
+// response-time gap between "no such user" and "wrong password" is a
+// timing oracle for username enumeration.
+var dummyHash []byte
+
+func init() {
+	h, err := bcrypt.GenerateFromPassword([]byte("elevon-dummy"), bcrypt.DefaultCost)
+	if err != nil {
+		panic("auth: failed to generate dummy bcrypt hash: " + err.Error())
+	}
+	dummyHash = h
+}
+
 // Login accepts a username or email plus password and returns a JWT. Failed
 // attempts are throttled per identifier+IP; the same key is used for
 // "no such user" and "wrong password" so the limiter is not an oracle.
@@ -95,14 +114,22 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var u models.User
 	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.FirstName, &u.LastName, &u.Role, &u.IsActive,
 		&u.HasPin, &u.LastLoginAt, &u.CreatedAt, &u.UpdatedAt, &hash)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil) {
-		h.loginRL.Record(rlKey)
-		c.JSON(http.StatusUnauthorized, models.Fail("Invalid username or password", "invalid_credentials"))
-		return
-	}
-	if err != nil {
+	notFound := errors.Is(err, sql.ErrNoRows)
+	if err != nil && !notFound {
 		log.Printf("login: query: %v", err)
 		c.JSON(http.StatusInternalServerError, models.Fail("Could not sign in right now", "internal_error"))
+		return
+	}
+	// Always compare against a bcrypt hash — the real one when the user
+	// exists, a fixed dummy one otherwise — so both paths cost the same.
+	compareHash := []byte(hash)
+	if notFound {
+		compareHash = dummyHash
+	}
+	passwordOK := bcrypt.CompareHashAndPassword(compareHash, []byte(req.Password)) == nil
+	if notFound || !passwordOK {
+		h.loginRL.Record(rlKey)
+		c.JSON(http.StatusUnauthorized, models.Fail("Invalid username or password", "invalid_credentials"))
 		return
 	}
 	token, err := middleware.GenerateToken(u.ID, u.Username, u.Role)
@@ -143,7 +170,7 @@ const resetTokenTTL = time.Hour
 
 // ForgotPassword starts the reset flow. Always 200 with the same message,
 // whether or not the email exists, so the login page cannot enumerate
-// staff. Throttled per IP and per email before the lookup.
+// staff. Throttled per email before the lookup (see forgotMaxRequests).
 func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	var req models.ForgotPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -155,7 +182,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.Fail("Email is required", "missing_email"))
 		return
 	}
-	if !h.forgotRL.Allow("ip:"+c.ClientIP()) || !h.forgotRL.Allow("email:"+email) {
+	if !h.forgotRL.Allow("email:" + email) {
 		c.JSON(http.StatusTooManyRequests, models.Fail("Too many reset requests. Try again in a few minutes.", "rate_limited"))
 		return
 	}

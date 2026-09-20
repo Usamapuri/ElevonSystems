@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -31,13 +32,20 @@ type Client struct {
 }
 
 // NewClientFromEnv reads RESEND_API_KEY and EMAIL_FROM. Missing values are
-// not an error — dev mode logs the message.
+// not an error — dev mode logs the message. In release mode, that silent
+// fallback is worth a boot warning: an operator who forgot to set them
+// would otherwise only discover it when a store owner says the reset email
+// never arrived.
 func NewClientFromEnv() *Client {
-	return &Client{
+	c := &Client{
 		apiKey:     strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
 		fromAddr:   strings.TrimSpace(os.Getenv("EMAIL_FROM")),
 		httpClient: &http.Client{Timeout: httpTimeout},
 	}
+	if os.Getenv("GIN_MODE") == "release" && !c.IsLiveSend() {
+		log.Printf("WARNING: RESEND_API_KEY/EMAIL_FROM unset in release mode — password-reset links will be written to the log instead of emailed")
+	}
+	return c
 }
 
 // IsLiveSend reports whether a real Resend request will be made.
@@ -99,8 +107,14 @@ func greeting(firstName string) string {
 	return "Hi"
 }
 
-// buildResetHTML is inline-styled: mail clients strip <style> blocks.
+// buildResetHTML is inline-styled: mail clients strip <style> blocks. The
+// three inputs (business name, greeting, reset URL) all ultimately come
+// from user-controlled data (settings, first name, a generated token), so
+// each is HTML-escaped before being interpolated into the markup.
 func buildResetHTML(business, firstName, url string) string {
+	business = html.EscapeString(business)
+	greet := html.EscapeString(greeting(firstName))
+	url = html.EscapeString(url)
 	return fmt.Sprintf(`<!doctype html>
 <html><body style="margin:0;padding:24px;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1c1917;">
 <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;padding:36px 32px;">
@@ -112,7 +126,7 @@ func buildResetHTML(business, firstName, url string) string {
 <p style="margin:0 0 4px;color:#78716c;font-size:13px;">Or paste this link into your browser:</p>
 <p style="margin:0;word-break:break-all;"><a href="%s" style="color:#c2410c;font-size:13px;">%s</a></p>
 <p style="margin:24px 0 0;color:#78716c;font-size:13px;line-height:1.5;">If you did not ask for this, ignore this email — your password will not change.</p>
-</td></tr></table></body></html>`, business, greeting(firstName), business, url, url, url)
+</td></tr></table></body></html>`, business, greet, business, url, url, url)
 }
 
 func buildResetText(business, firstName, url string) string {

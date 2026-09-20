@@ -126,6 +126,41 @@ func TestUsers_UpdateRevokesAndGuards(t *testing.T) {
 	}
 }
 
+// TestUsers_ProfileEditDoesNotRevoke guards against the bug where the
+// frontend always sends role and is_active on an edit form, which made
+// Update revoke sessions on every save — including an admin editing their
+// own row, which then bounced them to /login. Only a real change to role
+// or is_active (or a password reset) should revoke.
+func TestUsers_ProfileEditDoesNotRevoke(t *testing.T) {
+	db := testdb.Fresh(t)
+	ownerID := seedUser(t, db, "owner", "admin", "owner-pass-1", nil)
+	tillID := seedUser(t, db, "till", "counter", "till-pass-1", nil)
+	r := usersRouter(NewUsersHandler(db), actor{id: ownerID, username: "owner", role: "admin"})
+
+	counter, tr := "counter", true
+	if w := doJSON(r, http.MethodPut, "/admin/users/"+tillID.String(), models.UpdateUserRequest{FirstName: strp("New"), Role: &counter, IsActive: &tr}); w.Code != http.StatusOK {
+		t.Fatalf("profile edit: %d %s", w.Code, w.Body.String())
+	}
+	var revokedAt *time.Time
+	if err := db.QueryRow(`SELECT token_revoked_at FROM users WHERE id = $1`, tillID).Scan(&revokedAt); err != nil {
+		t.Fatal(err)
+	}
+	if revokedAt != nil {
+		t.Fatalf("unchanged role/active must not revoke, got token_revoked_at=%v", *revokedAt)
+	}
+
+	admin := "admin"
+	if w := doJSON(r, http.MethodPut, "/admin/users/"+tillID.String(), models.UpdateUserRequest{Role: &admin}); w.Code != http.StatusOK {
+		t.Fatalf("role change: %d %s", w.Code, w.Body.String())
+	}
+	if err := db.QueryRow(`SELECT token_revoked_at FROM users WHERE id = $1`, tillID).Scan(&revokedAt); err != nil {
+		t.Fatal(err)
+	}
+	if revokedAt == nil {
+		t.Fatal("a real role change must revoke")
+	}
+}
+
 func TestUsers_SetPin(t *testing.T) {
 	db := testdb.Fresh(t)
 	ownerID := seedUser(t, db, "owner", "admin", "owner-pass-1", nil)

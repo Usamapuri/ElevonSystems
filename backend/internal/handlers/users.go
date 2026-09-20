@@ -119,6 +119,11 @@ func (h *UsersHandler) List(c *gin.Context) {
 		}
 		users = append(users, u)
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("users list: rows: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not load users", "internal_error"))
+		return
+	}
 	c.JSON(http.StatusOK, models.PaginatedResponse{
 		Success: true, Message: "OK", Data: users,
 		Meta: models.MetaData{CurrentPage: page, PerPage: perPage, Total: total, TotalPages: (total + perPage - 1) / perPage},
@@ -183,7 +188,11 @@ func (h *UsersHandler) Create(c *gin.Context) {
 // to counter also clears the PIN. An admin cannot demote or deactivate
 // themself, and the last active admin can never be demoted or deactivated.
 func (h *UsersHandler) Update(c *gin.Context) {
-	actorID, _, _, _ := middleware.UserFromContext(c)
+	actorID, _, _, ok := middleware.UserFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, models.Fail("Not signed in", "auth_required"))
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, models.Fail("User not found", "user_not_found"))
@@ -228,7 +237,6 @@ func (h *UsersHandler) Update(c *gin.Context) {
 		}
 		add("last_name", v)
 	}
-	revoke := false
 	if req.Password != nil {
 		if code := checkPassword(*req.Password); code != "" {
 			c.JSON(http.StatusBadRequest, models.Fail(passwordMessage(code), code))
@@ -241,7 +249,6 @@ func (h *UsersHandler) Update(c *gin.Context) {
 			return
 		}
 		add("password_hash", string(hash))
-		revoke = true
 	}
 	demoting := req.Role != nil && *req.Role != util.RoleAdmin
 	if req.Role != nil {
@@ -253,12 +260,10 @@ func (h *UsersHandler) Update(c *gin.Context) {
 		if demoting {
 			sets = append(sets, "pin_hash = NULL")
 		}
-		revoke = true
 	}
 	deactivating := req.IsActive != nil && !*req.IsActive
 	if req.IsActive != nil {
 		add("is_active", *req.IsActive)
-		revoke = true
 	}
 	if len(sets) == 0 {
 		c.JSON(http.StatusBadRequest, models.Fail("Nothing to update", "no_changes"))
@@ -293,6 +298,15 @@ func (h *UsersHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.Fail("Could not update the user", "internal_error"))
 		return
 	}
+	// Revoke only on a change that actually matters for a live session: a
+	// new password, or a role/active flip from what's currently stored. The
+	// frontend always sends role and is_active on an edit, so comparing
+	// against the request alone would revoke on every profile tweak
+	// (including an admin editing their own row, which would then bounce
+	// them to /login).
+	revoke := req.Password != nil ||
+		(req.Role != nil && *req.Role != curRole) ||
+		(req.IsActive != nil && *req.IsActive != curActive)
 	if curRole == util.RoleAdmin && curActive && (demoting || deactivating) {
 		var others int
 		if err := tx.QueryRow(`SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active = true AND id <> $1`, id).Scan(&others); err != nil {
