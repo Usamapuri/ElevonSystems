@@ -29,6 +29,8 @@ This repo is a **sibling** of Bhookly Retail (`ArtyReal/POS-System-General`, loc
 backend/main.go                     boot: env → DB → Migrate → EnsureInitialAdmin → router
 backend/migrations/NNN_*.sql        embedded, applied in order, each idempotent; cmd/migrate applies without booting
 backend/internal/api/routes.go      ALL route registration; every route inside RequireRoles
+backend/internal/settings/          the 21 setting keys, their rules, Load/Save, LoadDayBoundaryHour
+backend/internal/staffpin/          admin PIN identify (bcrypt, iterates every candidate)
 backend/internal/middleware/auth.go JWT (24h, X-POS-JWT fallback), CheckTokenNotRevoked fails closed, RequireRoles
 backend/internal/util/roles.go      canonical roles ↔ frontend/src/lib/roles.ts
 backend/internal/util/timewindow.go business timezone + boundary-hour BusinessDate()
@@ -39,7 +41,7 @@ frontend/src/routes/                file-based routes; routeTree.gen.ts is gener
 ```
 
 ## Critical invariants (DO NOT regress) — each pinned by a test
-1. Every route in `routes.go` sits inside `RequireRoles` except `POST /auth/login` (`routes_role_gates_contract_test.go`).
+1. Every route in `routes.go` sits inside `RequireRoles` except the three public auth routes `POST /auth/login`, `POST /auth/forgot-password`, `POST /auth/reset-password` (`routes_role_gates_contract_test.go` pins the exact list).
 2. `APIResponse` envelope on every response; `error` codes are stable snake_case; no `err.Error()` reaches a client.
 3. `JWT_SECRET` is per store and mandatory in release mode; never hardcoded.
 4. Migrations are idempotent DDL (`migrations_idempotent_contract_test.go`) and `Migrate` runs before `EnsureInitialAdmin` (`boot_order_contract_test.go`).

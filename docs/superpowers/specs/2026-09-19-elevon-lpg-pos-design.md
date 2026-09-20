@@ -462,7 +462,8 @@ INITIAL_ADMIN_USERNAME  optional, default admin
 BUSINESS_TIMEZONE       Asia/Karachi (default)
 FISCAL_SECRETS_KEY      32-byte key for the DI token at rest (required once fiscal is enabled)
 ENABLE_FISCAL_WORKER    1 to run the outbound worker in-process
-RESEND_API_KEY, EMAIL_FROM   only if password-reset email is wanted
+APP_URL                 the frontend's public URL; used to build password-reset links (default http://localhost:3000)
+RESEND_API_KEY, EMAIL_FROM   only if password-reset email is wanted; unset → the reset link is written to the backend log
 ```
 
 Local dev: `docker compose -f docker-compose.dev.yml up` → Postgres 5432, backend 8080 with air, Vite 3000.
@@ -487,7 +488,7 @@ Each phase ends green (§10 gate) and is one PR from `dev`.
 | Phase | Deliverable | Notes |
 |---|---|---|
 | **0 Scaffold** | Repo layout, CLAUDE.md, `.claude/settings.json`, CI, docker-compose, Go server with `/health` + migration runner + first migration (users, settings), React shell with login page, sidebar, theme, API client, `window.elevon` bridge stub | **DONE 2026-09-20** on `dev` (commits `212a442`…`e48cf92`, plan `docs/superpowers/plans/2026-09-19-phase-0-scaffold.md`). Login/JWT/`/auth/me` were pulled forward from Phase 1 so sign-in works end to end. Deviation: route guards use `beforeLoad` + `redirect`, not `<Navigate>` in render, because the installed TanStack Router (1.170) loops on the latter. |
-| **1 Auth + users + settings** | Login/JWT/roles, initial admin from env, users CRUD, PIN set, settings API + Business/Tax/Receipt/Day-close/Credit sections | §6.1 |
+| **1 Auth + users + settings** | Login/JWT/roles, initial admin from env, users CRUD, PIN set, settings API + Business/Tax/Receipt/Day-close/Credit sections | **DONE 2026-09-20** on `dev` (plan `docs/superpowers/plans/2026-09-20-phase-1-auth-users-settings.md`). Deviations: users are deactivated, never deleted; usernames are immutable; PINs are 4 digits and unique across admins; password policy 8–72 bytes for every flow; forgot-password needs an email on the account (admins reset the rest from Settings → Users); `APP_URL` added to §11. `fiscal_config` is not a known setting until Phase 7. |
 | **2 Products, rates, customers** | Products CRUD (weight), Rates screen with history, Customers CRUD | §5.2, §5.3 |
 | **3 Day ops + invoices + ledger (backend)** | Business day open/ensure/close/reopen, drawer movements, audit log; `POST /invoices` with server-side pricing (§6.3), numbering, idempotency, credit tender + ledger + limit; receipts; voids; list/search/detail; `testdb` harness with the §10 cases | The money core. Rounding examples put to the owner before merge. |
 | **4 Till UI + printing** | `/pos` with WeightPad (4 modes), cart rail, customer picker, tender dialog, day-gate banners; thermal receipt + A4 invoice; reprint; kiosk-printing launcher | §6.2, §8.3, §8.4 |
