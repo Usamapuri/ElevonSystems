@@ -73,6 +73,15 @@ func SetupRoutes(r *gin.RouterGroup, db *sql.DB, auth gin.HandlerFunc) {
 	staff.POST("/customers/:id/receipts", customersH.CreateReceipt)
 	staff.POST("/customers/:id/receipts/:rid/void", customersH.VoidReceipt)
 
+	// The read side. The dashboard and the report tabs are the owner's view
+	// of the whole business, so they are admin only (spec §6.8); the ageing
+	// drill-down is staff, because the person taking a payment at the counter
+	// needs to see what the customer owes.
+	reportsH := handlers.NewReportsHandler(db)
+	admin.GET("/dashboard", reportsH.Dashboard)
+	admin.GET("/reports/:name", reportsH.Report)
+	staff.GET("/customers/:id/ageing", reportsH.Ageing)
+
 	// The money core. Voids are on staff for the same reason: the PIN in the
 	// body identifies the admin who authorised it (spec §6.4).
 	invoicesH := handlers.NewInvoicesHandler(db)
