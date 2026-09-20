@@ -1,11 +1,12 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type {
   APIResponse, AppSettings, BusinessDay, CashMovement, CashMovementRequest, CloseDayRequest, CreateCustomerRequest,
-  CreateInvoiceRequest, CreateProductRequest, CreateUserRequest, Customer, CustomerListParams, DayCurrent,
-  DayHistoryParams, ForceCloseDayRequest, Invoice, InvoiceListParams, LoginRequest, LoginResponse, OpenDayRequest,
-  PaginatedResponse, Product, ProductListParams, RateHistoryEntry, RateHistoryParams, RecentInvoiceParams,
-  ReopenDayRequest, SettingsPatch, StatementParams, StatementRow, UpdateCustomerRequest, UpdateProductRequest,
-  UpdateRatesRequest, UpdateRatesResponse, UpdateUserRequest, User, UserListParams, VoidInvoiceRequest, ZReport,
+  CreateInvoiceRequest, CreateProductRequest, CreateReceiptRequest, CreateUserRequest, Customer, CustomerAgeing,
+  CustomerListParams, DayCurrent, DayHistoryParams, ForceCloseDayRequest, Invoice, InvoiceListParams, LoginRequest,
+  LoginResponse, OpenDayRequest, PaginatedResponse, Product, ProductListParams, RateHistoryEntry, RateHistoryParams,
+  Receipt, RecentInvoiceParams, ReopenDayRequest, SettingsPatch, StatementParams, StatementRow,
+  UpdateCustomerRequest, UpdateProductRequest, UpdateRatesRequest, UpdateRatesResponse, UpdateUserRequest, User,
+  UserListParams, VoidInvoiceRequest, VoidReceiptRequest, ZReport,
 } from '@/types'
 
 export const TOKEN_KEY = 'elevon_token'
@@ -194,6 +195,24 @@ class APIClient {
   }
   updateCustomer(id: string, req: UpdateCustomerRequest) {
     return this.request<Customer>({ method: 'PUT', url: `/admin/customers/${id}`, data: req })
+  }
+
+  // ── Receipts (any staff — spec §3: counter may receive payment) ────────
+  getReceipts(customerId: string) {
+    return this.request<Receipt[]>({ method: 'GET', url: `/customers/${customerId}/receipts` })
+  }
+  /** 201 with `customer_balance_after`. 409 `day_not_open` / `previous_day_open`,
+   * 404 `customer_not_found`, 409 `customer_inactive`. */
+  createReceipt(customerId: string, req: CreateReceiptRequest) {
+    return this.request<Receipt>({ method: 'POST', url: `/customers/${customerId}/receipts`, data: req })
+  }
+  /** The PIN is the admin authority to reverse a receipt; never stored. 401
+   * `invalid_pin`, 409 `receipt_already_voided`. */
+  voidReceipt(customerId: string, receiptId: string, req: VoidReceiptRequest) {
+    return this.request<Receipt>({ method: 'POST', url: `/customers/${customerId}/receipts/${receiptId}/void`, data: req })
+  }
+  getCustomerAgeing(customerId: string) {
+    return this.request<CustomerAgeing>({ method: 'GET', url: `/customers/${customerId}/ageing` })
   }
 
   // ── Business day (the till reads it to know whether it may sell) ───────

@@ -228,6 +228,65 @@ export interface UpdateCustomerRequest {
 
 export type LedgerEntryType = 'invoice' | 'invoice_void' | 'receipt' | 'receipt_void' | 'adjustment'
 
+export type ReceiptMethod = 'cash' | 'card' | 'online'
+
+/** One customer_receipts row: money taken against an account, not against a
+ * specific invoice (spec §6.5). `customer_balance_after` carries the same
+ * meaning as on Invoice — the ledger balance immediately after this receipt
+ * (or its void) posted — and is set only on the create/void responses. */
+export interface Receipt {
+  id: string
+  receipt_number: string
+  customer_id: string
+  customer_name: string
+  amount: number
+  method: ReceiptMethod
+  sub_method: string | null
+  reference: string | null
+  business_day_id: string
+  business_date: string
+  received_by: string | null
+  received_by_name: string
+  note: string | null
+  created_at: string
+  voided_at: string | null
+  voided_by: string | null
+  void_reason: string | null
+  customer_balance_after: number | null
+}
+
+/** POST /customers/:id/receipts. Credit is not a method here — a receipt is
+ * money arriving, so it can only be cash, card or online. */
+export interface CreateReceiptRequest {
+  amount: number
+  method: ReceiptMethod
+  sub_method?: string
+  reference?: string
+  note?: string
+}
+
+/** POST /customers/:id/receipts/:rid/void. */
+export interface VoidReceiptRequest {
+  reason: string
+  pin: string
+}
+
+/** GET /customers/:id/ageing — the receivables report's row for one
+ * customer, or (a settled account) a zeroed row carrying only name, phone
+ * and the date last paid. Buckets age unsettled debits by business_date,
+ * FIFO against receipts (spec §6.8). */
+export interface CustomerAgeing {
+  customer_id: string
+  name: string
+  phone: string
+  balance: number
+  b0_30: number
+  b31_60: number
+  b61_90: number
+  b90: number
+  last_receipt: string | null
+}
+
 export interface StatementRow {
   id: string
   business_date: string
