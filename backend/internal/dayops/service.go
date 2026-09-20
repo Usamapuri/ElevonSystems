@@ -530,8 +530,11 @@ func EnsureOpenDayForInvoice(tx *sql.Tx, actor Actor, now time.Time) (Day, error
 		return Day{}, err
 	}
 	if today.Status != StatusClosed {
-		// Unreachable: Current would have returned an open/reopened row.
-		// Defensive — hand back the row rather than inventing a new one.
+		// Reachable under READ COMMITTED: another invoice's transaction
+		// committed a reopen (or an operator opened the day) between the
+		// Current read above and this one, so today's row already holds the
+		// open slot. Harmless — hand back the row that is now open rather
+		// than inventing a second one for the same date.
 		return today, nil
 	}
 
@@ -612,19 +615,53 @@ func AddMovement(db *sql.DB, actor Actor, dayID uuid.UUID, kind string, amount f
 	return Movement{}, ErrDayNotFound
 }
 
+// lockDay takes a row-level write lock on one business day inside tx and
+// returns it. Everything a close decides — what the day currently is, what it
+// expects, whether the variance needs a note — has to be read after this lock
+// and written before the commit that releases it. Without it two tills closing
+// at the same moment both read "open", both compute a count, and the second
+// UPDATE silently overwrites the first one's counted/expected figures while
+// both write a 'close' audit row.
+//
+// The lock is taken on business_days alone rather than with Get's LEFT JOINs:
+// Postgres refuses FOR UPDATE on the nullable side of an outer join, and the
+// user rows are not what needs locking.
+func lockDay(tx *sql.Tx, dayID uuid.UUID) (Day, error) {
+	var status string
+	err := tx.QueryRow(`SELECT status FROM business_days WHERE id = $1 FOR UPDATE`, dayID).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Day{}, ErrDayNotFound
+	}
+	if err != nil {
+		return Day{}, err
+	}
+	return Get(tx, dayID)
+}
+
 // Close seals a day in one step: count cash, card and online, compare against
 // Expected, snapshot the summary and lock. |variance| above threshold on ANY
 // tender needs a closing note; without one the close is refused with
 // ErrVarianceNoteRequired and nothing is written.
+//
+// The whole sequence runs inside one transaction that holds a row lock on the
+// day from the first read to the commit, so a second close arriving while this
+// one is in flight waits and then finds the day sealed (ErrDayClosed) instead
+// of overwriting it.
 func Close(db *sql.DB, actor Actor, dayID uuid.UUID, counted Counted, closingNotes *string, threshold float64) (Day, error) {
-	day, err := Get(db, dayID)
+	tx, err := db.Begin()
+	if err != nil {
+		return Day{}, err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	day, err := lockDay(tx, dayID)
 	if err != nil {
 		return Day{}, err
 	}
 	if day.Status == StatusClosed {
 		return Day{}, ErrDayClosed
 	}
-	expected, err := ComputeExpected(db, dayID)
+	expected, err := ComputeExpected(tx, dayID)
 	if err != nil {
 		return Day{}, err
 	}
@@ -647,13 +684,7 @@ func Close(db *sql.DB, actor Actor, dayID uuid.UUID, counted Counted, closingNot
 		}
 	}
 
-	tx, err := db.Begin()
-	if err != nil {
-		return Day{}, err
-	}
-	defer tx.Rollback() //nolint:errcheck
-
-	if _, err := tx.Exec(`
+	res, err := tx.Exec(`
 		UPDATE business_days SET
 			status = 'closed', closed_at = now(), closed_by = $1,
 			counted_cash = $2, counted_card = $3, counted_online = $4,
@@ -663,7 +694,7 @@ func Close(db *sql.DB, actor Actor, dayID uuid.UUID, counted Counted, closingNot
 			on_account_sales = $15, receipts_collected = $16,
 			invoice_count = $17, void_count = $18,
 			closing_notes = $19, updated_at = now()
-		WHERE id = $20`,
+		WHERE id = $20 AND status IN ('open', 'reopened')`,
 		actorRef(actor),
 		countedCash, countedCard, countedOnline,
 		expected.Cash, expected.Card, expected.Online,
@@ -671,8 +702,19 @@ func Close(db *sql.DB, actor Actor, dayID uuid.UUID, counted Counted, closingNot
 		expected.GrossSales, expected.Discounts, expected.TaxCollected, expected.NetSales,
 		expected.OnAccountSales, expected.ReceiptsCollected,
 		expected.InvoiceCount, expected.VoidCount,
-		nullIfEmpty(note), dayID); err != nil {
+		nullIfEmpty(note), dayID)
+	if err != nil {
 		return Day{}, err
+	}
+	// Belt and braces behind the row lock: the status predicate above means a
+	// day sealed by anyone else matches no row, and that must never commit as
+	// a silent no-op with an audit row claiming a close happened.
+	sealed, err := res.RowsAffected()
+	if err != nil {
+		return Day{}, err
+	}
+	if sealed == 0 {
+		return Day{}, ErrDayClosed
 	}
 	if err := writeAuditTx(tx, &dayID, day.DateKey(), "close", actor,
 		fmt.Sprintf("Closed %s — cash variance %.2f, card %.2f, online %.2f", day.DateKey(), cashVariance, cardVariance, onlineVariance),
@@ -773,26 +815,30 @@ func ForceClose(db *sql.DB, actor Actor, dayID uuid.UUID, pin, reason string) (D
 	if err != nil {
 		return Day{}, err
 	}
-	day, err := Get(db, dayID)
-	if err != nil {
-		return Day{}, err
-	}
-	if day.Status == StatusClosed {
-		return Day{}, ErrDayClosed
-	}
-	expected, err := ComputeExpected(db, dayID)
-	if err != nil {
-		return Day{}, err
-	}
 	note := "[Force close — no count] " + reason
 
+	// The PIN check is deliberately outside the transaction below: bcrypt
+	// against every active admin takes tens of milliseconds and has nothing to
+	// do with the day's state, so it must not be done holding the row lock.
 	tx, err := db.Begin()
 	if err != nil {
 		return Day{}, err
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	if _, err := tx.Exec(`
+	day, err := lockDay(tx, dayID)
+	if err != nil {
+		return Day{}, err
+	}
+	if day.Status == StatusClosed {
+		return Day{}, ErrDayClosed
+	}
+	expected, err := ComputeExpected(tx, dayID)
+	if err != nil {
+		return Day{}, err
+	}
+
+	res, err := tx.Exec(`
 		UPDATE business_days SET
 			status = 'closed', closed_at = now(), closed_by = $1,
 			counted_cash = $2, counted_card = $3, counted_online = $4,
@@ -802,14 +848,22 @@ func ForceClose(db *sql.DB, actor Actor, dayID uuid.UUID, pin, reason string) (D
 			on_account_sales = $9, receipts_collected = $10,
 			invoice_count = $11, void_count = $12,
 			closing_notes = $13, updated_at = now()
-		WHERE id = $14`,
+		WHERE id = $14 AND status IN ('open', 'reopened')`,
 		actorRef(actor),
 		expected.Cash, expected.Card, expected.Online,
 		expected.GrossSales, expected.Discounts, expected.TaxCollected, expected.NetSales,
 		expected.OnAccountSales, expected.ReceiptsCollected,
 		expected.InvoiceCount, expected.VoidCount,
-		note, dayID); err != nil {
+		note, dayID)
+	if err != nil {
 		return Day{}, err
+	}
+	sealed, err := res.RowsAffected()
+	if err != nil {
+		return Day{}, err
+	}
+	if sealed == 0 {
+		return Day{}, ErrDayClosed
 	}
 	if err := writeAuditTx(tx, &dayID, day.DateKey(), "force_close", actor,
 		fmt.Sprintf("Force-closed %s without a count — reason: %s", day.DateKey(), reason),

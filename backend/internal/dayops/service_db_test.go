@@ -435,6 +435,80 @@ func TestClose_WithinThresholdNeedsNoNote(t *testing.T) {
 	}
 }
 
+// Two tills (or one impatient person double-tapping Close) must not both
+// seal the same day: the second would overwrite the first's counted figures
+// and leave two 'close' rows in an append-only log that is supposed to record
+// exactly what happened. Close resolves, computes and writes inside one
+// transaction holding a row lock, so the loser waits and then finds the day
+// already sealed.
+func TestClose_IsSerialisedAndSecondCloseIsRefused(t *testing.T) {
+	db := testdb.Fresh(t)
+	actor, _ := admin(t, db, "1234")
+	day, err := Open(db, actor, 1000, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type outcome struct {
+		counted float64
+		err     error
+	}
+	// Both counts are inside the threshold of the expected 1000, and both
+	// carry a note, so nothing but the lock can separate them.
+	note := "counted at the same moment from two devices"
+	counts := []float64{1000, 950}
+	results := make(chan outcome, len(counts))
+	start := make(chan struct{})
+	for _, counted := range counts {
+		go func(c float64) {
+			<-start
+			_, err := Close(db, actor, day.ID, Counted{Cash: c}, &note, 100)
+			results <- outcome{counted: c, err: err}
+		}(counted)
+	}
+	close(start)
+
+	var sealed, refused int
+	var winner float64
+	for range counts {
+		r := <-results
+		switch {
+		case r.err == nil:
+			sealed++
+			winner = r.counted
+		case errors.Is(r.err, ErrDayClosed):
+			refused++
+		default:
+			t.Fatalf("counted %.2f: unexpected error %v", r.counted, r.err)
+		}
+	}
+	if sealed != 1 || refused != 1 {
+		t.Fatalf("exactly one close must win: %d sealed, %d refused", sealed, refused)
+	}
+
+	var closeRows int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM day_close_audit_log WHERE action = 'close'`).Scan(&closeRows); err != nil {
+		t.Fatal(err)
+	}
+	if closeRows != 1 {
+		t.Fatalf("one close audit row expected, got %d", closeRows)
+	}
+
+	final, err := Get(db, day.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Status != StatusClosed {
+		t.Fatalf("status: %s", final.Status)
+	}
+	if final.CountedCash == nil || !near(*final.CountedCash, winner) {
+		t.Fatalf("the sealed row must carry the winner's count (%.2f): %+v", winner, final.CountedCash)
+	}
+	if final.CashVariance == nil || !near(*final.CashVariance, winner-1000) {
+		t.Fatalf("variance must match the winner's count: %+v", final.CashVariance)
+	}
+}
+
 func TestMovements_NeedAnOpenDay(t *testing.T) {
 	db := testdb.Fresh(t)
 	actor, actorID := admin(t, db, "1234")
