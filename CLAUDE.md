@@ -39,6 +39,7 @@ backend/internal/pricing/           ComputeTotals — exact-integer §6.3 arithm
 backend/internal/dayops/            business day open/ensure-open/close/reopen/force-close, no-auto-open contract
 backend/internal/invoice/           atomic daily invoice/receipt numbering (YYYYMMDD-NNN, R-YYYYMMDD-NNN)
 backend/internal/ledger/            customer ledger Post/Balance/Statement, append-only
+backend/internal/reports/           LoadPeriodSummary feeds dashboard + daily report + Z-report; Products/TaxBands/Cashiers/Receivables/DayCloses; CSV/XLSX writers
 frontend/src/api/client.ts          the only place that talks HTTP
 frontend/src/lib/print/transport.ts window.elevon desktop bridge seam (browser falls back to window.print)
 frontend/src/lib/print/             receipt/A4/Z-report HTML builders, pure and node-safe (no DOM at module scope)
