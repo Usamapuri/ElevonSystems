@@ -30,8 +30,8 @@ func loadFixture(t *testing.T) []fixtureCase {
 	if err := json.Unmarshal(data, &cases); err != nil {
 		t.Fatalf("parse fixture: %v", err)
 	}
-	if len(cases) != 9 {
-		t.Fatalf("expected 9 fixture cases, got %d", len(cases))
+	if len(cases) != 14 {
+		t.Fatalf("expected 14 fixture cases, got %d", len(cases))
 	}
 	return cases
 }
@@ -172,19 +172,126 @@ func TestComputeTotals_InvalidRate(t *testing.T) {
 	}
 }
 
+// I1 review fix: negative discount amount/percent and negative tax rates
+// must be rejected, not silently clamped or accepted.
+func TestComputeTotals_InvalidDiscount(t *testing.T) {
+	_, err := ComputeTotals(Input{
+		Lines:          []LineIn{{ProductID: uuid.New(), Quantity: 1, Rate: 100}},
+		DiscountAmount: -1,
+	})
+	if !errors.Is(err, ErrInvalidDiscount) {
+		t.Fatalf("negative discount_amount: got %v, want ErrInvalidDiscount", err)
+	}
+
+	negPct := -5.0
+	_, err = ComputeTotals(Input{
+		Lines:           []LineIn{{ProductID: uuid.New(), Quantity: 1, Rate: 100}},
+		DiscountPercent: &negPct,
+	})
+	if !errors.Is(err, ErrInvalidDiscount) {
+		t.Fatalf("negative discount_percent: got %v, want ErrInvalidDiscount", err)
+	}
+}
+
+func TestComputeTotals_InvalidTaxRate(t *testing.T) {
+	_, err := ComputeTotals(Input{
+		Lines:   []LineIn{{ProductID: uuid.New(), Quantity: 1, Rate: 100}},
+		TaxRate: -0.01,
+	})
+	if !errors.Is(err, ErrInvalidTaxRate) {
+		t.Fatalf("negative tax_rate: got %v, want ErrInvalidTaxRate", err)
+	}
+
+	_, err = ComputeTotals(Input{
+		Lines:          []LineIn{{ProductID: uuid.New(), Quantity: 1, Rate: 100}},
+		FurtherTaxRate: -0.01,
+	})
+	if !errors.Is(err, ErrInvalidTaxRate) {
+		t.Fatalf("negative further_tax_rate: got %v, want ErrInvalidTaxRate", err)
+	}
+}
+
+// I2 review fix: with enough lines and a steep enough discount, a "last
+// line absorbs the remainder" allocation can push that line's discount past
+// its own line_total, making line_taxable negative. The largest-remainder
+// method must never do that: every line_discount stays within its own
+// line_total, and the shares still sum exactly to the invoice discount.
+// (Same numbers as the fixture's three_lines_heavy_discount case, asserted
+// here more directly as a standalone regression.)
+func TestComputeTotals_ThreeLinesNeverGoesNegative(t *testing.T) {
+	got, err := ComputeTotals(Input{
+		Lines: []LineIn{
+			{ProductID: uuid.New(), Quantity: 10.0, Rate: 265},
+			{ProductID: uuid.New(), Quantity: 5.0, Rate: 265},
+			{ProductID: uuid.New(), Quantity: 0.001, Rate: 265},
+		},
+		DiscountAmount: 3950.00,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var sumDiscounts float64
+	for i, l := range got.Lines {
+		if l.LineDiscount > l.LineTotal+epsilon {
+			t.Errorf("line %d LineDiscount %v exceeds LineTotal %v", i, l.LineDiscount, l.LineTotal)
+		}
+		if l.LineTaxable < -epsilon {
+			t.Errorf("line %d LineTaxable %v is negative", i, l.LineTaxable)
+		}
+		sumDiscounts += l.LineDiscount
+	}
+	if !approxEqual(sumDiscounts, got.DiscountAmount) {
+		t.Errorf("Σ LineDiscount = %v, want DiscountAmount %v", sumDiscounts, got.DiscountAmount)
+	}
+}
+
+// C1 review fix regression: this exact case (3.260 kg × 265.00, 15% discount,
+// 18% tax) previously computed a different TotalPayable in the TS mirror
+// (867) than in Go (866) because the two used different float expressions
+// for the percent-discount calculation. Both now run the same scaled-integer
+// algorithm and must agree; this pins Go's own side of that agreement.
+func TestComputeTotals_C1PercentDiscountRegression(t *testing.T) {
+	pct := 15.0
+	got, err := ComputeTotals(Input{
+		Lines:           []LineIn{{ProductID: uuid.New(), Quantity: 3.260, Rate: 265.00}},
+		DiscountPercent: &pct,
+		TaxRate:         0.18,
+		BuyerRegistered: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.TotalPayable != 866 {
+		t.Errorf("TotalPayable = %d, want 866", got.TotalPayable)
+	}
+	if !approxEqual(got.RoundingAdjustment, -0.49) {
+		t.Errorf("RoundingAdjustment = %v, want -0.49", got.RoundingAdjustment)
+	}
+}
+
 func TestRound2(t *testing.T) {
 	cases := []struct {
 		in, want float64
+		note     string
 	}{
-		{3908.745, 3908.75}, // half-up at the paisa boundary (3908.745*100=390874.5)
-		{0.005, 0.01},       // 0.5 paisa rounds up (documents the half-up rule)
-		{3312.50, 3312.50},  // already exact, unchanged
-		{0, 0},
+		{3908.745, 3908.75, "half-up at the paisa boundary (3908.745*100=390874.5)"},
+		{0.005, 0.01, "0.5 paisa rounds up (documents the half-up rule)"},
+		{3312.50, 3312.50, "already exact, unchanged"},
+		{0, 0, "zero"},
+		// I1 review fix: these two are exact half-paisa ties whose float64
+		// product lands one ULP LOW of the true value (0.22499999999999998
+		// and 2.3849999999999998 respectively), so the naive
+		// math.Round(v*100) path floats DOWN to 0.22/2.38 instead of the
+		// correct half-up 0.23/2.39. Round2 must get these right by scaling
+		// to micro-rupees (v*1e6) before rounding to an integer, where the
+		// same float error is negligible next to the true integer value.
+		{1.25 * 0.18, 0.23, "1.25×0.18=0.225 exact tie, float64 product is one ULP low"},
+		{0.009 * 265, 2.39, "0.009×265=2.385 exact tie, float64 product is one ULP low"},
 	}
 	for _, c := range cases {
 		got := Round2(c.in)
 		if !approxEqual(got, c.want) {
-			t.Errorf("Round2(%v) = %v, want %v", c.in, got, c.want)
+			t.Errorf("Round2(%v) [%s] = %v, want %v", c.in, c.note, got, c.want)
 		}
 	}
 }
@@ -231,5 +338,26 @@ func TestTaxRateFor(t *testing.T) {
 	settings["tax_rate_card"] = json.RawMessage(`0`)
 	if got := TaxRateFor("card", settings); !approxEqual(got, 0) {
 		t.Errorf("card = %v, want 0", got)
+	}
+}
+
+// TestTaxRateFor_AbsentKeyAndUnknownTender: a settings map that simply
+// doesn't have the key (not just a null value), and a tender that isn't
+// cash/card/online/credit, both return 0 — fail closed, never silently
+// fall back to the cash rate for a tender nobody configured.
+func TestTaxRateFor_AbsentKeyAndUnknownTender(t *testing.T) {
+	empty := map[string]json.RawMessage{}
+	if got := TaxRateFor("cash", empty); got != 0 {
+		t.Errorf("cash with no tax_rate_cash key = %v, want 0", got)
+	}
+
+	settings := map[string]json.RawMessage{
+		"tax_rate_cash": json.RawMessage(`0.18`),
+	}
+	if got := TaxRateFor("bank_transfer", settings); got != 0 {
+		t.Errorf(`unknown tender "bank_transfer" = %v, want 0 (not the cash rate)`, got)
+	}
+	if got := TaxRateFor("", settings); got != 0 {
+		t.Errorf("empty tender = %v, want 0", got)
 	}
 }
