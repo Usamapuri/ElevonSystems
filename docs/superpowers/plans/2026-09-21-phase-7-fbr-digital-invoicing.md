@@ -32,7 +32,7 @@
 ## File structure
 
 ```
-backend/migrations/003_fiscal.sql                 fiscal_invoices, fiscal_outbound_jobs, fiscal_audit_events (+trigger), void_log.fiscal_void_status, settings seeds
+backend/migrations/003_fiscal.sql                 fiscal_invoices, fiscal_outbound_jobs, fiscal_audit_events (+trigger), invoices.fiscal_void_status + fiscal_debit_note_number, settings seeds
 backend/internal/fiscal/
   config.go        config_test.go                Config, ParseConfig, Validate, Public
   crypto.go        crypto_test.go                Encrypt/Decrypt AES-256-GCM, KeyFromEnv
@@ -114,7 +114,11 @@ CREATE INDEX IF NOT EXISTS idx_fiscal_audit_invoice ON fiscal_audit_events (invo
 DROP TRIGGER IF EXISTS fiscal_audit_events_append_only ON fiscal_audit_events;
 CREATE TRIGGER fiscal_audit_events_append_only BEFORE UPDATE OR DELETE ON fiscal_audit_events FOR EACH ROW EXECUTE FUNCTION raise_append_only();
 
-ALTER TABLE void_log ADD COLUMN IF NOT EXISTS fiscal_void_status VARCHAR(12) NOT NULL DEFAULT 'unfiled'; -- unfiled|pending|synced|failed
+-- void_log is append-only (invariant 6), so the debit-note state lives on the mutable invoices row:
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fiscal_void_status VARCHAR(12) NOT NULL DEFAULT 'unfiled'; -- unfiled|pending|synced|failed
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fiscal_debit_note_number VARCHAR(64);
+ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_fiscal_void_status_check;
+ALTER TABLE invoices ADD CONSTRAINT invoices_fiscal_void_status_check CHECK (fiscal_void_status IN ('unfiled','pending','synced','failed'));
 
 INSERT INTO settings (key, value) VALUES
   ('fiscal_config', '{"enabled":false,"is_sandbox":true,"seller_ntn_cnic":"","seller_business_name":"","seller_province":"","seller_address":"","scenario_registered":"SN001","scenario_unregistered":"SN002","rate_desc":"18%","sale_type":"Goods at Standard Rate (default)","trans_type_id":75,"default_uom":"KG","buyer_registration_default":"Unregistered","validate_url":"","post_url":""}'),
@@ -212,13 +216,13 @@ type Deps struct{ DB *sql.DB; NewClient func(cfg Config, token string, timeout t
 func Submit(ctx context.Context, d Deps, invoiceID uuid.UUID, kind Kind, actor *uuid.UUID) (string, error)
 ```
 Steps, in this order (the contract test pins 1 before 4):
-1. `FindSynced` → if found: apply to the invoice/void_log (step 6) with phase `ledger_recovery`, return the number. **This runs before any HTTP.**
+1. `FindSynced` → if found: apply to the invoice (step 6) with phase `ledger_recovery`, return the number. **This runs before any HTTP.**
 2. `LoadConfig`; if `!Enabled` → `ErrDisabled` (`fiscal_disabled`); `CheckRuntime()` → `ErrSandboxInRelease` (audit phase `refused`, outcome `refused`); `LoadAPIKey` empty → `ErrTokenMissing`; `KeyFromEnv` error in release → `ErrSecretsKeyMissing`.
 3. Load invoice + lines (`handlers.loadInvoiceWithLines` is in `handlers`; move that query into a small `internal/invoice/load.go` `LoadWithLines(q, id)` so `fiscal` can use it without importing handlers) and the customer row when `customer_id` is set → `Buyer`. For `KindDebitNote` also load `void_log.reason` and `fiscal_invoices` sale number (`ErrNotSynced` if the sale was never filed; `ErrBuyerUnregistered` when the buyer is not registered → caller marks `unfiled`).
 4. Build; `Validate`; `Rejection()` → audit `validate/rejected`, return `*RejectedError`.
 5. `Post`; transport error → audit `post/unreachable`, return it (retryable). `Rejection()` → audit `post/rejected`, return `*RejectedError`. Otherwise `RecordSynced` **first**, then step 6, audit `post/ok` with latency.
-6. Apply: sale → `UPDATE invoices SET fiscal_status='synced', fiscal_invoice_number=$2, fiscal_details=$3` where `fiscal_details = {"kind","scenario_id","filed_at","line_numbers":[…],"is_sandbox"}`; debit note → `UPDATE void_log SET fiscal_void_status='synced', fiscal_credit_note=$2 WHERE invoice_id=$1`.
-`MarkFailed(db, invoiceID, kind, code)` sets `fiscal_status='failed'` / `fiscal_void_status='failed'` and stores `{"error_code","error"}` in `fiscal_details`.
+6. Apply: sale → `UPDATE invoices SET fiscal_status='synced', fiscal_invoice_number=$2, fiscal_details=$3` where `fiscal_details = {"kind","scenario_id","filed_at","line_numbers":[…],"is_sandbox"}`; debit note → `UPDATE invoices SET fiscal_void_status='synced', fiscal_debit_note_number=$2 WHERE id=$1` (never touch `void_log`, it is append-only; its `fiscal_credit_note` column stays unused).
+`MarkFailed(db, invoiceID, kind, code)` sets `invoices.fiscal_status='failed'` / `invoices.fiscal_void_status='failed'` and stores `{"error_code","error"}` in `fiscal_details`.
 
 **Tests (DB + httptest):** happy path sale sets status/number/ledger/audit rows; ledger-first: pre-insert a `fiscal_invoices` row and a client that panics if called → Submit returns the number without HTTP; rejection marks nothing synced and returns `*RejectedError` with the code; unreachable leaves `pending`; sandbox in release refuses with an audit row and no HTTP; debit note for an unregistered buyer returns `ErrBuyerUnregistered`. **Contract test** greps `submit.go` for `FindSynced(` appearing before `.Validate(` in source order.
 
@@ -246,7 +250,7 @@ Rejections are dead immediately (retrying a `01` cannot succeed without a config
 
 **Invoice hooks (`invoices.go`):**
 - Create: read `fiscal.LoadConfig(h.db)` alongside settings (before the transaction). Insert `fiscal_status` as `'pending'` when `cfg.Enabled` else `'off'`. **After commit**, when enabled: `number, err := fiscal.Submit(ctx with 8 s, deps, inv.ID, KindSale, actor)`; on success set `inv.FiscalStatus='synced'`, `inv.FiscalInvoiceNumber=&number` in the response; on `*RejectedError` → `fiscal.MarkFailed` and `inv.FiscalStatus='failed'`; on any other error → `fiscal.Enqueue(now)` and leave `pending`. The sale is **never** rolled back because of FBR. Response gains `fiscal_error_code` (string, omitempty) so the till can toast "FBR rejected: 0104".
-- Void: after commit, when the invoice was `synced` and its customer's `buyer_registration_type == 'Registered'` (read inside the void transaction) → `UPDATE void_log SET fiscal_void_status='pending'` in the same transaction, then after commit `Submit(KindDebitNote)` inline with the same 8 s rule; else the row stays `unfiled`. Existing void tests unchanged (fiscal disabled → `unfiled`).
+- Void: after commit, when the invoice was `synced` and its customer's `buyer_registration_type == 'Registered'` (read inside the void transaction) → `UPDATE invoices SET fiscal_void_status='pending' WHERE id=$1` in the same transaction, then after commit `Submit(KindDebitNote)` inline with the same 8 s rule; else the row stays `unfiled`. Existing void tests unchanged (fiscal disabled → `unfiled`). The invoice DTO and TS type gain `fiscal_void_status` and `fiscal_debit_note_number`.
 
 **`handlers/fiscal.go` (all under `admin`):**
 | Route | Body → Response |
