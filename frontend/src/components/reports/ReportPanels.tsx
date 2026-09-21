@@ -246,6 +246,10 @@ export function DayClosesPanel({ from, to, params, enabled }: PanelProps) {
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        These are the figures sealed when the day was closed. A void entered after the close changes the Daily tab but
+        never a sealed row.
+      </p>
       <PanelHeader report="day-closes" reportLabel="Day closes" from={from} to={to} enabled={enabled} />
       <PanelStatus isLoading={q.isLoading} error={q.error} />
       <ReportTable

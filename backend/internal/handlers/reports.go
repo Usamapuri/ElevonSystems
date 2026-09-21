@@ -442,7 +442,7 @@ func (h *ReportsHandler) dayClosesView(ctx context.Context, r reports.Range) (*r
 		rows:  rows,
 		sheet: reportSheets["day-closes"],
 		headers: []string{"Date", "Status", "Closed By", "Expected Cash", "Counted Cash",
-			"Cash Variance", "Card Variance", "Online Variance", "Net"},
+			"Cash Variance", "Card Variance", "Online Variance", "Net (sealed)"},
 	}
 	for _, row := range rows {
 		v.csvRows = append(v.csvRows, []string{

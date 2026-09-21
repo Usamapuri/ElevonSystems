@@ -176,6 +176,13 @@ export const receivableColumns: ReportColumn<ReceivableRow>[] = [
 
 // ── Day closes (sealed rows — no totals row; spec §6.8) ─────────────────────
 
+// The Net column here is `business_days.net_sales` as sealed by the close,
+// not a live recomputation: a void entered after the close moves the Daily
+// tab and never this row (a printed Z-slip cannot restate itself). Hence
+// the "Net (sealed)" label — matching the export header in
+// backend/internal/handlers/reports.go `dayClosesView` — and the note
+// `DayClosesPanel` carries above the table.
+
 function statusLabel(status: DayCloseRow['status']): string {
   switch (status) {
     case 'open':
@@ -210,7 +217,7 @@ export function dayCloseColumns(onOpenZReport: (row: DayCloseRow) => void): Repo
     { key: 'cash_variance', label: 'Cash variance', align: 'right', format: (r) => signedMoney(r.cash_variance) },
     { key: 'card_variance', label: 'Card variance', align: 'right', format: (r) => signedMoney(r.card_variance) },
     { key: 'online_variance', label: 'Online variance', align: 'right', format: (r) => signedMoney(r.online_variance) },
-    { key: 'net', label: 'Net', align: 'right', format: (r) => formatMoney(r.net) },
+    { key: 'net', label: 'Net (sealed)', align: 'right', format: (r) => formatMoney(r.net) },
     {
       key: 'z_report',
       label: 'Z-report',
