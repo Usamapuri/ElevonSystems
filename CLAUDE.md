@@ -29,7 +29,7 @@ This repo is a **sibling** of Bhookly Retail (`ArtyReal/POS-System-General`, loc
 backend/main.go                     boot: env → DB → Migrate → EnsureInitialAdmin → router
 backend/migrations/NNN_*.sql        embedded, applied in order, each idempotent; cmd/migrate applies without booting
 backend/internal/api/routes.go      ALL route registration; every route inside RequireRoles
-backend/internal/settings/          the 21 setting keys, their rules, Load/Save, LoadDayBoundaryHour
+backend/internal/settings/          the 24 setting keys, their rules, Load/LoadPublic/Save, Private, LoadDayBoundaryHour
 backend/internal/staffpin/          admin PIN identify (bcrypt, iterates every candidate)
 backend/internal/middleware/auth.go JWT (24h, X-POS-JWT fallback), CheckTokenNotRevoked fails closed, RequireRoles
 backend/internal/util/roles.go      canonical roles ↔ frontend/src/lib/roles.ts

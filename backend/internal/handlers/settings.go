@@ -21,9 +21,10 @@ type SettingsHandler struct{ db *sql.DB }
 // NewSettingsHandler builds a SettingsHandler.
 func NewSettingsHandler(db *sql.DB) *SettingsHandler { return &SettingsHandler{db: db} }
 
-// GetAll returns every setting as {key: value}.
+// GetAll returns every setting as {key: value}, minus the private ones — the
+// encrypted FBR token never leaves the server here.
 func (h *SettingsHandler) GetAll(c *gin.Context) {
-	all, err := settings.Load(h.db)
+	all, err := settings.LoadPublic(h.db)
 	if err != nil {
 		log.Printf("settings get: %v", err)
 		c.JSON(http.StatusInternalServerError, models.Fail("Could not load settings", "internal_error"))
@@ -46,6 +47,12 @@ func (h *SettingsHandler) Update(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, models.Fail(fmt.Sprintf("Unknown setting %q", k), "unknown_setting"))
 			return
 		}
+		// A private key has its own guarded route; writing it here would let
+		// a plaintext FBR token into the settings table.
+		if settings.Private(k) {
+			c.JSON(http.StatusBadRequest, models.Fail(fmt.Sprintf("%q is not writable here", k), "private_setting"))
+			return
+		}
 	}
 	current, err := settings.Load(h.db)
 	if err != nil {
@@ -64,7 +71,7 @@ func (h *SettingsHandler) Update(c *gin.Context) {
 			// ve.Key/ve.Message are curated, person-facing text — never a
 			// raw system error — so building the message from those fields
 			// is safe to send to the client.
-			c.JSON(http.StatusBadRequest, models.Fail(ve.Key+": "+ve.Message, "invalid_setting_value"))
+			c.JSON(http.StatusBadRequest, models.Fail(ve.Key+": "+ve.Message, settingErrorCode(ve)))
 			return
 		}
 		current[k] = v
@@ -72,7 +79,7 @@ func (h *SettingsHandler) Update(c *gin.Context) {
 	if err := settings.CheckConsistency(current); err != nil {
 		var ve *settings.ValueError
 		if errors.As(err, &ve) {
-			c.JSON(http.StatusBadRequest, models.Fail(ve.Key+": "+ve.Message, "invalid_setting_value"))
+			c.JSON(http.StatusBadRequest, models.Fail(ve.Key+": "+ve.Message, settingErrorCode(ve)))
 			return
 		}
 		log.Printf("settings update: consistency: %v", err)
@@ -87,11 +94,21 @@ func (h *SettingsHandler) Update(c *gin.Context) {
 	if _, ok := req["day_boundary_hour"]; ok {
 		settings.LoadDayBoundaryHour(h.db)
 	}
-	updated, err := settings.Load(h.db)
+	updated, err := settings.LoadPublic(h.db)
 	if err != nil {
 		log.Printf("settings update: reload: %v", err)
 		c.JSON(http.StatusInternalServerError, models.Fail("Saved, but could not reload settings", "internal_error"))
 		return
 	}
 	c.JSON(http.StatusOK, models.OK("Settings saved", updated))
+}
+
+// settingErrorCode picks the envelope's error code. Most refusals are the
+// generic invalid_setting_value; the fiscal cross-key rules carry their own
+// stable code so the FBR screen can show each one beside its field.
+func settingErrorCode(ve *settings.ValueError) string {
+	if ve.Code != "" {
+		return ve.Code
+	}
+	return "invalid_setting_value"
 }

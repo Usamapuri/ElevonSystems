@@ -8,17 +8,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
+	"elevon-backend/internal/fiscal"
 	"elevon-backend/internal/util"
 )
 
 // ValueError names the key that failed and why, in words for a person.
+//
+// Code, when set, is the stable snake_case error code the handler puts in the
+// envelope instead of the generic invalid_setting_value. The fiscal cross-key
+// rules use it so the admin screen can show each refusal beside the field it
+// belongs to. Message is always curated text, never a system error.
 type ValueError struct {
 	Key     string
+	Code    string
 	Message string
 }
 
@@ -56,7 +65,24 @@ var rules = map[string]rule{
 
 	"day_close_variance_threshold": notNull(number(0, 1_000_000)),
 	"credit_limit_enforced":        notNull(boolean),
+
+	// Phase 7, seeded by migrations/003_fiscal.sql. fiscal_api_key_enc holds
+	// the AES-GCM ciphertext of the FBR token and is private: it never leaves
+	// the server through GET /settings and is not writable through
+	// PUT /admin/settings.
+	"fiscal_config":      notNull(fiscalConfig),
+	"fiscal_api_key_enc": notNull(text(0, 512)),
+	"fiscal_reference":   notNull(jsonObject),
 }
+
+// privateKeys never leave the server in a settings response and cannot be
+// written through the general settings endpoint. Each has its own guarded
+// route instead (the FBR token: PUT /admin/fiscal/token).
+var privateKeys = map[string]bool{"fiscal_api_key_enc": true}
+
+// Private reports whether key is withheld from GET /settings and refused by
+// PUT /admin/settings.
+func Private(key string) bool { return privateKeys[key] }
 
 // Keys lists every known setting, sorted.
 func Keys() []string {
@@ -85,6 +111,13 @@ func Validate(key string, raw json.RawMessage) error {
 
 // CheckConsistency applies the cross-key rules to a complete map.
 func CheckConsistency(all map[string]json.RawMessage) error {
+	if err := checkReceipt(all); err != nil {
+		return err
+	}
+	return checkFiscal(all)
+}
+
+func checkReceipt(all map[string]json.RawMessage) error {
 	var width, printable int
 	if err := json.Unmarshal(all["receipt_paper_width_mm"], &width); err != nil {
 		return nil // missing or invalid on its own; Validate reports that
@@ -96,6 +129,81 @@ func CheckConsistency(all map[string]json.RawMessage) error {
 		return &ValueError{Key: "receipt_printable_area_mm", Message: fmt.Sprintf("must not exceed the paper width (%d mm)", width)}
 	}
 	return nil
+}
+
+// checkFiscal is the gate on switching FBR filing on. While fiscal_config is
+// disabled nothing here applies, so setup can happen in any order; the moment
+// enabled goes true every other key it depends on must already agree, because
+// each of these mismatches is an FBR rejection at the till:
+//
+//   - rate_desc against tax_rate_cash — FBR recomputes tax as
+//     valueSalesExcludingST × rate and rejects with 0104 when the payload's
+//     figures were priced at a different rate.
+//   - a stored token — without one nothing can be filed at all.
+//   - the reference lists covering default_hs_code and default_uom — FBR
+//     rejects an unlisted UoM for an HS code with 0099.
+//
+// Each refusal carries its own code so the admin screen can put the message
+// beside the right field.
+func checkFiscal(all map[string]json.RawMessage) error {
+	raw, ok := all[fiscal.KeyConfig]
+	if !ok {
+		return nil
+	}
+	cfg, err := fiscal.ParseConfig(raw)
+	if err != nil || !cfg.Enabled {
+		return nil // Validate already reports a malformed config
+	}
+
+	var cash float64
+	pct, pctErr := strconv.ParseFloat(strings.TrimSuffix(cfg.RateDesc, "%"), 64)
+	if err := json.Unmarshal(all["tax_rate_cash"], &cash); err != nil || pctErr != nil || math.Abs(pct-cash*100) > 1e-9 {
+		return &ValueError{
+			Key:     fiscal.KeyConfig,
+			Code:    "tax_rate_mismatch",
+			Message: "rate_desc does not match tax_rate_cash",
+		}
+	}
+
+	var token string
+	if err := json.Unmarshal(all[fiscal.KeyAPIKeyEnc], &token); err != nil || strings.TrimSpace(token) == "" {
+		return &ValueError{
+			Key:     fiscal.KeyConfig,
+			Code:    "fiscal_token_missing",
+			Message: "save the FBR token before switching filing on",
+		}
+	}
+
+	var hsCode string
+	_ = json.Unmarshal(all["default_hs_code"], &hsCode)
+	var ref struct {
+		HSUoM map[string][]string `json:"hs_uom"`
+	}
+	if err := json.Unmarshal(all[fiscal.KeyReference], &ref); err != nil || len(ref.HSUoM) == 0 {
+		return &ValueError{
+			Key:     fiscal.KeyConfig,
+			Code:    "fiscal_reference_stale",
+			Message: "refresh the FBR reference lists before switching filing on",
+		}
+	}
+	allowed, ok := ref.HSUoM[hsCode]
+	if !ok {
+		return &ValueError{
+			Key:     fiscal.KeyConfig,
+			Code:    "fiscal_reference_stale",
+			Message: "refresh the FBR reference lists for the default HS code before switching filing on",
+		}
+	}
+	for _, u := range allowed {
+		if strings.EqualFold(strings.TrimSpace(u), strings.TrimSpace(cfg.DefaultUoM)) {
+			return nil
+		}
+	}
+	return &ValueError{
+		Key:     fiscal.KeyConfig,
+		Code:    "fiscal_uom_not_allowed",
+		Message: "FBR does not allow this unit of measure for the default HS code",
+	}
 }
 
 // Load returns every row.
@@ -115,6 +223,21 @@ func Load(db *sql.DB) (map[string]json.RawMessage, error) {
 		out[k] = v
 	}
 	return out, rows.Err()
+}
+
+// LoadPublic is Load without the private keys. Every path that hands settings
+// to a browser uses this; server-side readers (pricing, day ops) keep Load.
+func LoadPublic(db *sql.DB) (map[string]json.RawMessage, error) {
+	all, err := Load(db)
+	if err != nil {
+		return nil, err
+	}
+	for k := range all {
+		if Private(k) {
+			delete(all, k)
+		}
+	}
+	return all, nil
 }
 
 // Save upserts the given values in one transaction. Callers validate first.
@@ -264,6 +387,27 @@ func stringList(maxItems, maxLen int) rule {
 		}
 		return nil
 	}
+}
+
+// jsonObject accepts any JSON object. fiscal_reference is a cache of FBR's
+// own lists, written by the refresh job rather than typed, so its shape is
+// the refresher's contract (internal/fiscal) and not this package's.
+func jsonObject(raw json.RawMessage) error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return errors.New("must be an object")
+	}
+	return nil
+}
+
+// fiscalConfig defers to internal/fiscal, which owns the shape and the rules.
+// The import goes settings → fiscal and never back.
+func fiscalConfig(raw json.RawMessage) error {
+	cfg, err := fiscal.ParseConfig(raw)
+	if err != nil {
+		return err
+	}
+	return cfg.Validate()
 }
 
 func hsCode(raw json.RawMessage) error {
