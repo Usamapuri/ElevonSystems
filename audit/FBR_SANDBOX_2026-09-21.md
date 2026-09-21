@@ -49,3 +49,15 @@ Rejections come back as HTTP 200 with `statusCode "01"`; invoice-level errors (`
 3. **`trans_type_id` = 75**, `rate_desc "18%"`, provinces upper-case from the reference list, `uoM "KG"`, HS `2711.1910` all confirmed against the API.
 4. **Tax is recomputed server-side by FBR (0104)**, so `salesTaxApplicable` must be `round2(valueSalesExcludingST × 18 %)` per line, which is exactly §6.3's `line_tax`. No tolerance observed; keep the paisa-exact pricing package as the only source of these numbers.
 5. Still untested for lack of a registered buyer NTN: SN001, and the full Debit Note happy path. The owner should supply the NTN of any registered customer to close both.
+
+## Addendum: discount semantics (same day, later)
+
+Case C re-sent two ways to settle how `discount` interacts with tax:
+
+| Variant | `valueSalesExcludingST` | `salesTaxApplicable` | `discount` | Result |
+|---|---|---|---|---|
+| As validated (spec §7.4) | net of discount (3202.83) | 18 % of net (576.51) | 109.67 | Valid |
+| Gross value, tax on net | gross (3312.50) | 576.51 | 109.67 | **Invalid 0104** on both lines |
+| Gross value, tax on gross | gross (3312.50) | 596.25 | 109.67 | Valid |
+
+FBR computes tax strictly as `valueSalesExcludingST × rate` and treats `discount` as informational. Because the app taxes the discounted value (§6.3), the payload must send `valueSalesExcludingST = line_total − line_discount` and `salesTaxApplicable = line_tax`, with `discount = line_discount` alongside. This differs from the sibling retail POS (which sends the gross value) and is the rule for Phase 7.
