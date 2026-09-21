@@ -13,11 +13,12 @@ import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import apiClient from '@/api/client'
 import { ExportButton } from './ExportButton'
+import { HourlyHeatmap } from './HourlyHeatmap'
 import { MetricTile } from './MetricTile'
 import { ReportTable } from './ReportTable'
 import { DayCloseDialog } from './DayCloseDialog'
 import {
-  cashierColumns, cashierTotals, dailyColumns, dailyTotals, dayCloseColumns, hourlyColumns, hourlyTotals,
+  cashierColumns, cashierTotals, dailyColumns, dailyTotals, dayCloseColumns,
   productColumns, productTotals, receivableColumns, taxColumns, taxTotals,
 } from './reportColumns'
 import { formatKg, formatMoney } from '@/lib/money'
@@ -193,6 +194,7 @@ export function CashiersPanel({ from, to, params, enabled }: PanelProps) {
 export function HourlyPanel({ from, to, params, enabled }: PanelProps) {
   const q = useReport<HourRow>('hourly', params, enabled)
   const rows = q.data?.rows ?? []
+  const cells = q.data?.cells ?? []
   const totals = q.data?.totals
 
   return (
@@ -205,13 +207,7 @@ export function HourlyPanel({ from, to, params, enabled }: PanelProps) {
         </div>
       )}
       <PanelStatus isLoading={q.isLoading} error={q.error} />
-      <ReportTable
-        columns={hourlyColumns}
-        rows={rows}
-        rowKey={(r) => String(r.hour)}
-        totals={totals ? hourlyTotals(totals) : null}
-        emptyMessage="No sales in this range."
-      />
+      <HourlyHeatmap cells={cells} rows={rows} totals={totals ?? null} />
     </div>
   )
 }

@@ -672,10 +672,13 @@ export interface ReportParams {
 
 /** GET /admin/reports/:name in JSON. `totals` is null for `receivables` and
  * `day-closes` — a balance as of a date and a set of sealed rows are not a
- * period to sum (backend/internal/handlers/reports.go reportView). */
+ * period to sum (backend/internal/handlers/reports.go reportView). `cells`
+ * is only ever present on `hourly` — the heatmap grid alongside the flat
+ * `rows` every report carries; every other report simply omits the field. */
 export interface ReportResponse<T> {
   rows: T[]
   totals: PeriodSummary | null
+  cells?: HeatCell[]
 }
 
 /** One effective tax-rate band over the window (backend
@@ -706,6 +709,17 @@ export interface CashierRow {
 /** One hour-of-day bucket, 0–23 in the business timezone. All 24 hours are
  * always present, including empty ones, so a chart has a fixed x-axis. */
 export interface HourRow {
+  hour: number
+  invoices: number
+  net: number
+}
+
+/** One hour × weekday bucket of the Hourly report's heatmap (backend
+ * internal/reports/queries.go HeatCell; Task P8). `weekday` is 0=Mon…6=Sun
+ * (ISODOW − 1). All 7×24 = 168 cells are always present, zero-filled, so the
+ * grid never has to guess at a missing (weekday, hour) pair. */
+export interface HeatCell {
+  weekday: number
   hour: number
   invoices: number
   net: number

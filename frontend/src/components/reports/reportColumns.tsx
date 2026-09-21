@@ -23,7 +23,10 @@ import type {
 
 const DASH = '—'
 
-function hourLabel(hour: number): string {
+/** `HH:00` for an hour-of-day bucket — shared with the heatmap
+ * (`hourlyHeat.ts`) so the grid's row labels and this table's own Hour
+ * column never drift apart. */
+export function hourLabel(hour: number): string {
   return `${String(hour).padStart(2, '0')}:00`
 }
 

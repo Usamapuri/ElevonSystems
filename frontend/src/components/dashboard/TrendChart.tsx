@@ -25,7 +25,7 @@ import {
 } from 'recharts'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatKg, formatMoney } from '@/lib/money'
+import { formatKg, formatKgTick, formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { dayMonthLabel } from './kpis'
 import type { DailyRow } from '@/types'
@@ -115,7 +115,7 @@ export function TrendChart({ series7d, series30d }: Props) {
                   orientation="right"
                   tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                   stroke="hsl(var(--border))"
-                  tickFormatter={formatKg}
+                  tickFormatter={formatKgTick}
                   width={72}
                 />
                 <Tooltip
