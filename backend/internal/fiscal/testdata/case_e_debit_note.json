@@ -1,0 +1,37 @@
+{
+  "invoiceType": "Debit Note",
+  "invoiceDate": "2026-09-21",
+  "sellerNTNCNIC": "8951943",
+  "sellerBusinessName": "Elevon Test Seller",
+  "sellerProvince": "PUNJAB",
+  "sellerAddress": "Lahore",
+  "buyerNTNCNIC": "1234567",
+  "buyerBusinessName": "Test Registered Buyer",
+  "buyerProvince": "PUNJAB",
+  "buyerAddress": "Lahore",
+  "buyerRegistrationType": "Registered",
+  "invoiceRefNo": "6110180871403DIAJGEJ4031308",
+  "scenarioId": "SN001",
+  "items": [
+    {
+      "hsCode": "2711.1910",
+      "productDescription": "LPG bulk 12.500 kg",
+      "rate": "18%",
+      "uoM": "KG",
+      "quantity": 12.5,
+      "totalValues": 3908.75,
+      "valueSalesExcludingST": 3312.5,
+      "fixedNotifiedValueOrRetailPrice": 0,
+      "salesTaxApplicable": 596.25,
+      "salesTaxWithheldAtSource": 0,
+      "extraTax": "",
+      "furtherTax": 0,
+      "sroScheduleNo": "",
+      "fedPayable": 0,
+      "discount": 0,
+      "saleType": "Goods at Standard Rate (default)",
+      "sroItemSerialNo": ""
+    }
+  ],
+  "reason": "Sale voided at the till"
+}
