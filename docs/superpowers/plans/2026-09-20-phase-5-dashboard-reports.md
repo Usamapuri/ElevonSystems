@@ -119,3 +119,9 @@ Commit `docs(handover): E-05 — Phase 5 done, polish sweep`.
 - Coverage: §6.8 table rows → P1/P2/P5; dashboard row of §3 → P2/P4; §6.5 receipts UI + ageing → P3; exports → P1/P2/P5; §10 "tax report reconciles to Σ tax" → P1 test.
 - Interfaces: `PeriodSummary` is shared by dashboard, daily, pack; `DailyRow` embeds it; frontend types mirror these names.
 - Out of scope: FBR queue report (Phase 7), fiscal filter on invoices, `manager` role.
+
+### Task P7 (E-05): Visual identity and UX pass
+
+Owner request (2026-09-21): the UI is "all white and bland". Full brief with the design plan (tokens, type, layout, principles, self-review against generic defaults, screenshot protocol) lives in the phase workspace as `task-P7-brief.md` and is summarised here: cylinder-navy ink on a steel canvas, safety-orange primary, Manrope with tabular figures, a navy sidebar rail with an orange active mark, a page header with the business-day pill on every screen, the till's payable amount as a weighbridge-style navy plate (the one bold element), quiet white tiles elsewhere, two radii, semantic colours with meaning, no decorative motion. Print HTML untouched; tests stay green; before/after screenshots at desktop and mobile.
+
+Commit `frontend(design): E-05 — visual identity: navy and safety orange, Manrope, steel canvas, weighbridge payable plate`.
