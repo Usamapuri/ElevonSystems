@@ -461,6 +461,9 @@ export interface Invoice {
   notes: string | null
   fiscal_status: string
   fiscal_invoice_number: string | null
+  /** The debit note that reverses this sale with FBR: unfiled until one is filed. */
+  fiscal_void_status: string
+  fiscal_debit_note_number: string | null
   created_at: string
   voided_at: string | null
   voided_by: string | null

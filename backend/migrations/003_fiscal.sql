@@ -63,9 +63,16 @@ CREATE TRIGGER fiscal_audit_events_append_only BEFORE UPDATE OR DELETE ON fiscal
 
 -- Where a void stands with FBR: unfiled (never filed — the buyer was not
 -- registered, or fiscal was off), pending, synced, failed.
-ALTER TABLE void_log ADD COLUMN IF NOT EXISTS fiscal_void_status VARCHAR(12) NOT NULL DEFAULT 'unfiled';
-ALTER TABLE void_log DROP CONSTRAINT IF EXISTS void_log_fiscal_void_status_check;
-ALTER TABLE void_log ADD CONSTRAINT void_log_fiscal_void_status_check CHECK (fiscal_void_status IN ('unfiled','pending','synced','failed'));
+--
+-- This state lives on invoices, not on void_log, because void_log is
+-- append-only (CLAUDE.md invariant 6) and a debit note's status has to move
+-- as the filing progresses. fiscal_debit_note_number is FBR's invoiceNumber
+-- for the debit note, the counterpart of invoices.fiscal_invoice_number for
+-- the original sale.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fiscal_void_status VARCHAR(12) NOT NULL DEFAULT 'unfiled';
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fiscal_debit_note_number VARCHAR(64);
+ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_fiscal_void_status_check;
+ALTER TABLE invoices ADD CONSTRAINT invoices_fiscal_void_status_check CHECK (fiscal_void_status IN ('unfiled','pending','synced','failed'));
 
 INSERT INTO settings (key, value) VALUES
   ('fiscal_config', '{"enabled":false,"is_sandbox":true,"seller_ntn_cnic":"","seller_business_name":"","seller_province":"","seller_address":"","scenario_registered":"SN001","scenario_unregistered":"SN002","rate_desc":"18%","sale_type":"Goods at Standard Rate (default)","trans_type_id":75,"default_uom":"KG","buyer_registration_default":"Unregistered","validate_url":"","post_url":""}'),

@@ -85,6 +85,13 @@ type Invoice struct {
 	FiscalStatus        string  `json:"fiscal_status"`
 	FiscalInvoiceNumber *string `json:"fiscal_invoice_number"`
 
+	// FiscalVoidStatus and FiscalDebitNoteNumber track the debit note that
+	// reverses this sale with FBR. They live here rather than on void_log
+	// because void_log is append-only and this state moves as the filing
+	// progresses. FiscalVoidStatus is 'unfiled' until a void is filed.
+	FiscalVoidStatus      string  `json:"fiscal_void_status"`
+	FiscalDebitNoteNumber *string `json:"fiscal_debit_note_number"`
+
 	CreatedAt  time.Time  `json:"created_at"`
 	VoidedAt   *time.Time `json:"voided_at"`
 	VoidedBy   *uuid.UUID `json:"voided_by"`

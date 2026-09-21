@@ -168,16 +168,44 @@ func TestFiscalOutboundJobs_OneActiveJobPerDocument(t *testing.T) {
 	}
 }
 
-func TestVoidLog_FiscalVoidStatusDefaultsToUnfiled(t *testing.T) {
+// The debit-note state lives on invoices, not on void_log: void_log is
+// append-only (invariant 6) and this status has to move as the filing
+// progresses. This pins both halves — the column is mutable where it now is,
+// and void_log still refuses an UPDATE.
+func TestInvoices_FiscalVoidStatusIsMutableVoidLogIsNot(t *testing.T) {
 	db := testdb.Fresh(t)
 	invoiceID := seedInvoice(t, db)
 
 	var status string
-	if err := db.QueryRow(`INSERT INTO void_log (invoice_id, invoice_number, total_payable, reason)
-		VALUES ($1, '20260921-001', 3909, 'Wrong customer') RETURNING fiscal_void_status`, invoiceID).Scan(&status); err != nil {
+	var debitNote *string
+	if err := db.QueryRow(`SELECT fiscal_void_status, fiscal_debit_note_number FROM invoices WHERE id = $1`,
+		invoiceID).Scan(&status, &debitNote); err != nil {
 		t.Fatal(err)
 	}
-	if status != "unfiled" {
-		t.Fatalf("a void starts unfiled, got %q", status)
+	if status != "unfiled" || debitNote != nil {
+		t.Fatalf("a sale starts unfiled with no debit note, got %q %v", status, debitNote)
+	}
+
+	// The whole point of moving it here: the filing can advance the state.
+	for _, next := range []string{"pending", "synced"} {
+		if _, err := db.Exec(`UPDATE invoices SET fiscal_void_status = $1 WHERE id = $2`, next, invoiceID); err != nil {
+			t.Fatalf("invoices.fiscal_void_status must be mutable (%s): %v", next, err)
+		}
+	}
+	if _, err := db.Exec(`UPDATE invoices SET fiscal_debit_note_number = '6110180871403DIAJGEJ4031308' WHERE id = $1`, invoiceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE invoices SET fiscal_void_status = 'whatever' WHERE id = $1`, invoiceID); err == nil {
+		t.Fatal("an unknown void status must be refused")
+	}
+
+	// void_log itself keeps its append-only guarantee.
+	var voidID string
+	if err := db.QueryRow(`INSERT INTO void_log (invoice_id, invoice_number, total_payable, reason)
+		VALUES ($1, '20260921-001', 3909, 'Wrong customer') RETURNING id`, invoiceID).Scan(&voidID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE void_log SET reason = 'changed' WHERE id = $1`, voidID); err == nil {
+		t.Fatal("void_log must stay append-only")
 	}
 }

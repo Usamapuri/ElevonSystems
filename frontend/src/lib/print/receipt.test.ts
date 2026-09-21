@@ -90,6 +90,8 @@ const cashInvoice: Invoice = {
   notes: null,
   fiscal_status: 'off',
   fiscal_invoice_number: null,
+  fiscal_void_status: 'unfiled',
+  fiscal_debit_note_number: null,
   created_at: '2026-09-20T10:45:00+05:00',
   voided_at: null,
   voided_by: null,

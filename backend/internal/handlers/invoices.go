@@ -60,7 +60,8 @@ const invoiceColumns = `id, invoice_number, client_op_id, business_day_id, busin
 	subtotal::float8, discount_amount::float8, discount_percent::float8, tax_rate::float8,
 	tax_amount::float8, further_tax_amount::float8, total_amount::float8, rounding_adjustment::float8,
 	total_payable::bigint, payment_method, payment_reference, payment_sub_method, notes,
-	fiscal_status, fiscal_invoice_number, created_at, voided_at, voided_by, void_reason`
+	fiscal_status, fiscal_invoice_number, fiscal_void_status, fiscal_debit_note_number,
+	created_at, voided_at, voided_by, void_reason`
 
 const invoiceLineColumns = `id, invoice_id, product_id, product_name, hs_code, fbr_uom,
 	quantity::float8, entered_as, gross_weight::float8, tare_weight::float8,
@@ -75,7 +76,8 @@ func scanInvoice(row interface {
 		&inv.Subtotal, &inv.DiscountAmount, &inv.DiscountPercent, &inv.TaxRate,
 		&inv.TaxAmount, &inv.FurtherTaxAmount, &inv.TotalAmount, &inv.RoundingAdjustment,
 		&inv.TotalPayable, &inv.PaymentMethod, &inv.PaymentReference, &inv.PaymentSubMethod, &inv.Notes,
-		&inv.FiscalStatus, &inv.FiscalInvoiceNumber, &inv.CreatedAt, &inv.VoidedAt, &inv.VoidedBy, &inv.VoidReason)
+		&inv.FiscalStatus, &inv.FiscalInvoiceNumber, &inv.FiscalVoidStatus, &inv.FiscalDebitNoteNumber,
+		&inv.CreatedAt, &inv.VoidedAt, &inv.VoidedBy, &inv.VoidReason)
 	return inv, err
 }
 
