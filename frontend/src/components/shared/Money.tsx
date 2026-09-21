@@ -9,5 +9,5 @@ interface Props {
 }
 
 export function Money({ amount, className }: Props) {
-  return <span className={cn('tabular-nums', className)}>{formatMoney(amount)}</span>
+  return <span className={cn('tabular', className)}>{formatMoney(amount)}</span>
 }

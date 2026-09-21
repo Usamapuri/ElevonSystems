@@ -286,13 +286,13 @@ export function InvoiceTable() {
                 >
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {formatBusinessDate(invoice.business_date)}
-                    <span className="ml-2 tabular-nums">{formatTimePK(invoice.created_at)}</span>
+                    <span className="ml-2 tabular">{formatTimePK(invoice.created_at)}</span>
                   </TableCell>
-                  <TableCell className="font-medium tabular-nums">{invoice.invoice_number}</TableCell>
+                  <TableCell className="font-medium tabular">{invoice.invoice_number}</TableCell>
                   <TableCell>{invoice.customer_name ?? <span className="text-muted-foreground">Walk-in</span>}</TableCell>
                   <TableCell className="hidden lg:table-cell text-muted-foreground">{invoice.cashier_name}</TableCell>
                   <TableCell>{paymentMethodLabel(invoice.payment_method)}</TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">{formatMoney(invoice.total_payable)}</TableCell>
+                  <TableCell className="text-right font-medium tabular">{formatMoney(invoice.total_payable)}</TableCell>
                   <TableCell>
                     {voided ? <Badge variant="destructive">Voided</Badge> : <Badge variant="secondary">Completed</Badge>}
                   </TableCell>

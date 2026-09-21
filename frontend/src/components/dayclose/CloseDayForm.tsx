@@ -88,7 +88,7 @@ export function CloseDayForm({ expected, threshold, pending, error, onSubmit }: 
                     {tenderLabel(t.tender)}
                   </Label>
                   <span className="text-sm text-muted-foreground">
-                    Expected <span className="tabular-nums">{formatMoney(t.expected)}</span>
+                    Expected <span className="tabular">{formatMoney(t.expected)}</span>
                   </span>
                 </div>
                 <Input
@@ -98,11 +98,11 @@ export function CloseDayForm({ expected, threshold, pending, error, onSubmit }: 
                   value={counted[t.tender]}
                   onFocus={() => setActive(t.tender)}
                   onChange={(e) => setTender(t.tender, e.target.value)}
-                  className="mt-2 h-14 text-center text-2xl font-semibold tabular-nums"
+                  className="mt-2 h-14 text-center text-2xl font-semibold tabular"
                 />
                 <p
                   className={cn(
-                    'mt-1 h-5 text-sm tabular-nums',
+                    'mt-1 h-5 text-sm tabular',
                     t.variance === null
                       ? 'text-muted-foreground'
                       : t.overThreshold

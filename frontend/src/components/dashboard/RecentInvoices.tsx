@@ -47,14 +47,14 @@ export function RecentInvoices({ invoices }: Props) {
                 const voided = inv.status === 'voided'
                 return (
                   <TableRow key={inv.id} className={cn(voided && 'opacity-60')}>
-                    <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
+                    <TableCell className="whitespace-nowrap text-muted-foreground tabular">
                       {formatTimePK(inv.created_at)}
                     </TableCell>
-                    <TableCell className="font-medium tabular-nums">{inv.invoice_number}</TableCell>
+                    <TableCell className="font-medium tabular">{inv.invoice_number}</TableCell>
                     <TableCell>{inv.customer_name ?? <span className="text-muted-foreground">Walk-in</span>}</TableCell>
                     <TableCell className="hidden lg:table-cell text-muted-foreground">{inv.cashier_name}</TableCell>
                     <TableCell>{paymentMethodLabel(inv.payment_method)}</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">{formatMoney(inv.total_payable)}</TableCell>
+                    <TableCell className="text-right font-medium tabular">{formatMoney(inv.total_payable)}</TableCell>
                     <TableCell>
                       {voided ? <Badge variant="destructive">Voided</Badge> : <Badge variant="secondary">Completed</Badge>}
                     </TableCell>

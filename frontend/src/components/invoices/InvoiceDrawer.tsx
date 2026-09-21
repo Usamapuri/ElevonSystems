@@ -235,10 +235,10 @@ export function InvoiceDrawer({ invoiceId, onOpenChange }: Props) {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">{formatKg(line.quantity)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatMoney(line.unit_price)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatMoney(line.line_total)}</TableCell>
-                        <TableCell className="hidden sm:table-cell text-right tabular-nums">
+                        <TableCell className="text-right tabular">{formatKg(line.quantity)}</TableCell>
+                        <TableCell className="text-right tabular">{formatMoney(line.unit_price)}</TableCell>
+                        <TableCell className="text-right tabular">{formatMoney(line.line_total)}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-right tabular">
                           {formatMoney(line.line_tax)}
                         </TableCell>
                       </TableRow>
@@ -315,7 +315,7 @@ function Line({ label, value, strong = false }: { label: string; value: string; 
   return (
     <div className="flex items-baseline justify-between gap-4">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className={cn('tabular-nums', strong && 'text-base font-semibold')}>{value}</dd>
+      <dd className={cn('tabular', strong && 'text-base font-semibold')}>{value}</dd>
     </div>
   )
 }

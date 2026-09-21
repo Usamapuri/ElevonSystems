@@ -123,7 +123,7 @@ export function WeightPad({ open, onOpenChange, product, editing, onConfirm, onR
   const bigInputProps = {
     inputMode: 'decimal' as const,
     autoComplete: 'off',
-    className: 'h-14 text-2xl font-semibold tabular-nums',
+    className: 'h-14 text-2xl font-semibold tabular',
     onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
         e.preventDefault()
@@ -214,17 +214,17 @@ export function WeightPad({ open, onOpenChange, product, editing, onConfirm, onR
           {line ? (
             <div className="space-y-1">
               {mode === 'gross_tare' && (
-                <p className="text-muted-foreground tabular-nums">
+                <p className="text-muted-foreground tabular">
                   {formatKg(line.gross_weight ?? 0)} gross − {formatKg(line.tare_weight ?? 0)} tare
                 </p>
               )}
               {mode === 'amount' && Number.isFinite(typedAmount) && (
-                <p className="text-muted-foreground tabular-nums">
+                <p className="text-muted-foreground tabular">
                   Asked for {formatMoney(typedAmount)}
                   {round2(typedAmount) !== lineTotal && ' — priced to the nearest gram below'}
                 </p>
               )}
-              <p className="text-base font-semibold tabular-nums">
+              <p className="text-base font-semibold tabular">
                 {formatKg(line.quantity)} kg × {rate.toFixed(2)} = {formatMoney(lineTotal)}
               </p>
             </div>

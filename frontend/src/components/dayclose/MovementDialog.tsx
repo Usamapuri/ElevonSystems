@@ -105,7 +105,7 @@ export function MovementDialog({ open, onOpenChange, defaultType, pending, error
             autoComplete="off"
             value={amount}
             onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-            className="h-14 text-center text-3xl font-semibold tabular-nums"
+            className="h-14 text-center text-3xl font-semibold tabular"
           />
           <p className="h-5 text-center text-sm text-muted-foreground">{value === null ? '' : formatMoney(value)}</p>
           <NumericKeypad value={amount} onChange={setAmount} maxDecimals={2} maxLength={11} />

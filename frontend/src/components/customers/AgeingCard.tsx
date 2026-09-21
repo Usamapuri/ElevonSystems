@@ -52,7 +52,7 @@ export function AgeingCard({ customerId, enabled }: Props) {
           {BUCKETS.map(({ key, label }) => (
             <div key={key} className="text-center">
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className={`text-sm font-medium tabular-nums ${data[key] > 0 ? 'text-warning-ink' : ''}`}>
+              <p className={`text-sm font-medium tabular ${data[key] > 0 ? 'text-warning-ink' : ''}`}>
                 {formatMoney(data[key])}
               </p>
             </div>

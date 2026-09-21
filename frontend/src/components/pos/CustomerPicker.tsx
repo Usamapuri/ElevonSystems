@@ -64,13 +64,13 @@ export function CustomerPicker({ value, onChange, required = false }: Props) {
             <User className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{value.name}</span>
-              <span className="block truncate text-xs font-normal text-muted-foreground">
+              <span className="tabular block truncate text-xs font-normal text-muted-foreground">
                 Balance <Money amount={value.balance} />
                 {value.credit_allowed
                   ? value.credit_limit === null
-                    ? ' · no credit limit'
+                    ? ', no credit limit'
                     : ` of ${value.credit_limit.toLocaleString('en-PK')}`
-                  : ' · no credit'}
+                  : ', no credit'}
               </span>
             </span>
           </span>
@@ -173,7 +173,7 @@ function CustomerSearchDialog({
                 <div className="min-w-0">
                   <p className="truncate font-medium">{customer.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {customer.phone ?? 'No phone'} · {customer.buyer_registration_type}
+                    {customer.phone ?? 'No phone'} — {customer.buyer_registration_type}
                   </p>
                 </div>
                 <div className="shrink-0 text-right text-xs">
@@ -181,7 +181,7 @@ function CustomerSearchDialog({
                     <Money amount={customer.balance} />
                   </p>
                   {customer.credit_allowed ? (
-                    <Badge variant="outline" className="mt-1">
+                    <Badge variant="outline" className="tabular mt-1">
                       {customer.credit_limit === null ? 'No limit' : `Limit ${customer.credit_limit.toLocaleString('en-PK')}`}
                     </Badge>
                   ) : (

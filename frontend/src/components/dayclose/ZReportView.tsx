@@ -46,7 +46,7 @@ function count(n: number | null | undefined): string {
 
 function who(name: string | null, at: string | null): string {
   if (!at) return DASH
-  return `${name ?? DASH} · ${formatTimePK(at)}`
+  return `${name ?? DASH} at ${formatTimePK(at)}`
 }
 
 interface Props {
@@ -83,12 +83,12 @@ export function ZReportView({ z, settings, actions, onPrint, printing = false }:
         <div>
           <CardTitle className="flex flex-wrap items-center gap-2">
             {sealed ? 'Z-report' : 'X-read (day open)'}
-            <Badge variant={sealed ? 'secondary' : 'success'} className="uppercase">
+            <Badge variant={sealed ? 'secondary' : 'success'} className="capitalize">
               {day.status}
             </Badge>
           </CardTitle>
           <CardDescription>
-            {formatBusinessDate(day.business_date)} · printed figures as of {formatDateTimePK(z.generated_at)}
+            {formatBusinessDate(day.business_date)} — figures as of {formatDateTimePK(z.generated_at)}
           </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -108,7 +108,7 @@ export function ZReportView({ z, settings, actions, onPrint, printing = false }:
         </div>
 
         <section>
-          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Tender</h3>
+          <h3 className="mb-2 text-sm font-bold text-muted-foreground">Tender</h3>
           <Table>
             <TableHeader>
               <TableRow>
@@ -122,11 +122,11 @@ export function ZReportView({ z, settings, actions, onPrint, printing = false }:
               {rows.map((row) => (
                 <TableRow key={row.label}>
                   <TableCell className="font-medium">{row.label}</TableCell>
-                  <TableCell className="text-right tabular-nums">{money(row.expected)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{money(row.counted)}</TableCell>
+                  <TableCell className="text-right tabular">{money(row.expected)}</TableCell>
+                  <TableCell className="text-right tabular">{money(row.counted)}</TableCell>
                   <TableCell
                     className={cn(
-                      'text-right tabular-nums',
+                      'text-right tabular',
                       typeof row.variance === 'number' && row.variance !== 0 && 'font-medium text-warning-ink',
                     )}
                   >
@@ -145,7 +145,7 @@ export function ZReportView({ z, settings, actions, onPrint, printing = false }:
 
         <div className="grid gap-6 md:grid-cols-2">
           <section>
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Sales</h3>
+            <h3 className="mb-2 text-sm font-bold text-muted-foreground">Sales</h3>
             <dl className="space-y-1 text-sm">
               <Line label="Gross sales" value={formatMoney(expected.gross_sales)} />
               <Line label="Discounts" value={`-${formatMoney(expected.discounts)}`} />
@@ -157,7 +157,7 @@ export function ZReportView({ z, settings, actions, onPrint, printing = false }:
           </section>
 
           <section>
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 className="mb-2 text-sm font-bold text-muted-foreground">
               Accounts &amp; drawer
             </h3>
             <dl className="space-y-1 text-sm">
@@ -174,15 +174,15 @@ export function ZReportView({ z, settings, actions, onPrint, printing = false }:
 
         {z.movements.length > 0 && (
           <section>
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Cash movements</h3>
+            <h3 className="mb-2 text-sm font-bold text-muted-foreground">Cash movements</h3>
             <ul className="space-y-1 text-sm">
               {z.movements.map((m) => (
                 <li key={m.id} className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border py-1">
                   <span>
-                    <span className="text-muted-foreground tabular-nums">{formatTimePK(m.created_at)}</span> {m.reason}
-                    {m.created_by_name ? <span className="text-muted-foreground"> · {m.created_by_name}</span> : null}
+                    <span className="text-muted-foreground tabular">{formatTimePK(m.created_at)}</span> {m.reason}
+                    {m.created_by_name ? <span className="text-muted-foreground"> — {m.created_by_name}</span> : null}
                   </span>
-                  <span className={cn('tabular-nums', m.movement_type === 'paid_out' ? 'text-destructive' : 'text-success-ink')}>
+                  <span className={cn('tabular', m.movement_type === 'paid_out' ? 'text-destructive' : 'text-success-ink')}>
                     {m.movement_type === 'paid_out' ? '-' : '+'}
                     {formatMoney(m.amount)}
                   </span>
@@ -194,7 +194,7 @@ export function ZReportView({ z, settings, actions, onPrint, printing = false }:
 
         {day.closing_notes && (
           <section>
-            <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Closing notes</h3>
+            <h3 className="mb-1 text-sm font-bold text-muted-foreground">Closing notes</h3>
             <p className="whitespace-pre-wrap text-sm">{day.closing_notes}</p>
           </section>
         )}
@@ -216,7 +216,7 @@ function Line({ label, value, strong = false }: { label: string; value: string; 
   return (
     <div className="flex items-baseline justify-between gap-4">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className={cn('tabular-nums', strong && 'font-semibold')}>{value}</dd>
+      <dd className={cn('tabular', strong && 'font-semibold')}>{value}</dd>
     </div>
   )
 }

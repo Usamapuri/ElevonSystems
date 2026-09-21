@@ -112,13 +112,13 @@ export function CartRail({
                       <span className="tabular text-sm font-bold">
                         <Money amount={lineTotal ? lineTotal.line_total : line.quantity * line.rate} />
                       </span>
-                      <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Edit line" onClick={() => onEditLine(line)}>
+                      <Button variant="ghost" size="icon" className="h-11 w-11" aria-label="Edit line" onClick={() => onEditLine(line)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-10 w-10 text-muted-foreground hover:text-destructive"
+                        className="h-11 w-11 text-muted-foreground hover:text-destructive"
                         aria-label="Remove line"
                         onClick={() => dispatch({ type: 'remove', key: line.key })}
                       >

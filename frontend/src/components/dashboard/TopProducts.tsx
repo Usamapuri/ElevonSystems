@@ -39,10 +39,10 @@ export function TopProducts({ products }: Props) {
               {products.map((p) => (
                 <TableRow key={p.product_id ?? p.name}>
                   <TableCell className="font-semibold">{p.name}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatKg(p.kg)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{p.invoices}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatMoney(p.gross)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{p.share.toFixed(1)}%</TableCell>
+                  <TableCell className="text-right tabular">{formatKg(p.kg)}</TableCell>
+                  <TableCell className="text-right tabular">{p.invoices}</TableCell>
+                  <TableCell className="text-right tabular">{formatMoney(p.gross)}</TableCell>
+                  <TableCell className="text-right tabular">{p.share.toFixed(1)}%</TableCell>
                 </TableRow>
               ))}
             </TableBody>

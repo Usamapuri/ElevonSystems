@@ -82,7 +82,7 @@ export function OpenDayDialog({ open, onOpenChange, pending, error, onSubmit }: 
             autoComplete="off"
             value={cash}
             onChange={(e) => setCash(e.target.value.replace(/[^0-9.]/g, ''))}
-            className="h-14 text-center text-3xl font-semibold tabular-nums"
+            className="h-14 text-center text-3xl font-semibold tabular"
           />
           <p className="h-5 text-center text-sm text-muted-foreground">
             {amount === null ? '' : formatMoney(amount)}
