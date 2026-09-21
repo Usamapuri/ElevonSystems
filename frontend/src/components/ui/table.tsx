@@ -2,6 +2,15 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Add to a <Table> that sits inside a padded <CardContent>: it trims the
+ * outer cells' own padding so the first column's text lines up with the
+ * card's heading instead of sitting 16px further in. One class rather than a
+ * bespoke fix per table.
+ */
+export const tableInCard =
+  '[&_th:first-child]:pl-0 [&_td:first-child]:pl-0 [&_th:last-child]:pr-0 [&_td:last-child]:pr-0'
+
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
@@ -42,12 +51,22 @@ const TableFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <tfoot
     ref={ref}
-    className={cn("bg-muted/50 font-medium [&>tr]:last:border-b-0", className)}
+    // The totals row is the answer to the question the table asks, so it gets
+    // a rule above it and the page's ink, not a grey wash.
+    className={cn(
+      "border-t-2 border-foreground/15 font-bold text-foreground [&>tr]:last:border-b-0 [&>tr]:hover:bg-transparent",
+      className
+    )}
     {...props}
   />
 ))
 TableFooter.displayName = "TableFooter"
 
+/**
+ * No zebra striping. Rows are 44px with a hairline under each — on a money
+ * table, alternating fills compete with the semantic colours the figures
+ * themselves carry, and the reader ends up scanning the stripes.
+ */
 const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>
@@ -55,7 +74,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+      "h-11 border-b border-border transition-colors hover:bg-muted data-[state=selected]:bg-muted",
       className
     )}
     {...props}
@@ -70,7 +89,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+      "h-10 whitespace-nowrap px-4 text-left align-middle text-xs font-bold text-muted-foreground [&:has([role=checkbox])]:pr-0",
       className
     )}
     {...props}
@@ -84,7 +103,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)}
+    className={cn("px-4 py-2.5 align-middle [&:has([role=checkbox])]:pr-0", className)}
     {...props}
   />
 ))

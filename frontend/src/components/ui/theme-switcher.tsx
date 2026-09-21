@@ -31,9 +31,9 @@ export function ThemeSwitcher() {
             aria-checked={active}
             onClick={() => setTheme(opt.value)}
             className={cn(
-              'flex flex-col items-center gap-1 rounded-md border px-1 py-2 text-[11px] font-medium transition-colors',
+              'flex flex-col items-center gap-1 rounded-md border px-1 py-2 text-[11px] font-semibold transition-colors',
               active
-                ? 'border-primary bg-primary/5 text-primary'
+                ? 'border-foreground/30 bg-secondary text-foreground'
                 : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >

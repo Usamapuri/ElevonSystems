@@ -38,13 +38,13 @@ export const dailyColumns: ReportColumn<DailyRow>[] = [
   { key: 'discount', label: 'Discount', align: 'right', format: (r) => formatMoney(r.discount) },
   { key: 'taxable', label: 'Taxable', align: 'right', format: (r) => formatMoney(r.taxable) },
   { key: 'tax', label: 'Tax', align: 'right', format: (r) => formatMoney(r.tax) },
-  { key: 'further_tax', label: 'Further Tax', align: 'right', format: (r) => formatMoney(r.further_tax) },
+  { key: 'further_tax', label: 'Further tax', align: 'right', format: (r) => formatMoney(r.further_tax) },
   { key: 'rounding', label: 'Rounding', align: 'right', format: (r) => formatMoney(r.rounding) },
   { key: 'net', label: 'Net', align: 'right', format: (r) => formatMoney(r.net) },
   { key: 'cash', label: 'Cash', align: 'right', format: (r) => formatMoney(r.tenders.cash) },
   { key: 'card', label: 'Card', align: 'right', format: (r) => formatMoney(r.tenders.card) },
   { key: 'online', label: 'Online', align: 'right', format: (r) => formatMoney(r.tenders.online) },
-  { key: 'on_account', label: 'On Account', align: 'right', format: (r) => formatMoney(r.tenders.on_account) },
+  { key: 'on_account', label: 'On account', align: 'right', format: (r) => formatMoney(r.tenders.on_account) },
   { key: 'receipts', label: 'Receipts', align: 'right', format: (r) => formatMoney(r.receipts_total) },
 ]
 
@@ -96,7 +96,7 @@ export const taxColumns: ReportColumn<TaxBand>[] = [
   { key: 'invoices', label: 'Invoices', align: 'right', format: (r) => String(r.invoices) },
   { key: 'taxable', label: 'Taxable', align: 'right', format: (r) => formatMoney(r.taxable) },
   { key: 'tax', label: 'Tax', align: 'right', format: (r) => formatMoney(r.tax) },
-  { key: 'further_tax', label: 'Further Tax', align: 'right', format: (r) => formatMoney(r.further_tax) },
+  { key: 'further_tax', label: 'Further tax', align: 'right', format: (r) => formatMoney(r.further_tax) },
 ]
 
 export function taxTotals(t: PeriodSummary): Record<string, ReactNode> {
@@ -157,7 +157,7 @@ export const receivableColumns: ReportColumn<ReceivableRow>[] = [
     key: 'name',
     label: 'Customer',
     format: (r) => (
-      <Link to="/customers" className="font-medium text-primary hover:underline">
+      <Link to="/customers" className="font-semibold underline underline-offset-2 hover:text-primary-hover">
         {r.name}
       </Link>
     ),
@@ -168,7 +168,7 @@ export const receivableColumns: ReportColumn<ReceivableRow>[] = [
   { key: 'b31_60', label: '31-60', align: 'right', format: (r) => formatMoney(r.b31_60) },
   { key: 'b61_90', label: '61-90', align: 'right', format: (r) => formatMoney(r.b61_90) },
   { key: 'b90', label: '90+', align: 'right', format: (r) => formatMoney(r.b90) },
-  { key: 'last_receipt', label: 'Last Receipt', format: (r) => (r.last_receipt ? formatBusinessDate(r.last_receipt) : DASH) },
+  { key: 'last_receipt', label: 'Last receipt', format: (r) => (r.last_receipt ? formatBusinessDate(r.last_receipt) : DASH) },
 ]
 
 // ── Day closes (sealed rows — no totals row; spec §6.8) ─────────────────────
@@ -201,12 +201,12 @@ export function dayCloseColumns(onOpenZReport: (row: DayCloseRow) => void): Repo
   return [
     { key: 'date', label: 'Date', format: (r) => formatBusinessDate(r.business_date) },
     { key: 'status', label: 'Status', format: (r) => statusLabel(r.status) },
-    { key: 'closed_by', label: 'Closed By', format: (r) => r.closed_by || DASH },
-    { key: 'expected_cash', label: 'Expected Cash', align: 'right', format: (r) => formatMoney(r.expected_cash) },
-    { key: 'counted_cash', label: 'Counted Cash', align: 'right', format: (r) => formatMoney(r.counted_cash) },
-    { key: 'cash_variance', label: 'Cash Variance', align: 'right', format: (r) => signedMoney(r.cash_variance) },
-    { key: 'card_variance', label: 'Card Variance', align: 'right', format: (r) => signedMoney(r.card_variance) },
-    { key: 'online_variance', label: 'Online Variance', align: 'right', format: (r) => signedMoney(r.online_variance) },
+    { key: 'closed_by', label: 'Closed by', format: (r) => r.closed_by || DASH },
+    { key: 'expected_cash', label: 'Expected cash', align: 'right', format: (r) => formatMoney(r.expected_cash) },
+    { key: 'counted_cash', label: 'Counted cash', align: 'right', format: (r) => formatMoney(r.counted_cash) },
+    { key: 'cash_variance', label: 'Cash variance', align: 'right', format: (r) => signedMoney(r.cash_variance) },
+    { key: 'card_variance', label: 'Card variance', align: 'right', format: (r) => signedMoney(r.card_variance) },
+    { key: 'online_variance', label: 'Online variance', align: 'right', format: (r) => signedMoney(r.online_variance) },
     { key: 'net', label: 'Net', align: 'right', format: (r) => formatMoney(r.net) },
     {
       key: 'z_report',

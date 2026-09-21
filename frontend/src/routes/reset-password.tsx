@@ -41,7 +41,7 @@ function ResetPasswordPage() {
     return (
       <AuthShell>
         <div className="space-y-4">
-          <AlertCircle className="h-10 w-10 text-red-600" />
+          <AlertCircle className="h-10 w-10 text-destructive" />
           <h1 className="text-2xl font-semibold">Missing reset link</h1>
           <p className="text-sm text-muted-foreground">Open the full link from the reset email; some mail apps cut long links.</p>
           <Link to="/forgot-password">
@@ -63,14 +63,14 @@ function ResetPasswordPage() {
         <div className="space-y-2">
           <Label htmlFor="new_password">New password</Label>
           <Input id="new_password" type="password" autoComplete="new-password" autoFocus {...form.register('new_password')} />
-          {errors.new_password && <p className="text-sm text-red-600">{errors.new_password.message}</p>}
+          {errors.new_password && <p className="text-sm text-destructive">{errors.new_password.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="confirm">Confirm new password</Label>
           <Input id="confirm" type="password" autoComplete="new-password" {...form.register('confirm')} />
-          {errors.confirm && <p className="text-sm text-red-600">{errors.confirm.message}</p>}
+          {errors.confirm && <p className="text-sm text-destructive">{errors.confirm.message}</p>}
         </div>
-        {errors.root && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{errors.root.message}</div>}
+        {errors.root && <div className="rounded-md border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm font-semibold text-destructive-ink">{errors.root.message}</div>}
         <Button type="submit" className="w-full" disabled={reset.isPending}>
           {reset.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Update password'}
         </Button>

@@ -34,7 +34,7 @@ export function ReportsTabs() {
       <DateRangeFilter range={range} />
 
       <Tabs defaultValue="daily">
-        <TabsList className="flex-wrap">
+        <TabsList className="h-auto flex-wrap justify-start">
           {TABS.map((t) => (
             <TabsTrigger key={t.name} value={t.name}>
               {t.label}

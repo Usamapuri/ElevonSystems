@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import { PanelLeft } from 'lucide-react'
 import apiClient from '@/api/client'
 import { Button } from '@/components/ui/button'
-import { Sidebar, navTitleFromPath } from '@/components/shell/Sidebar'
+import { BrandMark } from '@/components/shell/BrandMark'
+import { Sidebar } from '@/components/shell/Sidebar'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { canAccess, defaultPath, isRole } from '@/lib/roles'
 
@@ -38,11 +39,23 @@ function AppLayout() {
         <Sidebar user={user} isNarrowViewport={isNarrow} drawerOpen={drawerOpen} onDrawerOpenChange={setDrawerOpen} />
       </div>
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-3 md:hidden">
-          <Button variant="ghost" size="icon" aria-label="Open navigation" onClick={() => setDrawerOpen((o) => !o)}>
+        {/* On a phone the rail is a drawer, so the top bar carries the navy —
+            otherwise the whole app loses its identity at 390px. */}
+        <header className="flex h-14 shrink-0 items-center gap-2 bg-rail px-2 text-rail-foreground md:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11 text-rail-foreground hover:bg-white/10 hover:text-rail-foreground focus-visible:ring-primary focus-visible:ring-offset-rail"
+            aria-label="Open navigation"
+            onClick={() => setDrawerOpen((o) => !o)}
+          >
             <PanelLeft className="h-6 w-6" />
           </Button>
-          <span className="truncate text-base font-semibold">{navTitleFromPath(pathname)}</span>
+          {/* The brand, not the page name: every screen prints its own title
+              in the PageHeader immediately below, and saying it twice on a
+              390px screen wastes the one row the identity can live in. */}
+          <BrandMark className="h-8 w-8 rounded-sm" />
+          <span className="truncate text-base font-extrabold tracking-tight">Elevon POS</span>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <Outlet />

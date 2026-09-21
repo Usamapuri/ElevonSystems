@@ -18,6 +18,7 @@ import apiClient from '@/api/client'
 import { KpiRow } from '@/components/dashboard/KpiRow'
 import { RecentInvoices } from '@/components/dashboard/RecentInvoices'
 import { TopProducts } from '@/components/dashboard/TopProducts'
+import { PageHeader } from '@/components/shell/PageHeader'
 import { formatBusinessDate } from '@/lib/print/format'
 
 // recharts is a big dependency (~SVG chart engine) that only this one card
@@ -49,21 +50,19 @@ function DashboardPage() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            {data ? formatBusinessDate(data.today.from) : 'Today'}
-          </p>
-        </div>
-        {isFetching && !isLoading && (
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Refreshing…
-          </span>
-        )}
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description={data ? formatBusinessDate(data.today.from) : 'Today'}
+        actions={
+          isFetching && !isLoading ? (
+            <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Refreshing…
+            </span>
+          ) : null
+        }
+      />
 
-      {error && <p className="text-sm text-destructive">{errorMessage(error, 'Could not load the dashboard')}</p>}
+      {error && <p className="text-sm font-semibold text-destructive">{errorMessage(error, 'Could not load the dashboard')}</p>}
       {isLoading && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading the dashboard…
@@ -72,7 +71,7 @@ function DashboardPage() {
 
       {data && (
         <>
-          <KpiRow today={data.today} receivablesOutstanding={data.receivables_outstanding} day={data.day} />
+          <KpiRow today={data.today} receivablesOutstanding={data.receivables_outstanding} />
           <Suspense fallback={<div className="h-72 w-full animate-pulse rounded-lg border bg-muted/40" />}>
             <TrendChart series7d={data.series_7d} series30d={data.series_30d} />
           </Suspense>

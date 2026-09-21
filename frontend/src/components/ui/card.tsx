@@ -7,8 +7,16 @@ const Card = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
+    // No shadow. A white panel on the steel canvas is already a different
+    // surface; the shadow token is spent on the things that actually float —
+    // dialogs, sheets and the till's cart rail.
+    // min-w-0: a card is almost always a grid or flex item, and the default
+    // `min-width: auto` lets a wide table inside it push the card past its
+    // track — which is how the dashboard grew a horizontal scrollbar on a
+    // phone. With this, the table's own overflow-auto wrapper does the
+    // scrolling, as it was meant to.
     className={cn(
-      'rounded-lg border bg-card text-card-foreground shadow-sm',
+      'min-w-0 rounded-lg border border-border bg-card text-card-foreground',
       className
     )}
     {...props}
@@ -22,7 +30,7 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex flex-col space-y-1.5 p-6', className)}
+    className={cn('flex flex-col space-y-1.5 p-5', className)}
     {...props}
   />
 ))
@@ -35,7 +43,7 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      'text-2xl font-semibold leading-none tracking-tight',
+      'text-lg font-bold leading-tight tracking-tight',
       className
     )}
     {...props}
@@ -59,7 +67,7 @@ const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
+  <div ref={ref} className={cn('p-5 pt-0', className)} {...props} />
 ))
 CardContent.displayName = 'CardContent'
 
@@ -69,7 +77,7 @@ const CardFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex items-center p-6 pt-0', className)}
+    className={cn('flex items-center p-5 pt-0', className)}
     {...props}
   />
 ))

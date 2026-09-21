@@ -80,7 +80,7 @@ export function CloseDayForm({ expected, threshold, pending, error, onSubmit }: 
                 className={cn(
                   'rounded-lg border p-3',
                   active === t.tender ? 'border-ring ring-1 ring-ring/40' : 'border-border',
-                  t.overThreshold && 'border-amber-500/60',
+                  t.overThreshold && 'border-warning/60',
                 )}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -106,9 +106,9 @@ export function CloseDayForm({ expected, threshold, pending, error, onSubmit }: 
                     t.variance === null
                       ? 'text-muted-foreground'
                       : t.overThreshold
-                        ? 'font-medium text-amber-600'
+                        ? 'font-medium text-warning-ink'
                         : t.variance === 0
-                          ? 'text-emerald-600'
+                          ? 'text-success-ink'
                           : 'text-muted-foreground',
                   )}
                 >
@@ -150,10 +150,10 @@ export function CloseDayForm({ expected, threshold, pending, error, onSubmit }: 
                 : 'Anything worth reading back later'
             }
             onChange={(e) => setNotes(e.target.value)}
-            className={cn(noteMissing && 'border-amber-500 focus-visible:ring-amber-500')}
+            className={cn(noteMissing && 'border-warning focus-visible:ring-warning')}
           />
           {evaluation.noteRequired && (
-            <p className="flex items-start gap-2 text-sm text-amber-600">
+            <p className="flex items-start gap-2 text-sm text-warning-ink">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
                 A tender is off by more than {formatMoney(threshold)}. Write what explains it — the close is refused

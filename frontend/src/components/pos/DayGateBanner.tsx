@@ -18,11 +18,11 @@ export function DayGateBanner({ gate, className }: Props) {
     return (
       <div
         className={cn(
-          'flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm',
+          'flex items-start gap-3 rounded-lg border border-warning/40 bg-warning-soft px-4 py-3 text-sm',
           className,
         )}
       >
-        <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        <Info className="mt-0.5 h-5 w-5 shrink-0 text-warning-ink" />
         <div className="min-w-0">
           <p className="font-medium">Today is already closed.</p>
           <p className="text-muted-foreground">

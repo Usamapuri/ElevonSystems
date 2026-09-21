@@ -6,7 +6,7 @@
  * "30 days" for exactly that reason; nothing here should be read as "today".
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, tableInCard } from '@/components/ui/table'
 import { formatKg, formatMoney } from '@/lib/money'
 import type { ProductRow } from '@/types'
 
@@ -18,14 +18,14 @@ export function TopProducts({ products }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">Top products · 30 days</CardTitle>
+        <CardTitle className="text-base">Top products, last 30 days</CardTitle>
         <CardDescription>The five biggest sellers by gross, last 30 days — not just today.</CardDescription>
       </CardHeader>
       <CardContent>
         {products.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing sold in the last 30 days.</p>
+          <p className="text-sm text-muted-foreground">Nothing has sold in the last 30 days.</p>
         ) : (
-          <Table>
+          <Table className={tableInCard}>
             <TableHeader>
               <TableRow>
                 <TableHead>Product</TableHead>
@@ -38,7 +38,7 @@ export function TopProducts({ products }: Props) {
             <TableBody>
               {products.map((p) => (
                 <TableRow key={p.product_id ?? p.name}>
-                  <TableCell className="font-medium">{p.name}</TableCell>
+                  <TableCell className="font-semibold">{p.name}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatKg(p.kg)}</TableCell>
                   <TableCell className="text-right tabular-nums">{p.invoices}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMoney(p.gross)}</TableCell>

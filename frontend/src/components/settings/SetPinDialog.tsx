@@ -53,7 +53,7 @@ export function SetPinDialog({ open, onOpenChange, user }: Props) {
           <Field label="Confirm PIN" htmlFor="confirm" error={errors.confirm?.message}>
             <Input id="confirm" type="password" inputMode="numeric" maxLength={4} autoComplete="off" {...form.register('confirm')} />
           </Field>
-          {errors.root && <p className="text-sm text-red-600">{errors.root.message}</p>}
+          {errors.root && <p className="text-sm text-destructive">{errors.root.message}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={set.isPending}>
               Cancel

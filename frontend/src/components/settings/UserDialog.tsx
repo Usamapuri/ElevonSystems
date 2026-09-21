@@ -135,7 +135,7 @@ export function UserDialog({ open, onOpenChange, user }: Props) {
               </div>
             )}
           </div>
-          {errors.root && <p className="text-sm text-red-600">{errors.root.message}</p>}
+          {errors.root && <p className="text-sm text-destructive">{errors.root.message}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
               Cancel

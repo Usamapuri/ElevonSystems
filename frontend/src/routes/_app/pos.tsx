@@ -30,6 +30,7 @@ import { ProductTiles } from '@/components/pos/ProductTiles'
 import { RECENT_INVOICES_KEY, RecentInvoices } from '@/components/pos/RecentInvoices'
 import { TenderDialog, type TenderDetails } from '@/components/pos/TenderDialog'
 import { WeightPad } from '@/components/pos/WeightPad'
+import { PageHeader } from '@/components/shell/PageHeader'
 import { PinEntryModal } from '@/components/shared/PinEntryModal'
 import { useSettings } from '@/components/settings/useSettings'
 import { toast } from '@/hooks/use-toast'
@@ -306,10 +307,18 @@ function PosPage() {
 
   return (
     <div className="flex min-h-0 flex-col gap-4 p-4 md:p-6 lg:h-full">
+      <PageHeader title="Till" />
       <DayGateBanner gate={gate} />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
-        <div className="flex min-h-0 flex-col gap-4">
+      {/*
+        Three panels, not two columns of two. On a wide screen the cart spans
+        both rows on the right, exactly as before; on a phone the DOM order
+        is what stacks, and the cart has to come before the recent-sales list
+        — a cashier should not scroll past yesterday's receipts to reach the
+        Charge button.
+      */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[1fr_360px] lg:grid-rows-[minmax(0,1fr)_auto]">
+        <div className="flex min-h-0 flex-col lg:row-start-1">
           <ProductTiles
             products={products.data ?? []}
             isLoading={products.isLoading}
@@ -319,10 +328,10 @@ function PosPage() {
             onPick={openPadForProduct}
             searchRef={searchRef}
           />
-          <RecentInvoices />
         </div>
 
         <CartRail
+          className="lg:col-start-2 lg:row-span-2 lg:row-start-1"
           cart={cart}
           dispatch={dispatch}
           totals={totals}
@@ -339,6 +348,10 @@ function PosPage() {
           chargeDisabled={chargeDisabled || charge.isPending}
           chargeHint={chargeHint}
         />
+
+        <div className="min-w-0 lg:col-start-1 lg:row-start-2">
+          <RecentInvoices />
+        </div>
       </div>
 
       <WeightPad

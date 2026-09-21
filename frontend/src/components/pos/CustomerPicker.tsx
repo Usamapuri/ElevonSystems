@@ -177,7 +177,7 @@ function CustomerSearchDialog({
                   </p>
                 </div>
                 <div className="shrink-0 text-right text-xs">
-                  <p className={cn('font-medium', customer.balance > 0 && 'text-amber-600')}>
+                  <p className={cn('font-medium', customer.balance > 0 && 'text-warning-ink')}>
                     <Money amount={customer.balance} />
                   </p>
                   {customer.credit_allowed ? (

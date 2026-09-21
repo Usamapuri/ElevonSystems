@@ -56,19 +56,19 @@ export function ChangePasswordDialog({ open, onOpenChange }: Props) {
           <div className="space-y-2">
             <Label htmlFor="current_password">Current password</Label>
             <Input id="current_password" type="password" autoComplete="current-password" {...form.register('current_password')} />
-            {errors.current_password && <p className="text-sm text-red-600">{errors.current_password.message}</p>}
+            {errors.current_password && <p className="text-sm text-destructive">{errors.current_password.message}</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="new_password">New password (at least {PASSWORD_MIN} characters)</Label>
             <Input id="new_password" type="password" autoComplete="new-password" {...form.register('new_password')} />
-            {errors.new_password && <p className="text-sm text-red-600">{errors.new_password.message}</p>}
+            {errors.new_password && <p className="text-sm text-destructive">{errors.new_password.message}</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirm">Confirm new password</Label>
             <Input id="confirm" type="password" autoComplete="new-password" {...form.register('confirm')} />
-            {errors.confirm && <p className="text-sm text-red-600">{errors.confirm.message}</p>}
+            {errors.confirm && <p className="text-sm text-destructive">{errors.confirm.message}</p>}
           </div>
-          {errors.root && <p className="text-sm text-red-600">{errors.root.message}</p>}
+          {errors.root && <p className="text-sm text-destructive">{errors.root.message}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close} disabled={change.isPending}>
               Cancel

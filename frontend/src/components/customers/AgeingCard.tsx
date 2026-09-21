@@ -38,7 +38,7 @@ export function AgeingCard({ customerId, enabled }: Props) {
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading ageing…</p>
   if (error) {
-    return <p className="text-sm text-red-600">{error instanceof Error ? error.message : 'Could not load the ageing'}</p>
+    return <p className="text-sm text-destructive">{error instanceof Error ? error.message : 'Could not load the ageing'}</p>
   }
   if (!data) return null
 
@@ -52,7 +52,7 @@ export function AgeingCard({ customerId, enabled }: Props) {
           {BUCKETS.map(({ key, label }) => (
             <div key={key} className="text-center">
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className={`text-sm font-medium tabular-nums ${data[key] > 0 ? 'text-amber-600' : ''}`}>
+              <p className={`text-sm font-medium tabular-nums ${data[key] > 0 ? 'text-warning-ink' : ''}`}>
                 {formatMoney(data[key])}
               </p>
             </div>

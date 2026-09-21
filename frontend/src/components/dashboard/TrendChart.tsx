@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatKg, formatMoney } from '@/lib/money'
+import { cn } from '@/lib/utils'
 import { dayMonthLabel } from './kpis'
 import type { DailyRow } from '@/types'
 
@@ -36,12 +37,14 @@ interface Props {
 
 type RangeToggle = '7d' | '30d'
 
-// Categorical slots 1 (blue) and 3 (aqua): validated as an adjacent pair for
-// colour-vision-deficient readers (worst-case Delta E well above the CVD
-// floor) and distinct enough at a glance that the legend, not hue alone,
-// carries identity.
-const REVENUE_COLOR = '#2a78d6'
-const KG_COLOR = '#1baf7a'
+// The chrome's own two colours: navy bars for money, safety orange for the
+// kg line. Navy against orange is the canonical colour-vision-safe pair —
+// the two series stay tellable apart under every common CVD simulation — and
+// the mark itself differs (bar versus line), so hue is never the only cue.
+// Both are read from the theme so the chart follows light, dark and
+// high-contrast without a second palette to maintain.
+const REVENUE_COLOR = 'hsl(var(--chart-bar))'
+const KG_COLOR = 'hsl(var(--chart-line))'
 
 interface ChartRow {
   label: string
@@ -67,28 +70,24 @@ export function TrendChart({ series7d, series30d }: Props) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-sm font-semibold">Revenue &amp; kg sold</CardTitle>
-        <div className="flex gap-1 rounded-md bg-muted p-1">
-          <Button
-            type="button"
-            size="sm"
-            variant={range === '7d' ? 'default' : 'ghost'}
-            className="h-7 px-3 text-xs"
-            aria-pressed={range === '7d'}
-            onClick={() => setRange('7d')}
-          >
-            7 days
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={range === '30d' ? 'default' : 'ghost'}
-            className="h-7 px-3 text-xs"
-            aria-pressed={range === '30d'}
-            onClick={() => setRange('30d')}
-          >
-            30 days
-          </Button>
+        <CardTitle className="text-base">Revenue and kg sold</CardTitle>
+        <div className="flex gap-1 rounded-md border border-border bg-secondary p-1">
+          {(['7d', '30d'] as const).map((r) => (
+            <Button
+              key={r}
+              type="button"
+              size="sm"
+              variant="ghost"
+              className={cn(
+                'h-8 rounded-sm px-3 text-xs',
+                range === r ? 'bg-card text-foreground hover:bg-card' : 'text-muted-foreground',
+              )}
+              aria-pressed={range === r}
+              onClick={() => setRange(r)}
+            >
+              {r === '7d' ? '7 days' : '30 days'}
+            </Button>
+          ))}
         </div>
       </CardHeader>
       <CardContent>
@@ -109,7 +108,7 @@ export function TrendChart({ series7d, series30d }: Props) {
                   tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                   stroke="hsl(var(--border))"
                   tickFormatter={(v: number) => formatMoney(v)}
-                  width={84}
+                  width={96}
                 />
                 <YAxis
                   yAxisId="kg"

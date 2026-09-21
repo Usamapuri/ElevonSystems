@@ -20,9 +20,9 @@ interface Props {
 
 export function MetricTile({ label, value, hint }: Props) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className="tabular mt-1 truncate text-xl font-bold">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   )

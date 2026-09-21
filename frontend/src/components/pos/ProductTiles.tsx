@@ -32,7 +32,7 @@ export function ProductTiles({ products, isLoading, error, search, onSearchChang
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           ref={searchRef}
-          className="h-11 pl-9"
+          className="h-12 pl-9 text-base"
           placeholder="Search products  ( / )"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
@@ -47,15 +47,15 @@ export function ProductTiles({ products, isLoading, error, search, onSearchChang
         />
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p className="text-sm font-semibold text-destructive">{error}</p>}
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading && <p className="text-sm text-muted-foreground">Loading products…</p>}
         {!isLoading && shown.length === 0 && (
-          <p className="text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
             {products.length === 0
-              ? 'No active products. Add one on the Rates screen first.'
-              : 'No product matches that search.'}
+              ? 'No products to sell yet. Add one on the Rates screen first.'
+              : 'No product matches that search. Clear the box to see them all.'}
           </p>
         )}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
@@ -67,13 +67,15 @@ export function ProductTiles({ products, isLoading, error, search, onSearchChang
                 type="button"
                 onClick={() => onPick(product)}
                 className={cn(
-                  'flex min-h-[104px] flex-col justify-between rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-colors',
-                  'hover:border-primary/60 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  // Big, flat, and separated by colour rather than by shadow:
+                  // a wall of lifted cards on a till reads as noise.
+                  'flex min-h-[104px] flex-col justify-between rounded-lg border border-border bg-card p-4 text-left transition-colors',
+                  'hover:border-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   rateless && 'border-dashed opacity-70',
                 )}
               >
-                <span className="line-clamp-2 text-base font-semibold leading-tight">{product.name}</span>
-                <span className="mt-2 text-sm text-muted-foreground tabular-nums">
+                <span className="line-clamp-2 text-base font-bold leading-tight">{product.name}</span>
+                <span className={cn('tabular mt-2 text-sm font-semibold', rateless ? 'text-destructive' : 'text-muted-foreground')}>
                   {rateless ? 'No rate set' : `${formatMoney(product.rate)} / ${product.unit_label}`}
                 </span>
               </button>

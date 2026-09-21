@@ -73,7 +73,7 @@ export function ReceiptsList({ customerId, enabled }: Props) {
     <div>
       <h3 className="mb-2 text-sm font-semibold">Receipts</h3>
       {(error || listError) && (
-        <p className="mb-2 text-sm text-red-600">
+        <p className="mb-2 text-sm text-destructive">
           {listError ?? (error instanceof Error ? error.message : 'Could not load receipts')}
         </p>
       )}

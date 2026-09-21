@@ -127,7 +127,7 @@ export function ZReportView({ z, settings, actions, onPrint, printing = false }:
                   <TableCell
                     className={cn(
                       'text-right tabular-nums',
-                      typeof row.variance === 'number' && row.variance !== 0 && 'font-medium text-amber-600',
+                      typeof row.variance === 'number' && row.variance !== 0 && 'font-medium text-warning-ink',
                     )}
                   >
                     {signedMoney(row.variance)}
@@ -182,7 +182,7 @@ export function ZReportView({ z, settings, actions, onPrint, printing = false }:
                     <span className="text-muted-foreground tabular-nums">{formatTimePK(m.created_at)}</span> {m.reason}
                     {m.created_by_name ? <span className="text-muted-foreground"> · {m.created_by_name}</span> : null}
                   </span>
-                  <span className={cn('tabular-nums', m.movement_type === 'paid_out' ? 'text-destructive' : 'text-emerald-600')}>
+                  <span className={cn('tabular-nums', m.movement_type === 'paid_out' ? 'text-destructive' : 'text-success-ink')}>
                     {m.movement_type === 'paid_out' ? '-' : '+'}
                     {formatMoney(m.amount)}
                   </span>

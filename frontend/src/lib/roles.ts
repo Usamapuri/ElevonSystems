@@ -17,13 +17,20 @@ export interface NavItem {
   roles: readonly Role[]
 }
 
-/** Sidebar order. `to` is the URL prefix used for access checks. */
+/**
+ * Sidebar order. `to` is the URL prefix used for access checks.
+ *
+ * Dashboard leads because it is where `defaultPath` lands an admin, and a
+ * rail whose first item is not the screen you were just dropped on reads as
+ * misordered. A counter never sees it (admin-only), so a counter's rail still
+ * opens on Till — the screen they land on — and the order holds for both.
+ */
 export const NAV_ITEMS: readonly NavItem[] = [
+  { id: 'dashboard', label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
   { id: 'pos', label: 'Till', to: '/pos', icon: ShoppingCart, roles: ['admin', 'counter'] },
   { id: 'day-close', label: 'Day close', to: '/day-close', icon: CalendarCheck, roles: ['admin', 'counter'] },
   { id: 'customers', label: 'Customers', to: '/customers', icon: BookUser, roles: ['admin', 'counter'] },
   { id: 'invoices', label: 'Invoices', to: '/invoices', icon: FileText, roles: ['admin', 'counter'] },
-  { id: 'dashboard', label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
   { id: 'reports', label: 'Reports', to: '/reports', icon: BarChart3, roles: ['admin'] },
   { id: 'rates', label: 'Rates', to: '/rates', icon: Scale, roles: ['admin'] },
   { id: 'settings', label: 'Settings', to: '/settings', icon: Settings, roles: ['admin'] },

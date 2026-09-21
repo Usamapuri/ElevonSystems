@@ -84,17 +84,19 @@ export function RecentInvoices() {
   })
 
   return (
-    <div className="shrink-0 rounded-xl border border-border bg-card p-4">
+    <div className="shrink-0 rounded-lg border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recent sales</h2>
-        <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Refresh" onClick={() => refetch()}>
+        <h2 className="text-base font-bold">Recent sales</h2>
+        <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Refresh" onClick={() => refetch()}>
           <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
         </Button>
       </div>
 
       {error && <p className="text-sm text-destructive">Could not load recent sales</p>}
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-      {!isLoading && invoices.length === 0 && <p className="text-sm text-muted-foreground">No sales yet today.</p>}
+      {!isLoading && invoices.length === 0 && (
+        <p className="text-sm text-muted-foreground">No sales yet today. Tap a product to start one.</p>
+      )}
 
       <ul className="max-h-60 space-y-2 overflow-y-auto pr-1">
         {invoices.map((invoice) => {
@@ -103,17 +105,17 @@ export function RecentInvoices() {
             <li
               key={invoice.id}
               className={cn(
-                'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border px-3 py-2 text-sm',
+                'flex min-h-[44px] flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border px-3 py-2 text-sm',
                 voided && 'opacity-60',
               )}
             >
-              <span className="font-medium tabular-nums">{invoice.invoice_number}</span>
-              <span className="text-muted-foreground tabular-nums">{timeOf(invoice.created_at)}</span>
+              <span className="tabular font-bold">{invoice.invoice_number}</span>
+              <span className="tabular text-muted-foreground">{timeOf(invoice.created_at)}</span>
               <Badge variant="outline" className="capitalize">
                 {invoice.payment_method}
               </Badge>
               {voided && <Badge variant="destructive">Voided</Badge>}
-              <span className="ml-auto font-semibold tabular-nums">
+              <span className="tabular ml-auto font-bold">
                 <Money amount={invoice.total_payable} />
               </span>
               <div className="flex w-full items-center justify-end gap-1 sm:w-auto">

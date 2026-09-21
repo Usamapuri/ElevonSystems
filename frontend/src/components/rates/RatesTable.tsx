@@ -5,7 +5,7 @@ import apiClient, { ApiClientError } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, tableInCard } from '@/components/ui/table'
 import { ProductDialog } from '@/components/rates/ProductDialog'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
@@ -83,8 +83,8 @@ export function RatesTable() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        {error && <p className="text-sm text-red-600">{error instanceof Error ? error.message : 'Could not load products'}</p>}
-        <Table>
+        {error && <p className="text-sm text-destructive">{error instanceof Error ? error.message : 'Could not load products'}</p>}
+        <Table className={tableInCard}>
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
@@ -109,7 +109,7 @@ export function RatesTable() {
               const isInvalid = invalidIds.has(p.id)
               const isChanged = changes.some((c) => c.product_id === p.id)
               return (
-                <TableRow key={p.id} className={isChanged ? 'bg-amber-50 dark:bg-amber-950/20' : ''}>
+                <TableRow key={p.id} className={isChanged ? 'bg-warning-soft' : ''}>
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground">{p.sku ?? '—'}</TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground">{p.hs_code ?? '—'}</TableCell>
@@ -119,7 +119,7 @@ export function RatesTable() {
                       step="0.01"
                       min="0"
                       inputMode="decimal"
-                      className={cn('ml-auto w-28 text-right', isInvalid && 'border-red-500 focus-visible:ring-red-500')}
+                      className={cn('ml-auto w-28 text-right', isInvalid && 'border-destructive focus-visible:ring-destructive')}
                       value={valueFor(p)}
                       onChange={(e) => setEdits((prev) => ({ ...prev, [p.id]: e.target.value }))}
                       aria-invalid={isInvalid}
@@ -137,7 +137,7 @@ export function RatesTable() {
           </TableBody>
         </Table>
         <div className="flex items-center justify-end gap-3">
-          {invalidIds.size > 0 && <p className="text-sm text-red-600">Fix the highlighted rate{invalidIds.size === 1 ? '' : 's'} before saving.</p>}
+          {invalidIds.size > 0 && <p className="text-sm text-destructive">Fix the highlighted rate{invalidIds.size === 1 ? '' : 's'} before saving.</p>}
           <Button onClick={() => save.mutate()} disabled={changes.length === 0 || invalidIds.size > 0 || save.isPending}>
             {save.isPending ? 'Saving…' : changes.length > 0 ? `Save rates (${changes.length})` : 'Save rates'}
           </Button>

@@ -74,13 +74,13 @@ export function CustomerDetail({ customerId, onOpenChange }: Props) {
             <SheetDescription>Profile, ageing, receipts and the full ledger statement, oldest entry first.</SheetDescription>
           </SheetHeader>
           <SheetBody className="space-y-6">
-            {customerError && <p className="text-sm text-red-600">{customerError instanceof Error ? customerError.message : 'Could not load the customer'}</p>}
+            {customerError && <p className="text-sm text-destructive">{customerError instanceof Error ? customerError.message : 'Could not load the customer'}</p>}
             {loadingCustomer && <p className="text-sm text-muted-foreground">Loading…</p>}
             {customer && (
               <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
                 <div>
                   <p className="text-xs text-muted-foreground">Balance</p>
-                  <p className={`text-lg font-semibold ${customer.balance > 0 ? 'text-amber-600' : ''}`}>{formatMoney(customer.balance)}</p>
+                  <p className={`text-lg font-semibold ${customer.balance > 0 ? 'text-warning-ink' : ''}`}>{formatMoney(customer.balance)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Status</p>
@@ -143,7 +143,7 @@ export function CustomerDetail({ customerId, onOpenChange }: Props) {
 
             <div>
               <h3 className="mb-2 text-sm font-semibold">Statement</h3>
-              {statementError && <p className="text-sm text-red-600">{statementError instanceof Error ? statementError.message : 'Could not load the statement'}</p>}
+              {statementError && <p className="text-sm text-destructive">{statementError instanceof Error ? statementError.message : 'Could not load the statement'}</p>}
               <Table>
                 <TableHeader>
                   <TableRow>

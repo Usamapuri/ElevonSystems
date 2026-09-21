@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '@/api/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, tableInCard } from '@/components/ui/table'
 import { formatMoney } from '@/lib/money'
 
 const HISTORY_LIMIT = 50
@@ -29,8 +29,8 @@ export function RateHistoryCard() {
         <CardDescription>Last {HISTORY_LIMIT} changes, newest first.</CardDescription>
       </CardHeader>
       <CardContent>
-        {error && <p className="text-sm text-red-600">{error instanceof Error ? error.message : 'Could not load rate history'}</p>}
-        <Table>
+        {error && <p className="text-sm text-destructive">{error instanceof Error ? error.message : 'Could not load rate history'}</p>}
+        <Table className={tableInCard}>
           <TableHeader>
             <TableRow>
               <TableHead>When</TableHead>

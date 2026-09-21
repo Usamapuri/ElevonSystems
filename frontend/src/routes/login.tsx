@@ -1,7 +1,8 @@
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Eye, EyeOff, Flame, Loader2, Lock, Scale, User as UserIcon, FileCheck2, BookUser } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Lock, Scale, User as UserIcon, FileCheck2, BookUser } from 'lucide-react'
+import { BrandMark } from '@/components/shell/BrandMark'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -52,35 +53,42 @@ function LoginPage() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[3fr_2fr]">
-      <section className="hidden flex-col justify-between bg-slate-900 p-10 text-slate-50 lg:flex">
-        <div className="flex items-center gap-2 text-xl font-bold">
-          <Flame className="h-7 w-7 text-orange-400" /> Elevon POS
+      <section className="hidden flex-col justify-between bg-rail p-10 text-rail-foreground lg:flex">
+        <div className="flex items-center gap-3 text-lg font-extrabold tracking-tight">
+          <BrandMark /> Elevon POS
         </div>
         <div className="max-w-md space-y-6">
-          <h1 className="text-4xl font-semibold leading-tight">The till for an LPG counter.</h1>
-          <ul className="space-y-3 text-slate-300">
+          <h1 className="text-[2.75rem] font-extrabold leading-[1.05] tracking-tight">
+            The till for an LPG counter.
+          </h1>
+          <ul className="space-y-3 text-rail-muted">
             {FEATURES.map((f) => (
               <li key={f.text} className="flex items-start gap-3">
-                <f.icon className="mt-0.5 h-5 w-5 shrink-0 text-orange-400" />
+                <f.icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <span>{f.text}</span>
               </li>
             ))}
           </ul>
         </div>
-        <p className="text-xs text-slate-400">Elevon Systems</p>
+        <p className="text-xs font-semibold text-rail-muted">Elevon Systems</p>
       </section>
 
-      <section className="flex items-center justify-center p-6">
+      <section className="flex items-center justify-center bg-background p-6">
         <form
-          className="w-full max-w-sm space-y-5"
+          className="w-full max-w-sm space-y-5 rounded-lg border border-border bg-card p-6"
           onSubmit={(e) => {
             e.preventDefault()
             setError('')
             login.mutate(form)
           }}
         >
+          {/* On a phone the navy panel is not rendered, so the mark comes
+              here instead — otherwise sign-in is a blank white page. */}
+          <div className="flex items-center gap-3 text-lg font-extrabold tracking-tight lg:hidden">
+            <BrandMark /> Elevon POS
+          </div>
           <div className="space-y-1">
-            <h2 className="text-2xl font-semibold">Sign in</h2>
+            <h2 className="text-2xl font-bold tracking-tight">Sign in</h2>
             <p className="text-sm text-muted-foreground">Use your staff username or email.</p>
           </div>
           <div className="space-y-2">
@@ -105,12 +113,16 @@ function LoginPage() {
             </div>
           </div>
           <div className="text-right">
-            <Link to="/forgot-password" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+            <Link to="/forgot-password" className="text-sm font-semibold text-muted-foreground underline underline-offset-2 hover:text-foreground">
               Forgot password?
             </Link>
           </div>
-          {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{error}</div>}
-          <Button type="submit" className="w-full" disabled={login.isPending || !form.username || !form.password}>
+          {error && (
+            <div className="rounded-md border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm font-semibold text-destructive-ink">
+              {error}
+            </div>
+          )}
+          <Button type="submit" size="lg" className="w-full" disabled={login.isPending || !form.username || !form.password}>
             {login.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign in'}
           </Button>
         </form>

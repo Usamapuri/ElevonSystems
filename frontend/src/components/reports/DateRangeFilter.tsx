@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { presetLabel, REPORT_DATE_PRESETS } from '@/components/invoices/dateRange'
+import { cn } from '@/lib/utils'
 import type { UseReportRange } from './useReportRange'
 
 interface Props {
@@ -27,7 +28,9 @@ export function DateRangeFilter({ range }: Props) {
             key={preset}
             type="button"
             size="sm"
-            variant={range.preset === preset ? 'default' : 'outline'}
+            variant="outline"
+            aria-pressed={range.preset === preset}
+            className={cn(range.preset === preset && 'border-foreground bg-secondary text-foreground')}
             onClick={() => range.setPreset(preset)}
           >
             {presetLabel(preset)}
@@ -36,7 +39,7 @@ export function DateRangeFilter({ range }: Props) {
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="reports-from" className="text-xs text-muted-foreground">
+        <Label htmlFor="reports-from" className="text-xs font-semibold text-muted-foreground">
           From
         </Label>
         <Input
@@ -48,7 +51,7 @@ export function DateRangeFilter({ range }: Props) {
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="reports-to" className="text-xs text-muted-foreground">
+        <Label htmlFor="reports-to" className="text-xs font-semibold text-muted-foreground">
           To
         </Label>
         <Input
@@ -61,7 +64,7 @@ export function DateRangeFilter({ range }: Props) {
       </div>
 
       {range.inverted && (
-        <p className="text-sm text-destructive">The From date is after the To date — no report can match that.</p>
+        <p className="text-sm font-semibold text-destructive">The From date is after the To date — no report can match that.</p>
       )}
     </div>
   )

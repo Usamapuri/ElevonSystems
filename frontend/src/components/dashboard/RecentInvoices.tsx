@@ -9,7 +9,7 @@
  */
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, tableInCard } from '@/components/ui/table'
 import { formatMoney } from '@/lib/money'
 import { formatTimePK, paymentMethodLabel } from '@/lib/print/format'
 import { cn } from '@/lib/utils'
@@ -23,14 +23,14 @@ export function RecentInvoices({ invoices }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">Recent invoices</CardTitle>
+        <CardTitle className="text-base">Recent invoices</CardTitle>
         <CardDescription>The last few sales, voids included.</CardDescription>
       </CardHeader>
       <CardContent>
         {invoices.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No sales yet.</p>
+          <p className="text-sm text-muted-foreground">No sales yet today.</p>
         ) : (
-          <Table>
+          <Table className={tableInCard}>
             <TableHeader>
               <TableRow>
                 <TableHead>Time</TableHead>

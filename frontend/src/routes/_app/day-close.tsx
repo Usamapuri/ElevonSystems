@@ -24,9 +24,9 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, CalendarClock, Loader2, Sunrise, Unlock } from 'lucide-react'
 import apiClient from '@/api/client'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/shell/PageHeader'
 import { PinEntryModal } from '@/components/shared/PinEntryModal'
 import { CloseDayForm } from '@/components/dayclose/CloseDayForm'
 import { MovementDialog, type MovementType } from '@/components/dayclose/MovementDialog'
@@ -187,22 +187,17 @@ function DayClosePage() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Day close</h1>
-          <p className="text-sm text-muted-foreground">
-            {day ? `${formatBusinessDate(day.business_date)} · opened ${formatTimePK(day.opened_at)}` : 'No business day yet'}
-          </p>
-        </div>
-        {day && (
-          <Badge variant={dayIsOpen ? 'success' : 'secondary'} className="uppercase">
-            {day.status}
-          </Badge>
-        )}
-      </div>
+      <PageHeader
+        title="Day close"
+        description={
+          day
+            ? `${formatBusinessDate(day.business_date)}, opened ${formatTimePK(day.opened_at)}`
+            : 'No business day yet'
+        }
+      />
 
       {current.error && (
-        <p className="text-sm text-destructive">{errorMessage(current.error, 'Could not load the business day')}</p>
+        <p className="text-sm font-semibold text-destructive">{errorMessage(current.error, 'Could not load the business day')}</p>
       )}
       {current.isLoading && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -266,9 +261,9 @@ function DayClosePage() {
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {tiles.map((tile) => (
-              <div key={tile.label} className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{tile.label}</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{tile.value}</p>
+              <div key={tile.label} className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-semibold text-muted-foreground">{tile.label}</p>
+                <p className="tabular mt-1 text-xl font-bold">{tile.value}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{tile.hint}</p>
               </div>
             ))}
@@ -316,14 +311,14 @@ function DayClosePage() {
                       className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border py-1.5 last:border-b-0"
                     >
                       <span className="min-w-0">
-                        <span className="text-muted-foreground tabular-nums">{formatTimePK(m.created_at)}</span> {m.reason}
-                        {m.created_by_name ? <span className="text-muted-foreground"> · {m.created_by_name}</span> : null}
+                        <span className="tabular text-muted-foreground">{formatTimePK(m.created_at)}</span> {m.reason}
+                        {m.created_by_name ? <span className="text-muted-foreground"> — {m.created_by_name}</span> : null}
                         {m.notes ? <span className="block text-xs text-muted-foreground">{m.notes}</span> : null}
                       </span>
                       <span
                         className={cn(
-                          'font-medium tabular-nums',
-                          m.movement_type === 'paid_out' ? 'text-destructive' : 'text-emerald-600',
+                          'tabular font-semibold',
+                          m.movement_type === 'paid_out' ? 'text-destructive' : 'text-success-ink',
                         )}
                       >
                         {m.movement_type === 'paid_out' ? '-' : '+'}

@@ -23,6 +23,30 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          // Safety orange darkens on hover rather than fading: bg-primary/90
+          // over a white card lightens it, which reads as "going away".
+          hover: "hsl(var(--primary-hover))",
+        },
+        // The navy rail. Same colour in every theme — it is the one surface
+        // that identifies the app, so it does not follow light/dark.
+        rail: {
+          DEFAULT: "hsl(var(--rail))",
+          foreground: "hsl(var(--rail-foreground))",
+          muted: "hsl(var(--rail-muted))",
+        },
+        // Semantics carry meaning, never decoration: green is an open day or a
+        // settled account, amber is a day that needs attention, red is a void.
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+          soft: "hsl(var(--success-soft))",
+          ink: "hsl(var(--success-ink))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+          soft: "hsl(var(--warning-soft))",
+          ink: "hsl(var(--warning-ink))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -31,6 +55,8 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+          soft: "hsl(var(--destructive-soft))",
+          ink: "hsl(var(--destructive-ink))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -49,14 +75,19 @@ export default {
           foreground: "hsl(var(--card-foreground))",
         },
       },
+      // One family for the whole interface. Manrope's figures are open and its
+      // heavier weights stay legible at a glance across a counter, which is
+      // what a till and a weighbridge plate need.
       fontFamily: {
-        serif: ['"Instrument Serif"', '"Iowan Old Style"', '"Apple Garamond"', 'Georgia', 'serif'],
-        sans:  ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
+        sans: ['Manrope', 'ui-sans-serif', 'system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
       },
+      // Two radii on purpose: 12px on panels (lg/xl), 6px on controls (md).
+      // --radius is 0.75rem, so md/sm are subtracted down to the control size
+      // rather than tracking the panel radius the way stock shadcn does.
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 6px)",
+        sm: "calc(var(--radius) - 8px)",
       },
       keyframes: {
         "accordion-down": {

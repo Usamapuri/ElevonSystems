@@ -108,8 +108,7 @@ export function TenderDialog({
         <DialogHeader>
           <DialogTitle>Take payment</DialogTitle>
           <DialogDescription>
-            {customer ? `${customer.name} · ` : 'Walk-in · '}
-            {formatMoney(totalPayable)} due
+            {formatMoney(totalPayable)} due from {customer ? customer.name : 'a walk-in customer'}
           </DialogDescription>
         </DialogHeader>
 
@@ -120,10 +119,10 @@ export function TenderDialog({
               type="button"
               onClick={() => onTenderChange(value)}
               className={cn(
-                'flex h-16 items-center justify-center gap-2 rounded-xl border text-base font-medium transition-colors',
+                'flex h-16 items-center justify-center gap-2 rounded-md border-2 text-base font-bold transition-colors',
                 tender === value
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-background hover:bg-accent',
+                  ? 'border-primary bg-primary/10 text-foreground'
+                  : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
               )}
             >
               <Icon className="h-5 w-5" />

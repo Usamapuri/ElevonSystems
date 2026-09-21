@@ -36,6 +36,8 @@ interface Props {
   chargeDisabled: boolean
   /** Shown under the Charge button when it is off. */
   chargeHint: string | null
+  /** Grid placement from the page; the rail owns nothing about the layout. */
+  className?: string
 }
 
 const TENDER_LABEL: Record<PaymentMethod, string> = {
@@ -58,17 +60,18 @@ export function CartRail({
   onCharge,
   chargeDisabled,
   chargeHint,
+  className,
 }: Props) {
   const empty = cart.lines.length === 0
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 rounded-xl border border-border bg-card p-4">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold">Cart</h2>
+    <div className={cn('flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-lg', className)}>
+      <div className="flex items-center justify-between px-4 pb-2 pt-4">
+        <h2 className="text-base font-bold">Cart</h2>
         {!empty && (
           <button
             type="button"
-            className="text-xs text-muted-foreground hover:text-destructive"
+            className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => dispatch({ type: 'clear' })}
           >
             Clear all
@@ -76,50 +79,50 @@ export function CartRail({
         )}
       </div>
 
-      <div className="min-h-[80px] flex-1 overflow-y-auto pr-1">
+      <div className="min-h-[80px] flex-1 overflow-y-auto px-4">
         {empty ? (
-          <p className="pt-6 text-center text-sm text-muted-foreground">
-            Tap a product to weigh it.
+          <p className="pt-8 text-center text-sm text-muted-foreground">
+            Nothing on the scale yet. Tap a product to weigh it.
           </p>
         ) : (
           <ul className="space-y-2">
             {cart.lines.map((line, i) => {
               const lineTotal = totals?.lines[i]
               return (
-                <li key={line.key} className="rounded-lg border border-border px-3 py-2">
+                <li key={line.key} className="rounded-md border border-border px-3 py-2">
                   <div className="flex items-start justify-between gap-2">
                     <button
                       type="button"
-                      className="min-w-0 flex-1 text-left"
+                      className="min-w-0 flex-1 py-1 text-left"
                       onClick={() => onEditLine(line)}
                     >
-                      <p className="truncate font-medium">{line.product_name}</p>
-                      <p className="text-xs text-muted-foreground tabular-nums">
-                        {formatKg(line.quantity)} kg × {line.rate.toFixed(2)}
+                      <p className="truncate text-sm font-semibold">{line.product_name}</p>
+                      <p className="tabular text-xs text-muted-foreground">
+                        {formatKg(line.quantity)} kg at {line.rate.toFixed(2)}
                         {line.entered_as === 'gross_tare' && line.gross_weight !== undefined && line.tare_weight !== undefined && (
-                          <> · {formatKg(line.gross_weight)} − {formatKg(line.tare_weight)}</>
+                          <> — {formatKg(line.gross_weight)} gross − {formatKg(line.tare_weight)} tare</>
                         )}
-                        {line.entered_as === 'tonne' && <> · {(line.quantity / 1000).toFixed(3)} t</>}
+                        {line.entered_as === 'tonne' && <> — {(line.quantity / 1000).toFixed(3)} t</>}
                         {line.entered_as === 'amount' && line.typed_amount !== undefined && (
-                          <> · asked {formatMoney(line.typed_amount)}</>
+                          <> — asked {formatMoney(line.typed_amount)}</>
                         )}
                       </p>
                     </button>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <span className="text-sm font-medium tabular-nums">
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <span className="tabular text-sm font-bold">
                         <Money amount={lineTotal ? lineTotal.line_total : line.quantity * line.rate} />
                       </span>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit line" onClick={() => onEditLine(line)}>
-                        <Pencil className="h-3.5 w-3.5" />
+                      <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Edit line" onClick={() => onEditLine(line)}>
+                        <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        className="h-10 w-10 text-muted-foreground hover:text-destructive"
                         aria-label="Remove line"
                         onClick={() => dispatch({ type: 'remove', key: line.key })}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
@@ -130,65 +133,83 @@ export function CartRail({
         )}
       </div>
 
-      {/* Discount */}
-      <div className="space-y-1.5">
-        <span className="text-sm font-medium">Discount</span>
-        <div className="flex gap-2">
-          <div className="flex rounded-md bg-muted p-1">
-            {(['amount', 'percent'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => dispatch({ type: 'set_discount_mode', mode: m })}
-                className={cn(
-                  'rounded px-3 text-sm font-medium transition-colors',
-                  cart.discountMode === m ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {m === 'amount' ? 'Rs' : '%'}
-              </button>
-            ))}
+      <div className="space-y-3 px-4 pt-3">
+        {/* Discount */}
+        <div className="space-y-1.5">
+          <span className="text-xs font-semibold text-muted-foreground">Discount</span>
+          <div className="flex gap-2">
+            <div className="flex shrink-0 rounded-md border border-border bg-secondary p-1">
+              {(['amount', 'percent'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => dispatch({ type: 'set_discount_mode', mode: m })}
+                  className={cn(
+                    'w-10 rounded-sm text-sm font-bold transition-colors',
+                    cart.discountMode === m ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {m === 'amount' ? 'Rs' : '%'}
+                </button>
+              ))}
+            </div>
+            <Input
+              inputMode="decimal"
+              placeholder="0"
+              aria-label={cart.discountMode === 'percent' ? 'Discount percentage' : 'Discount amount in rupees'}
+              className={cn('tabular', !discountValid && 'border-destructive')}
+              value={cart.discountValue}
+              onChange={(e) => dispatch({ type: 'set_discount_value', value: e.target.value })}
+            />
           </div>
-          <Input
-            inputMode="decimal"
-            placeholder="0"
-            className={cn('tabular-nums', !discountValid && 'border-destructive')}
-            value={cart.discountValue}
-            onChange={(e) => dispatch({ type: 'set_discount_value', value: e.target.value })}
-          />
+          {!discountValid && (
+            <p className="text-xs font-semibold text-destructive">
+              {cart.discountMode === 'percent' ? 'Enter a percentage between 0 and 100' : 'Enter a rupee amount of zero or more'}
+            </p>
+          )}
         </div>
-        {!discountValid && (
-          <p className="text-xs text-destructive">
-            {cart.discountMode === 'percent' ? 'Enter a percentage between 0 and 100' : 'Enter a rupee amount of zero or more'}
-          </p>
-        )}
+
+        <CustomerPicker value={customer} onChange={onCustomerChange} required={tender === 'credit'} />
+
+        {/* Totals */}
+        <dl className="space-y-1 border-t border-border pt-3 text-sm">
+          <Row label="Subtotal" value={totals?.subtotal ?? 0} />
+          {(totals?.discount_amount ?? 0) > 0 && (
+            <Row label="Discount" value={-(totals?.discount_amount ?? 0)} className="text-muted-foreground" />
+          )}
+          <Row label={`Tax ${formatRate(taxRate)} on ${TENDER_LABEL[tender].toLowerCase()}`} value={totals?.tax_amount ?? 0} />
+          {(totals?.further_tax_amount ?? 0) > 0 && (
+            <Row label="Further tax (unregistered buyer)" value={totals?.further_tax_amount ?? 0} />
+          )}
+          {totals && totals.rounding_adjustment !== 0 && (
+            <Row label="Rounding" value={totals.rounding_adjustment} className="text-muted-foreground" />
+          )}
+        </dl>
       </div>
 
-      <CustomerPicker value={customer} onChange={onCustomerChange} required={tender === 'credit'} />
-
-      {/* Totals */}
-      <dl className="space-y-1 border-t border-border pt-3 text-sm">
-        <Row label="Subtotal" value={totals?.subtotal ?? 0} />
-        {(totals?.discount_amount ?? 0) > 0 && (
-          <Row label="Discount" value={-(totals?.discount_amount ?? 0)} className="text-muted-foreground" />
-        )}
-        <Row label={`Tax (${formatRate(taxRate)} · ${TENDER_LABEL[tender]})`} value={totals?.tax_amount ?? 0} />
-        {(totals?.further_tax_amount ?? 0) > 0 && (
-          <Row label="Further tax (unregistered buyer)" value={totals?.further_tax_amount ?? 0} />
-        )}
-        {totals && totals.rounding_adjustment !== 0 && (
-          <Row label="Rounding" value={totals.rounding_adjustment} className="text-muted-foreground" />
-        )}
-        <div className="flex items-baseline justify-between border-t border-border pt-2">
-          <dt className="text-base font-semibold">Total payable</dt>
-          <dd className="text-2xl font-bold tabular-nums">{formatMoney(totals?.total_payable ?? 0)}</dd>
+      {/*
+        The payable plate. This is the one loud element in the whole app and
+        it is loud on purpose: a weighbridge reads out in big lit digits
+        against a dark housing, and the figure the customer is about to hand
+        over money for deserves the same treatment. Everything above it is
+        deliberately quiet so that this is the thing the eye lands on.
+      */}
+      <div className="mt-3 bg-rail px-4 pb-4 pt-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-xs font-bold text-rail-muted">Total payable</span>
+          <span className="tabular truncate text-[2.5rem] font-extrabold leading-none text-primary">
+            {formatMoney(totals?.total_payable ?? 0)}
+          </span>
         </div>
-      </dl>
-
-      <Button className="h-14 text-lg" disabled={chargeDisabled} onClick={onCharge}>
-        Charge {totals ? formatMoney(totals.total_payable) : ''}
-      </Button>
-      {chargeHint && <p className="text-center text-xs text-muted-foreground">{chargeHint}</p>}
+        <Button
+          className="mt-3 h-14 w-full text-base focus-visible:ring-primary focus-visible:ring-offset-rail disabled:bg-white/10 disabled:text-rail-muted"
+          disabled={chargeDisabled}
+          onClick={onCharge}
+        >
+          Charge {totals ? formatMoney(totals.total_payable) : ''}
+        </Button>
+        {chargeHint && <p className="mt-2 text-center text-xs font-medium text-rail-muted">{chargeHint}</p>}
+      </div>
     </div>
   )
 }
@@ -201,9 +222,9 @@ function formatRate(rate: number): string {
 
 function Row({ label, value, className }: { label: string; value: number; className?: string }) {
   return (
-    <div className={cn('flex items-baseline justify-between', className)}>
-      <dt>{label}</dt>
-      <dd className="tabular-nums">
+    <div className={cn('flex items-baseline justify-between gap-3', className)}>
+      <dt className="truncate">{label}</dt>
+      <dd className="tabular shrink-0 font-semibold">
         <Money amount={value} />
       </dd>
     </div>

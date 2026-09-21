@@ -42,52 +42,54 @@ export function ReportTable<T>({
   onRowClick,
 }: Props<T>) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {columns.map((c) => (
-            <TableHead key={c.key} className={c.align === 'right' ? 'text-right' : undefined}>
-              {c.label}
-            </TableHead>
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {columns.map((c) => (
+              <TableHead key={c.key} className={cn('whitespace-nowrap', c.align === 'right' && 'text-right')}>
+                {c.label}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="py-8 text-center text-muted-foreground">
+                {emptyMessage}
+              </TableCell>
+            </TableRow>
+          )}
+          {rows.map((row, i) => (
+            <TableRow
+              key={rowKey(row, i)}
+              className={cn(onRowClick && 'cursor-pointer')}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+            >
+              {columns.map((c) => (
+                <TableCell key={c.key} className={cn('tabular whitespace-nowrap', c.align === 'right' && 'text-right')}>
+                  {c.format(row)}
+                </TableCell>
+              ))}
+            </TableRow>
           ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.length === 0 && (
-          <TableRow>
-            <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
-              {emptyMessage}
-            </TableCell>
-          </TableRow>
+        </TableBody>
+        {/* rows.length > 0 on purpose: a zeroed totals row under an empty
+            state row would read as "nothing sold, and here are its figures",
+            which is a contradiction, not a summary. */}
+        {totals && rows.length > 0 && (
+          <TableFooter>
+            <TableRow>
+              {columns.map((c) => (
+                <TableCell key={c.key} className={cn('tabular whitespace-nowrap font-bold', c.align === 'right' && 'text-right')}>
+                  {totals[c.key] ?? ''}
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableFooter>
         )}
-        {rows.map((row, i) => (
-          <TableRow
-            key={rowKey(row, i)}
-            className={cn(onRowClick && 'cursor-pointer')}
-            onClick={onRowClick ? () => onRowClick(row) : undefined}
-          >
-            {columns.map((c) => (
-              <TableCell key={c.key} className={cn('tabular-nums', c.align === 'right' && 'text-right')}>
-                {c.format(row)}
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
-      </TableBody>
-      {/* rows.length > 0 on purpose: a zeroed totals row under an empty
-          state row would read as "nothing sold, and here are its figures",
-          which is a contradiction, not a summary. */}
-      {totals && rows.length > 0 && (
-        <TableFooter>
-          <TableRow>
-            {columns.map((c) => (
-              <TableCell key={c.key} className={cn('font-semibold tabular-nums', c.align === 'right' && 'text-right')}>
-                {totals[c.key] ?? ''}
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableFooter>
-      )}
-    </Table>
+      </Table>
+    </div>
   )
 }

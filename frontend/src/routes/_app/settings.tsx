@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { PageHeader } from '@/components/shell/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageLoading } from '@/components/ui/loading-spinner'
 import { BusinessForm } from '@/components/settings/BusinessForm'
@@ -25,7 +26,7 @@ function SettingsPage() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <PageHeader title="Settings" description="How the shop identifies itself, taxes a sale, prints it and closes the day." />
       <Tabs defaultValue="business" className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
           {TABS.map((t) => (
@@ -35,7 +36,7 @@ function SettingsPage() {
           ))}
         </TabsList>
         {isLoading && <PageLoading />}
-        {error && <p className="text-sm text-red-600">{error instanceof Error ? error.message : 'Could not load settings'}</p>}
+        {error && <p className="text-sm text-destructive">{error instanceof Error ? error.message : 'Could not load settings'}</p>}
         {settings && (
           <>
             <TabsContent value="business"><BusinessForm settings={settings} /></TabsContent>

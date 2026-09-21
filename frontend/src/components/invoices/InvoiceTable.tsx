@@ -20,11 +20,11 @@ import { Search } from 'lucide-react'
 import apiClient from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, tableInCard } from '@/components/ui/table'
 import { InvoiceDrawer } from '@/components/invoices/InvoiceDrawer'
 import { useSettings } from '@/components/settings/useSettings'
 import { formatMoney } from '@/lib/money'
@@ -130,8 +130,7 @@ export function InvoiceTable() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Invoices</CardTitle>
-        <CardDescription>
+        <CardDescription className="max-w-3xl">
           Filtered on the business date, so a sale rung after midnight lands on the day it was sold, not the calendar
           date it was typed. Voided invoices stay listed and are excluded from every total.
         </CardDescription>
@@ -143,7 +142,9 @@ export function InvoiceTable() {
               <Button
                 key={preset}
                 size="sm"
-                variant={activePreset === preset ? 'default' : 'outline'}
+                variant="outline"
+                aria-pressed={activePreset === preset}
+                className={cn(activePreset === preset && 'border-foreground bg-secondary text-foreground')}
                 onClick={() => applyPreset(preset)}
               >
                 {presetLabel(preset)}
@@ -246,7 +247,7 @@ export function InvoiceTable() {
         {inverted && <p className="text-sm text-destructive">The From date is after the To date — no sale can match that.</p>}
         {error && <p className="text-sm text-destructive">{error instanceof Error ? error.message : 'Could not load invoices'}</p>}
 
-        <Table>
+        <Table className={tableInCard}>
           <TableHeader>
             <TableRow>
               <TableHead>Date</TableHead>

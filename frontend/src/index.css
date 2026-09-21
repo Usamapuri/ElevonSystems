@@ -15,6 +15,18 @@
   .touch-manipulation {
     touch-action: manipulation;
   }
+
+  /*
+   * Every money and weight figure wears this. `font-variant-numeric` is the
+   * standard property; the explicit "tnum" feature is belt-and-braces for the
+   * Android WebView the desktop shell may end up on, where the variant
+   * property alone is unreliable. A column of rupees has to line up by digit
+   * or a cashier cannot scan it.
+   */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
 }
 
 @layer base {
@@ -38,26 +50,76 @@
      */
     color-scheme: light;
 
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /*
+     * ELEVON'S PALETTE — drawn from the thing being sold, not from a template.
+     * Cylinder navy is the paint on an LPG cylinder; safety orange is the
+     * flame and the hazard signage around it; the canvas is galvanised steel,
+     * not paper. White is reserved for panels so that "this is content" and
+     * "this is background" are different colours rather than different
+     * shadows.
+     *
+     *   #EEF1F5  steel canvas     --background
+     *   #FFFFFF  panel            --card / --popover
+     *   #D5DBE3  hairline         --border
+     *   #14213D  cylinder navy    --foreground  (14.1:1 on the canvas)
+     *   #5B6577  secondary ink    --muted-foreground (5.2:1 on the canvas)
+     *   #F26B1D  safety orange    --primary
+     *
+     * --primary-foreground is NAVY, not white. White on #F26B1D measures
+     * 3.04:1, under the 4.5:1 this interface holds itself to for button
+     * labels; navy on the same orange measures 5.25:1 and is the pairing
+     * hazard signage actually uses. The plate on the till inverts it —
+     * orange on navy, the same 5.25:1 — so the two read as one system.
+     */
+    --background: 214 26% 95%;
+    --foreground: 221 51% 16%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 221 51% 16%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --popover-foreground: 221 51% 16%;
+    --primary: 22 89% 53%;
+    --primary-foreground: 221 51% 16%;
+    /* #E86215 — navy on it is still 4.71:1. The brief's #D95A12 would drop
+       that to 4.12:1, so the hover step stops here. */
+    --primary-hover: 22 83% 50%;
+    --secondary: 215 26% 91%;
+    --secondary-foreground: 221 51% 16%;
+    --muted: 214 27% 93%;
+    --muted-foreground: 219 13% 41%;
+    --accent: 216 28% 90%;
+    --accent-foreground: 221 51% 16%;
+    --destructive: 350 85% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-soft: 350 76% 96%;
+    --destructive-ink: 350 82% 33%;
+    --border: 214 20% 86%;
+    --input: 214 20% 80%;
+    /* Navy, not orange: an orange ring measures 2.7:1 against the steel
+       canvas and would be the one focus indicator nobody can see. */
+    --ring: 221 51% 16%;
+    /* 12px panels; controls subtract down to 6px (see tailwind.config.js). */
+    --radius: 0.75rem;
+
+    /* The rail is navy in every theme — it is the app's identity, not a mode. */
+    --rail: 221 51% 16%;
+    --rail-foreground: 212 39% 94%;
+    --rail-muted: 216 19% 67%;
+
+    /* Semantics. Each has a solid, a tint and an ink for text on the tint. */
+    --success: 154 67% 32%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 154 40% 90%;
+    --success-ink: 154 72% 22%;
+    --warning: 38 71% 42%;
+    --warning-foreground: 0 0% 100%;
+    --warning-soft: 38 70% 90%;
+    --warning-ink: 38 78% 26%;
+
+    /* Charts: navy bars, orange line — the same two colours as the chrome,
+       and a blue/orange pair is the one that survives colour-vision
+       deficiency without relying on the legend. */
+    --chart-bar: 221 51% 16%;
+    --chart-line: 22 89% 53%;
   }
 
   /*
@@ -97,35 +159,64 @@
   .dark {
     color-scheme: dark;
 
-    --background: 222 42% 6%;
-    --foreground: 210 30% 94%;
-    --card: 222 34% 9%;
-    --card-foreground: 210 30% 94%;
-    --popover: 221 30% 13%;
-    --popover-foreground: 210 30% 94%;
-    --primary: 210 30% 94%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 27% 17%;
-    --secondary-foreground: 210 30% 94%;
-    --muted: 217 27% 15%;
-    --muted-foreground: 215 18% 65%;
-    --accent: 216 26% 22%;
-    --accent-foreground: 210 30% 96%;
+    /*
+     *   #0F1722  canvas    --background
+     *   #172232  panel     --card
+     *   #26324A  hairline  --border
+     *   #E8EEF5  ink       --foreground
+     *   #9AA7BA  muted ink --muted-foreground (7.4:1 on the canvas)
+     *
+     * Safety orange does not change between themes — an accent that shifts
+     * hue with the mode stops being an identity. On the dark canvas it
+     * measures 5.9:1, and the navy ink on it is the same 5.25:1 as in light.
+     */
+    --background: 215 39% 10%;
+    --foreground: 212 39% 94%;
+    --card: 216 37% 14%;
+    --card-foreground: 212 39% 94%;
+    --popover: 216 34% 18%;
+    --popover-foreground: 212 39% 94%;
+    --primary: 22 89% 53%;
+    --primary-foreground: 221 51% 12%;
+    --primary-hover: 22 89% 60%;
+    --secondary: 217 30% 22%;
+    --secondary-foreground: 212 39% 94%;
+    --muted: 217 30% 18%;
+    --muted-foreground: 216 19% 67%;
+    --accent: 217 28% 26%;
+    --accent-foreground: 212 39% 96%;
     /*
      * The old destructive (0 62.8% 30.6%) was so dark it read as muddy brown
      * against the canvas — a Void button has to look like a Void button.
      */
-    --destructive: 0 66% 45%;
+    --destructive: 350 72% 52%;
     --destructive-foreground: 0 0% 100%;
-    --border: 216 19% 24%;
-    --input: 216 20% 28%;
+    --destructive-soft: 350 45% 20%;
+    --destructive-ink: 350 85% 82%;
+    --border: 220 32% 22%;
+    --input: 220 28% 30%;
     /*
-     * Focus was a pale grey-blue (212.7 26.8% 83.9%) that read as "disabled"
-     * more than "focused". Azure is unambiguous against both the green
-     * confirm actions and the red destructive ones, so a keyboard user
-     * tabbing through a tender flow can never mistake focus for state.
+     * Focus in dark is the accent itself: orange on the dark canvas measures
+     * 5.9:1, so it is unmistakable, and it means the same thing it means
+     * everywhere else — this is where an action will land.
      */
-    --ring: 199 89% 55%;
+    --ring: 22 89% 58%;
+
+    --rail: 221 51% 12%;
+    --rail-foreground: 212 39% 94%;
+    --rail-muted: 216 19% 67%;
+
+    --success: 154 55% 42%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 154 40% 18%;
+    --success-ink: 154 55% 72%;
+    --warning: 38 75% 52%;
+    --warning-foreground: 221 51% 12%;
+    --warning-soft: 38 45% 20%;
+    --warning-ink: 38 85% 72%;
+
+    --chart-bar: 212 39% 80%;
+    --chart-line: 22 89% 58%;
   }
 
   /*
@@ -138,25 +229,50 @@
   .high-contrast {
     color-scheme: light;
 
+    /*
+     * Same identity, pushed to the edges: pure white panels, black ink, the
+     * same safety orange but with BLACK on it (6.9:1) instead of navy, and
+     * borders dark enough to survive an old TN panel. The rail stays navy so
+     * the app is still recognisably itself in this mode.
+     */
     --background: 0 0% 100%;
     --foreground: 0 0% 0%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 0%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 0%;
-    --primary: 222 70% 22%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 22 89% 50%;
+    --primary-foreground: 0 0% 0%;
+    --primary-hover: 22 89% 42%;
     --secondary: 0 0% 90%;
     --secondary-foreground: 0 0% 0%;
     --muted: 0 0% 92%;
     --muted-foreground: 0 0% 20%;
-    --accent: 24 95% 42%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 40%;
+    --accent: 0 0% 86%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 350 100% 32%;
     --destructive-foreground: 0 0% 100%;
+    --destructive-soft: 0 0% 100%;
+    --destructive-ink: 350 100% 28%;
     --border: 0 0% 15%;
     --input: 0 0% 15%;
-    --ring: 222 70% 22%;
+    --ring: 0 0% 0%;
+
+    --rail: 221 60% 12%;
+    --rail-foreground: 0 0% 100%;
+    --rail-muted: 210 25% 80%;
+
+    --success: 154 100% 20%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 0 0% 100%;
+    --success-ink: 154 100% 18%;
+    --warning: 38 100% 26%;
+    --warning-foreground: 0 0% 100%;
+    --warning-soft: 0 0% 100%;
+    --warning-ink: 38 100% 22%;
+
+    --chart-bar: 221 60% 16%;
+    --chart-line: 22 89% 42%;
   }
 }
 
@@ -252,7 +368,16 @@ html {
   }
   body {
     @apply bg-background text-foreground;
+    /* Manrope's 400 is thin for a counter screen read at arm's length; 500 is
+       the body weight this interface is set in. */
+    font-weight: 500;
     font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.015em;
   }
 
   /*

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, tableInCard } from '@/components/ui/table'
 import { SetPinDialog } from '@/components/settings/SetPinDialog'
 import { UserDialog } from '@/components/settings/UserDialog'
 import { roleLabel } from '@/lib/roles'
@@ -61,8 +61,8 @@ export function UsersPanel() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input className="pl-9" placeholder="Search name, username or email" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        {error && <p className="text-sm text-red-600">{error instanceof Error ? error.message : 'Could not load users'}</p>}
-        <Table>
+        {error && <p className="text-sm text-destructive">{error instanceof Error ? error.message : 'Could not load users'}</p>}
+        <Table className={tableInCard}>
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>

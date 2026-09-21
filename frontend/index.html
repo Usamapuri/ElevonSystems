@@ -4,10 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Elevon POS</title>
-    <meta name="theme-color" content="#0f172a" />
+    <!-- Cylinder navy: the sidebar rail and the payable plate are this colour,
+         so the mobile browser chrome matches the app instead of fighting it. -->
+    <meta name="theme-color" content="#14213D" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Manrope carries the whole interface. 500 is body, 600/700 headings and
+         labels, 800 is reserved for the payable figure on the till plate. -->
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
     <script>
       // Apply the saved theme before first paint so the app never flashes light then dark.
       (function () {
