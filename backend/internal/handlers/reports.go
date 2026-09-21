@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	"elevon-backend/internal/dayops"
 	"elevon-backend/internal/models"
 	"elevon-backend/internal/pricing"
 	"elevon-backend/internal/reports"
@@ -508,13 +507,6 @@ func (h *ReportsHandler) periodPack(ctx context.Context, r reports.Range) ([]rep
 
 // ── GET /admin/dashboard ─────────────────────────────────────────────────
 
-// dashboardDay is the till's state, thinned to what the dashboard banner
-// needs. The full day (expected tenders, movements) is GET /day/current.
-type dashboardDay struct {
-	Status   string    `json:"status"`
-	OpenedAt time.Time `json:"opened_at"`
-}
-
 // dashboardInvoice is a recent-sales row. Deliberately not models.Invoice:
 // the dashboard lists ten sales, and shipping thirty fiscal and snapshot
 // columns per row to draw six of them is noise on a screen that polls every
@@ -538,6 +530,11 @@ type dashboardInvoice struct {
 // TopProducts is the 30-day window, not today: at nine in the morning
 // today's list is empty, and a card that is blank for the first hours of
 // every day tells the owner nothing. The frontend must label it as such.
+//
+// There is deliberately no day field. The banner that used to read one moved
+// to shell/PageHeader, which runs its own GET /day/current on the same
+// screen; producing a second copy here cost one or two extra queries on
+// every 30-second poll for a value nothing read.
 type dashboardResponse struct {
 	Today                  reports.PeriodSummary `json:"today"`
 	ReceivablesOutstanding float64               `json:"receivables_outstanding"`
@@ -545,7 +542,6 @@ type dashboardResponse struct {
 	Series30d              []reports.DailyRow    `json:"series_30d"`
 	TopProducts            []reports.ProductRow  `json:"top_products"`
 	RecentInvoices         []dashboardInvoice    `json:"recent_invoices"`
-	Day                    *dashboardDay         `json:"day"`
 }
 
 // Dashboard answers the admin home screen.
@@ -600,12 +596,6 @@ func (h *ReportsHandler) Dashboard(c *gin.Context) {
 		return
 	}
 
-	day, err := currentOrTodayDay(h.db)
-	if err != nil {
-		fail("day", err)
-		return
-	}
-
 	c.JSON(http.StatusOK, models.OK("OK", dashboardResponse{
 		Today:                  todaySummary,
 		ReceivablesOutstanding: outstanding,
@@ -613,7 +603,6 @@ func (h *ReportsHandler) Dashboard(c *gin.Context) {
 		Series30d:              series30,
 		TopProducts:            products,
 		RecentInvoices:         recent,
-		Day:                    day,
 	}))
 }
 
@@ -669,24 +658,6 @@ func (h *ReportsHandler) recentInvoices(ctx context.Context) ([]dashboardInvoice
 		out = append(out, inv)
 	}
 	return out, rows.Err()
-}
-
-// currentOrTodayDay is the day banner: whatever is open, else today's sealed
-// row, else nothing at all (the till has not been started today).
-func currentOrTodayDay(db *sql.DB) (*dashboardDay, error) {
-	day, err := dayops.Current(db)
-	if err != nil {
-		return nil, err
-	}
-	if day == nil {
-		if day, err = dayops.Today(db); err != nil {
-			return nil, err
-		}
-	}
-	if day == nil {
-		return nil, nil
-	}
-	return &dashboardDay{Status: day.Status, OpenedAt: day.OpenedAt}, nil
 }
 
 // ── GET /customers/:id/ageing ────────────────────────────────────────────

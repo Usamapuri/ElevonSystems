@@ -636,15 +636,12 @@ export interface DashboardInvoice {
   created_at: string
 }
 
-/** The dashboard's day banner: whatever is open, else today's sealed row,
- * else null (the till has not been started today). */
-export interface DashboardDay {
-  status: DayStatus
-  opened_at: string
-}
-
 /** GET /admin/dashboard — the whole screen in one round trip (spec §3).
- * `top_products` is the last 30 days, not today — label it as such. */
+ * `top_products` is the last 30 days, not today — label it as such.
+ *
+ * No day field: the day banner lives in shell/PageHeader, which runs its own
+ * ['day','current'] query, so the dashboard payload does not carry a second
+ * copy for nothing to read. */
 export interface DashboardResponse {
   today: PeriodSummary
   receivables_outstanding: number
@@ -652,7 +649,6 @@ export interface DashboardResponse {
   series_30d: DailyRow[]
   top_products: ProductRow[]
   recent_invoices: DashboardInvoice[]
-  day: DashboardDay | null
 }
 
 // ── Reports (GET /admin/reports/:name) — Daily/Products/Tax/Cashiers/Hourly/

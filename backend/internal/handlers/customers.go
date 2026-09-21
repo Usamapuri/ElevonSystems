@@ -701,6 +701,20 @@ func (h *CustomersHandler) VoidReceipt(c *gin.Context) {
 		return
 	}
 
+	// The PIN check runs before the transaction, matching dayops.Reopen:
+	// staffpin.Identify bcrypt-compares against every active admin (~100 ms
+	// each), and doing that while holding FOR UPDATE on the receipt row would
+	// pin the lock open for the whole sweep. Nothing it reads can be
+	// invalidated by the void that follows.
+	if _, err := staffpin.Identify(h.db, pin, staffpin.AdminOnly); errors.Is(err, staffpin.ErrNoMatch) {
+		c.JSON(http.StatusUnauthorized, models.Fail("That PIN does not match an active admin", "invalid_pin"))
+		return
+	} else if err != nil {
+		log.Printf("receipt void: pin: %v", err)
+		c.JSON(http.StatusInternalServerError, models.Fail("Could not void the receipt", "internal_error"))
+		return
+	}
+
 	actor := invoiceActor(c)
 	tx, err := h.db.Begin()
 	if err != nil {
@@ -728,15 +742,6 @@ func (h *CustomersHandler) VoidReceipt(c *gin.Context) {
 	}
 	if voidedAt != nil {
 		c.JSON(http.StatusConflict, models.Fail("That receipt is already voided", "receipt_already_voided"))
-		return
-	}
-
-	if _, err := staffpin.Identify(tx, pin, staffpin.AdminOnly); errors.Is(err, staffpin.ErrNoMatch) {
-		c.JSON(http.StatusUnauthorized, models.Fail("That PIN does not match an active admin", "invalid_pin"))
-		return
-	} else if err != nil {
-		log.Printf("receipt void: pin: %v", err)
-		c.JSON(http.StatusInternalServerError, models.Fail("Could not void the receipt", "internal_error"))
 		return
 	}
 

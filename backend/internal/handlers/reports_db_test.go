@@ -658,9 +658,6 @@ func TestReports_Dashboard(t *testing.T) {
 		t.Errorf("recent invoice statuses = %v", statuses)
 	}
 
-	if body.Day == nil || body.Day.Status != dayops.StatusOpen || body.Day.OpenedAt.IsZero() {
-		t.Errorf("day = %+v", body.Day)
-	}
 }
 
 // With no day and nothing sold the dashboard is a page of zeros, not an
@@ -681,9 +678,6 @@ func TestReports_DashboardOnAnEmptyStore(t *testing.T) {
 	}
 	if len(body.Series30d) != 30 || len(body.Series7d) != 7 {
 		t.Errorf("series lengths = %d / %d", len(body.Series30d), len(body.Series7d))
-	}
-	if body.Day != nil {
-		t.Errorf("day = %+v, want null before the till is opened", body.Day)
 	}
 	if body.TopProducts == nil || body.RecentInvoices == nil {
 		t.Error("empty lists must serialise as [], not null")
