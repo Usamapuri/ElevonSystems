@@ -107,10 +107,10 @@ function lineItems(lines: InvoiceLine[]): string {
     )
     if (line.gross_weight !== null && line.tare_weight !== null) {
       rows.push(
-        '<tr><td class="sub" colspan="2">Gross ' +
-          esc(formatKg(line.gross_weight)) +
-          ' kg &minus; Tare ' +
+        '<tr><td class="sub" colspan="2">Before fill ' +
           esc(formatKg(line.tare_weight)) +
+          ' kg, after fill ' +
+          esc(formatKg(line.gross_weight)) +
           ' kg</td></tr>',
       )
     }

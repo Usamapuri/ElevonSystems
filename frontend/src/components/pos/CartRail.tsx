@@ -100,7 +100,7 @@ export function CartRail({
                       <p className="tabular text-xs text-muted-foreground">
                         {formatKg(line.quantity)} kg at {line.rate.toFixed(2)}
                         {line.entered_as === 'gross_tare' && line.gross_weight !== undefined && line.tare_weight !== undefined && (
-                          <> — {formatKg(line.gross_weight)} gross − {formatKg(line.tare_weight)} tare</>
+                          <> — {formatKg(line.tare_weight)} before, {formatKg(line.gross_weight)} after</>
                         )}
                         {line.entered_as === 'tonne' && <> — {(line.quantity / 1000).toFixed(3)} t</>}
                         {line.entered_as === 'amount' && line.typed_amount !== undefined && (

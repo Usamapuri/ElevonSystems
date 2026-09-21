@@ -54,7 +54,7 @@ function enteredAsLabel(entered: EnteredAs | null): string {
     case 'amount':
       return 'by amount'
     case 'gross_tare':
-      return 'gross − tare'
+      return 'before / after fill'
     default:
       return ''
   }

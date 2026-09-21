@@ -117,10 +117,10 @@ function lineTable(lines: InvoiceLine[]): string {
   const rows = lines.map((line, i) => {
     const weights =
       line.gross_weight !== null && line.tare_weight !== null
-        ? '<div class="muted">Gross ' +
-          esc(formatKg(line.gross_weight)) +
-          ' kg &minus; Tare ' +
+        ? '<div class="muted">Before fill ' +
           esc(formatKg(line.tare_weight)) +
+          ' kg, after fill ' +
+          esc(formatKg(line.gross_weight)) +
           ' kg</div>'
         : ''
     return [

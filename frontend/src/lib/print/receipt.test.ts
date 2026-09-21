@@ -192,7 +192,7 @@ describe('buildReceiptHtml — lines and money', () => {
 
   it('prints gross and tare under a gross-minus-tare line', () => {
     const html = buildReceiptHtml(creditInvoice, settings)
-    expect(html).toContain('Gross 26.400 kg &minus; Tare 15.200 kg')
+    expect(html).toContain('Before fill 15.200 kg, after fill 26.400 kg')
   })
 
   it('prints subtotal, discount and the tax rate', () => {

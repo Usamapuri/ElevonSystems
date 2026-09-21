@@ -153,17 +153,17 @@ export function toLineInput(mode: WeightMode, values: WeightPadValues, rate: num
     }
     case 'gross_tare': {
       const grossRaw = parseTyped(values.gross)
-      if (grossRaw === null) return { error: 'Enter the gross weight' }
+      if (grossRaw === null) return { error: 'Enter the after-fill weight' }
       const tareRaw = parseTyped(values.tare)
-      if (tareRaw === null) return { error: 'Enter the tare weight' }
-      if (tareRaw < 0) return { error: 'Tare cannot be negative' }
+      if (tareRaw === null) return { error: 'Enter the before-fill weight' }
+      if (tareRaw < 0) return { error: 'Before-fill weight cannot be negative' }
       // Round both ends first so gross − tare on the server (which re-checks
       // to within half a gram) reproduces exactly the quantity we send.
       const gross = round3(grossRaw)
       const tare = round3(tareRaw)
-      if (gross <= tare) return { error: 'Gross must be more than tare' }
+      if (gross <= tare) return { error: 'After-fill weight must be more than before-fill' }
       const net = netFromGrossTare(gross, tare)
-      const result = finish(net, 'gross_tare', 'Gross must be more than tare')
+      const result = finish(net, 'gross_tare', 'After-fill weight must be more than before-fill')
       if (isLineInputError(result)) return result
       return { ...result, gross_weight: gross, tare_weight: tare }
     }
@@ -180,6 +180,6 @@ export function modeLabel(mode: WeightMode): string {
     case 'amount':
       return 'amount'
     case 'gross_tare':
-      return 'gross − tare'
+      return 'before / after'
   }
 }

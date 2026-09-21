@@ -4,7 +4,9 @@
  *   kg           — straight off the scale
  *   tonne        — a bulk load, ×1000
  *   amount       — "give me Rs 3,000 of gas", ÷ rate
- *   gross − tare — the scale reading minus the cylinder
+ *   before / after — cylinder weighed before and after filling (tare = the
+ *                  before-fill reading, gross = the after-fill reading, so any
+ *                  gas the customer brought in is never charged twice)
  *
  * All four resolve to net kg to 3 dp before anything leaves this component
  * (lib/weight.toLineInput), and the mode travels with the line as
@@ -46,7 +48,7 @@ export function WeightPad({ open, onOpenChange, product, editing, onConfirm, onR
   const [value, setValue] = useState('')
   const [gross, setGross] = useState('')
   const [tare, setTare] = useState('')
-  const [tareFocused, setTareFocused] = useState(false)
+  const [tareFocused, setTareFocused] = useState(true)
   const [keypad, setKeypad] = useState(false)
   const [touched, setTouched] = useState(false)
 
@@ -59,7 +61,7 @@ export function WeightPad({ open, onOpenChange, product, editing, onConfirm, onR
     if (!open) return
     setKeypad(coarsePointer)
     setTouched(false)
-    setTareFocused(false)
+    setTareFocused(true)
     if (editing) {
       setMode(editing.entered_as)
       setGross(editing.gross_weight !== undefined ? formatKg(editing.gross_weight) : '')
@@ -92,7 +94,7 @@ export function WeightPad({ open, onOpenChange, product, editing, onConfirm, onR
     setGross('')
     setTare('')
     setTouched(false)
-    setTareFocused(false)
+    setTareFocused(true)
   }
 
   const confirm = () => {
@@ -111,7 +113,7 @@ export function WeightPad({ open, onOpenChange, product, editing, onConfirm, onR
     onOpenChange(false)
   }
 
-  // In gross − tare mode the keypad drives whichever of the two fields the
+  // In before / after mode the keypad drives whichever of the two fields the
   // cashier last touched; everywhere else there is only one field.
   const keypadValue = mode === 'gross_tare' ? (tareFocused ? tare : gross) : value
   const setKeypadValue = (next: string) => {
@@ -163,27 +165,27 @@ export function WeightPad({ open, onOpenChange, product, editing, onConfirm, onR
         {mode === 'gross_tare' ? (
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="pad-gross">Gross (kg)</Label>
+              <Label htmlFor="pad-tare">Before fill (kg)</Label>
               <Input
-                id="pad-gross"
+                id="pad-tare"
                 autoFocus
-                value={gross}
-                onFocus={() => setTareFocused(false)}
+                value={tare}
+                onFocus={() => setTareFocused(true)}
                 onChange={(e) => {
-                  setGross(e.target.value)
+                  setTare(e.target.value)
                   setTouched(true)
                 }}
                 {...bigInputProps}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="pad-tare">Tare (kg)</Label>
+              <Label htmlFor="pad-gross">After fill (kg)</Label>
               <Input
-                id="pad-tare"
-                value={tare}
-                onFocus={() => setTareFocused(true)}
+                id="pad-gross"
+                value={gross}
+                onFocus={() => setTareFocused(false)}
                 onChange={(e) => {
-                  setTare(e.target.value)
+                  setGross(e.target.value)
                   setTouched(true)
                 }}
                 {...bigInputProps}
@@ -215,7 +217,7 @@ export function WeightPad({ open, onOpenChange, product, editing, onConfirm, onR
             <div className="space-y-1">
               {mode === 'gross_tare' && (
                 <p className="text-muted-foreground tabular">
-                  {formatKg(line.gross_weight ?? 0)} gross − {formatKg(line.tare_weight ?? 0)} tare
+                  {formatKg(line.tare_weight ?? 0)} kg before, {formatKg(line.gross_weight ?? 0)} kg after
                 </p>
               )}
               {mode === 'amount' && Number.isFinite(typedAmount) && (
