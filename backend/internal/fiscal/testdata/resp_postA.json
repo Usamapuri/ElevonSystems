@@ -1,0 +1,5 @@
+{
+								"invoiceNumber": "6110180871403DIAJGEJ4031308",
+								"dated": "2026-09-21 05:57:45",
+								"validationResponse": {"statusCode":"00","status":"Valid","error":"","invoiceStatuses":[{"itemSNo":"1","statusCode":"00","status":"Valid","invoiceNo":"6110180871403DIAJGEJ4031308-1","errorCode":"","error":""}]}
+								}

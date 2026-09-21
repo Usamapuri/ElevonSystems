@@ -1,0 +1,5 @@
+{
+									"dated": "2026-09-21 05:59:33" ,
+									"sourceInvoiceNo":"",
+									"validationResponse": {"statusCode":"01","status":"Invalid","errorCode":null,"error":"","invoiceStatuses":[{"itemSNo":"1","statusCode":"01","status":"Invalid","invoiceNo":null,"errorCode":"0058","error":"Buyer and Seller Registration number are same. Self invoicing is not allowed."}]}
+									}

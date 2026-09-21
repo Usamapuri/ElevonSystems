@@ -263,6 +263,31 @@ func TestBuildSaleInvoice_WalkInDefaults(t *testing.T) {
 	}
 }
 
+// A named buyer with no province on file still has to carry one: FBR takes
+// buyerProvince from its own upper-case list and rejects a blank, so the
+// payload falls back to the seller's province rather than sending "".
+func TestBuildSaleInvoice_BuyerWithoutProvinceFallsBackToTheSeller(t *testing.T) {
+	inv := models.Invoice{
+		BusinessDate: businessDate(),
+		Lines: []models.InvoiceLine{
+			{ProductName: "LPG bulk", Quantity: 12.5, LineTotal: 3312.5, LineTax: 596.25},
+		},
+	}
+	buyer := &Buyer{NTNCNIC: "1234567", Name: "Anwar Traders", Province: "  ", Address: "Gulberg, Lahore", RegistrationType: "Registered"}
+
+	got, err := BuildSaleInvoice(BuildInput{Invoice: inv, Buyer: buyer, DefaultHSCode: "2711.1910"}, sandboxCfg())
+	if err != nil {
+		t.Fatalf("BuildSaleInvoice: %v", err)
+	}
+	if got.BuyerProvince != "PUNJAB" {
+		t.Errorf("buyerProvince = %q, want the seller's PUNJAB", got.BuyerProvince)
+	}
+	// Nothing else about the buyer is invented along the way.
+	if got.BuyerBusinessName != "Anwar Traders" || got.BuyerRegistrationType != "Registered" {
+		t.Errorf("buyer = %q / %q", got.BuyerBusinessName, got.BuyerRegistrationType)
+	}
+}
+
 // --- Registered buyer: SN001 in sandbox, no scenarioId in production ------
 
 func TestBuildSaleInvoice_RegisteredBuyerScenario(t *testing.T) {

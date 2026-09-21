@@ -1,0 +1,5 @@
+{
+									"dated": "2026-09-21 06:00:13" ,
+									"sourceInvoiceNo":"",
+									"validationResponse": {"statusCode":"01","status":"Invalid","errorCode":null,"error":"","invoiceStatuses":[{"itemSNo":"1","statusCode":"01","status":"Invalid","invoiceNo":null,"errorCode":"0104","error":"Provided sales tax amount does not match the calculated sales tax amount. Please ensure that the provided Sale Value is used to calculate the Sales Tax Amount for the provided Rate."}]}
+									}

@@ -1,0 +1,5 @@
+{
+									"dated": "2026-09-21 05:59:35" ,
+									"sourceInvoiceNo":"",
+									"validationResponse": {"statusCode":"01","status":"Invalid","errorCode":"0205","error":"Provided scenario not valid for unregistered user","invoiceStatuses":null}
+									}
