@@ -244,6 +244,53 @@ func TestHourlyHeatGridInBusinessTimezone(t *testing.T) {
 	}
 }
 
+// Narrowing the range to day3 alone must exclude day1's and day2's
+// invoices from the grid — the same proof TestHourlyBucketsInBusinessTimezone
+// runs for the flat Hourly rows, pinned here against HourlyHeat's own
+// business_date BETWEEN parameters rather than assumed from the shared SQL
+// shape.
+func TestHourlyHeatGridExcludesOtherDays(t *testing.T) {
+	db := testdb.Fresh(t)
+	seedPeriod(t, db)
+
+	cells, err := HourlyHeat(ctx(), db, Range{From: mustDate(day3), To: mustDate(day3)})
+	if err != nil {
+		t.Fatalf("HourlyHeat: %v", err)
+	}
+	if len(cells) != 168 {
+		t.Fatalf("got %d heat cells, want 168", len(cells))
+	}
+
+	var totalInvoices int
+	var totalNet float64
+	for _, c := range cells {
+		totalInvoices += c.Invoices
+		totalNet += c.Net
+		switch {
+		case c.Weekday == 3 && c.Hour == 4:
+			// Thursday 04:00 — INV-0006, the only invoice on day3.
+			eqInt(t, "hour 4 invoices", c.Invoices, 1)
+			eq(t, "hour 4 net", c.Net, 472)
+		default:
+			// Every other cell, including Tuesday 10:00/11:00 (INV-0001,
+			// INV-0002 — day1) and Wednesday 10:00/11:00 (INV-0004,
+			// INV-0005 — day2), must be zero: those invoices sit outside
+			// this narrowed window and must not leak in.
+			if c.Invoices != 0 || c.Net != 0 {
+				t.Errorf("weekday=%d hour=%d = {%d, %.2f}, want zero (outside the day3-only window)",
+					c.Weekday, c.Hour, c.Invoices, c.Net)
+			}
+		}
+	}
+	eqInt(t, "Σ cell invoices", totalInvoices, 1)
+	eq(t, "Σ cell net", totalNet, 472)
+
+	if util.BusinessTimezoneName() != "Asia/Karachi" {
+		t.Fatalf("business timezone moved to %s — this test's 23:30 UTC → hour 4 assumption no longer holds",
+			util.BusinessTimezoneName())
+	}
+}
+
 // FIFO ageing, hand-computed: an invoice of 1,000 seventy days ago, an
 // invoice of 2,000 twenty days ago, a receipt of 1,200 ten days ago.
 // Balance 1,800, all of it in 0–30, because the payment settles the oldest

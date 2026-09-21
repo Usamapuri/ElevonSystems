@@ -23,14 +23,24 @@
  * "pick white or ink by the fill's luminance"); lighter cells rely on the
  * tooltip, the legend and the table view (`marks-and-anatomy.md`: "label
  * selectively, never a number on every point").
+ *
+ * Keyboard: `role="grid"` commits to the WAI-ARIA APG roving-tabindex
+ * pattern, not 168 independent Tab stops — exactly one cell (the "active"
+ * one) is ever `tabIndex={0}`; every other cell is `-1`. Tab reaches the
+ * grid once and, with the same keystroke, leaves it for the next control
+ * (the "Show table" button). Arrow keys move the active cell spatially
+ * (`nextCellPos`, `hourlyHeat.ts`); real DOM focus moves with it, via refs,
+ * because the tooltip needs actual focus to open per the rule above.
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ReportTable } from './ReportTable'
 import { hourlyColumns, hourlyTotals } from './reportColumns'
-import { HEAT_STEPS, LABEL_MIN_STEP, STEP_ALPHAS, WEEKDAY_LABELS, buildHeatGrid } from './hourlyHeat'
+import {
+  HEAT_STEPS, LABEL_MIN_STEP, STEP_ALPHAS, WEEKDAY_LABELS, buildHeatGrid, isGridNavKey, nextCellPos,
+} from './hourlyHeat'
 import { compactMoney, formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import type { HeatCell, HourRow, PeriodSummary } from '@/types'
@@ -40,6 +50,8 @@ interface Props {
   rows: HourRow[]
   totals: PeriodSummary | null
 }
+
+const WEEKDAY_COUNT = WEEKDAY_LABELS.length
 
 /** The rendered fill for one shading step — 0 is deliberately `transparent`,
  * not the ramp's lightest opaque step; see the file header. */
@@ -59,6 +71,28 @@ export function HourlyHeatmap({ cells, rows, totals }: Props) {
   const [showTable, setShowTable] = useState(false)
   const grid = useMemo(() => buildHeatGrid(cells), [cells])
   const hasSales = useMemo(() => grid.rows.some((row) => row.cells.some((c) => c.net > 0)), [grid])
+  const rowCount = grid.rows.length
+
+  // The one active (tabIndex=0) cell. Clamped on read, not reset in an
+  // effect: a date-range change can shrink rowCount (the Night collapse
+  // toggling) without this component unmounting, and clamping here is
+  // enough to keep `active` inside the new grid rather than pointing past
+  // its last row.
+  const [active, setActive] = useState<{ row: number; col: number }>({ row: 0, col: 0 })
+  const activeRow = Math.min(active.row, Math.max(0, rowCount - 1))
+  const activeCol = Math.min(active.col, WEEKDAY_COUNT - 1)
+
+  // Real DOM nodes, keyed "row-col", so an arrow key can move actual focus
+  // (not just the roving-tabindex bookkeeping) — the tooltip only opens on
+  // real focus.
+  const cellRefs = useRef(new Map<string, HTMLDivElement>())
+
+  const handleGridKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!isGridNavKey(e.key)) return
+    e.preventDefault() // arrows/Home/End would otherwise scroll the page
+    const next = nextCellPos({ row: activeRow, col: activeCol }, e.key, rowCount, WEEKDAY_COUNT)
+    cellRefs.current.get(`${next.row}-${next.col}`)?.focus()
+  }
 
   if (!hasSales) {
     return <p className="py-8 text-center text-sm text-muted-foreground">No sales in this range.</p>
@@ -72,6 +106,7 @@ export function HourlyHeatmap({ cells, rows, totals }: Props) {
           aria-label="Invoices and net sales by hour and weekday"
           className="grid min-w-[560px] gap-1"
           style={{ gridTemplateColumns: '52px repeat(7, minmax(0, 1fr))' }}
+          onKeyDown={handleGridKeyDown}
         >
           <div role="row" className="contents">
             <div role="columnheader" aria-hidden="true" />
@@ -81,7 +116,7 @@ export function HourlyHeatmap({ cells, rows, totals }: Props) {
               </div>
             ))}
           </div>
-          {grid.rows.map((row) => (
+          {grid.rows.map((row, rowIndex) => (
             <div key={row.label} role="row" className="contents">
               <div role="rowheader" className="flex items-center justify-end pr-2 text-xs tabular text-muted-foreground">
                 {row.label}
@@ -90,13 +125,20 @@ export function HourlyHeatmap({ cells, rows, totals }: Props) {
                 const weekdayLabel = WEEKDAY_LABELS[cell.weekday]
                 const invoiceWord = cell.invoices === 1 ? 'invoice' : 'invoices'
                 const tooltipText = `${weekdayLabel} ${row.label} — ${cell.invoices} ${invoiceWord}, ${formatMoney(cell.net)}`
+                const isActive = rowIndex === activeRow && cell.weekday === activeCol
+                const refKey = `${rowIndex}-${cell.weekday}`
                 return (
                   <Tooltip key={cell.weekday}>
                     <TooltipTrigger asChild>
                       <div
+                        ref={(el) => {
+                          if (el) cellRefs.current.set(refKey, el)
+                          else cellRefs.current.delete(refKey)
+                        }}
                         role="gridcell"
-                        tabIndex={0}
+                        tabIndex={isActive ? 0 : -1}
                         aria-label={tooltipText}
+                        onFocus={() => setActive({ row: rowIndex, col: cell.weekday })}
                         className={cn(
                           'flex h-8 items-center justify-center rounded-sm outline-none transition-shadow',
                           'hover:ring-2 hover:ring-primary/60 focus-visible:ring-2 focus-visible:ring-ring',

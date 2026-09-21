@@ -166,3 +166,59 @@ export function buildHeatGrid(cells: HeatCell[]): HeatGrid {
 
   return { rows, thresholds }
 }
+
+// ── roving tabindex (WAI-ARIA APG grid pattern) ─────────────────────────────
+
+/** A grid position by index — `row` into `HeatGrid.rows`, `col` the weekday
+ * (0=Mon…6=Sun, same as `HeatCell.weekday`). */
+export interface CellPos {
+  row: number
+  col: number
+}
+
+const GRID_NAV_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'])
+
+/** Whether a key is one `nextCellPos` handles — the component's keydown
+ * handler uses this to decide when to `preventDefault()` (arrow/Home/End
+ * would otherwise scroll the page) and let every other key, notably Tab,
+ * behave exactly as the browser's own default. */
+export function isGridNavKey(key: string): boolean {
+  return GRID_NAV_KEYS.has(key)
+}
+
+/**
+ * The next active cell for the heatmap's roving-tabindex navigation, given
+ * the currently active cell, a keyboard key, and the grid's bounds. Pure so
+ * the navigation math is unit-testable without mounting the grid (this
+ * repo's vitest is node-only, no DOM tests) — `HourlyHeatmap.tsx` only wires
+ * this to real DOM focus.
+ *
+ * Movement is spatial, per the WAI-ARIA APG grid pattern and how the grid
+ * actually reads on screen (columns are weekdays, rows are hours — spec
+ * §6.8, the brief): ArrowLeft/Right move across columns (weekdays) within
+ * the same hour row; ArrowUp/Down move across rows (hours) within the same
+ * weekday column; Home/End jump to the first/last column of the current row
+ * — the row's own ends, not the whole grid's. Every move clamps to the
+ * grid's bounds rather than wrapping, so repeated presses at an edge are a
+ * no-op instead of jumping to the opposite side. Any other key returns the
+ * position unchanged.
+ */
+export function nextCellPos(pos: CellPos, key: string, rowCount: number, colCount: number): CellPos {
+  const { row, col } = pos
+  switch (key) {
+    case 'ArrowUp':
+      return { row: Math.max(0, row - 1), col }
+    case 'ArrowDown':
+      return { row: Math.min(rowCount - 1, row + 1), col }
+    case 'ArrowLeft':
+      return { row, col: Math.max(0, col - 1) }
+    case 'ArrowRight':
+      return { row, col: Math.min(colCount - 1, col + 1) }
+    case 'Home':
+      return { row, col: 0 }
+    case 'End':
+      return { row, col: colCount - 1 }
+    default:
+      return pos
+  }
+}

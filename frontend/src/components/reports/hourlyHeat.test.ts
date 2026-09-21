@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { HeatCell } from '@/types'
 import {
-  HEAT_STEPS, WEEKDAY_LABELS, buildHeatGrid, cellShade, heatRowPlan, quantileSteps, sumCellsForRow,
+  HEAT_STEPS, WEEKDAY_LABELS, buildHeatGrid, cellShade, heatRowPlan, isGridNavKey, nextCellPos,
+  quantileSteps, sumCellsForRow,
 } from './hourlyHeat'
 
 /** All 168 zero cells, with a few overridden — the same shape the backend
@@ -160,5 +161,52 @@ describe('buildHeatGrid', () => {
     const grid = buildHeatGrid(makeCells())
     expect(grid.thresholds).toEqual([])
     expect(grid.rows.every((r) => r.cells.every((c) => c.step === 0))).toBe(true)
+  })
+})
+
+describe('isGridNavKey', () => {
+  it('recognizes the six APG grid navigation keys', () => {
+    for (const key of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      expect(isGridNavKey(key)).toBe(true)
+    }
+  })
+
+  it('rejects every other key, including Tab and Enter', () => {
+    for (const key of ['Tab', 'Enter', ' ', 'Escape', 'a', 'PageUp']) {
+      expect(isGridNavKey(key)).toBe(false)
+    }
+  })
+})
+
+describe('nextCellPos', () => {
+  // A grid 19 rows tall (the Night-collapsed shape) x 7 columns wide (Mon…Sun).
+  const rowCount = 19
+  const colCount = 7
+
+  it('moves right and left across columns (weekdays), within the same row', () => {
+    expect(nextCellPos({ row: 5, col: 2 }, 'ArrowRight', rowCount, colCount)).toEqual({ row: 5, col: 3 })
+    expect(nextCellPos({ row: 5, col: 2 }, 'ArrowLeft', rowCount, colCount)).toEqual({ row: 5, col: 1 })
+  })
+
+  it('moves up and down across rows (hours), within the same column', () => {
+    expect(nextCellPos({ row: 5, col: 2 }, 'ArrowDown', rowCount, colCount)).toEqual({ row: 6, col: 2 })
+    expect(nextCellPos({ row: 5, col: 2 }, 'ArrowUp', rowCount, colCount)).toEqual({ row: 4, col: 2 })
+  })
+
+  it('clamps at the edges instead of wrapping', () => {
+    expect(nextCellPos({ row: 0, col: 0 }, 'ArrowUp', rowCount, colCount)).toEqual({ row: 0, col: 0 })
+    expect(nextCellPos({ row: 0, col: 0 }, 'ArrowLeft', rowCount, colCount)).toEqual({ row: 0, col: 0 })
+    expect(nextCellPos({ row: rowCount - 1, col: 6 }, 'ArrowDown', rowCount, colCount)).toEqual({ row: rowCount - 1, col: 6 })
+    expect(nextCellPos({ row: rowCount - 1, col: 6 }, 'ArrowRight', rowCount, colCount)).toEqual({ row: rowCount - 1, col: 6 })
+  })
+
+  it('Home and End jump to the current row\'s first and last column, not the whole grid\'s', () => {
+    expect(nextCellPos({ row: 8, col: 4 }, 'Home', rowCount, colCount)).toEqual({ row: 8, col: 0 })
+    expect(nextCellPos({ row: 8, col: 4 }, 'End', rowCount, colCount)).toEqual({ row: 8, col: 6 })
+  })
+
+  it('leaves the position unchanged for a key it does not handle', () => {
+    expect(nextCellPos({ row: 3, col: 3 }, 'Tab', rowCount, colCount)).toEqual({ row: 3, col: 3 })
+    expect(nextCellPos({ row: 3, col: 3 }, 'Enter', rowCount, colCount)).toEqual({ row: 3, col: 3 })
   })
 })
