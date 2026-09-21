@@ -190,7 +190,7 @@ describe('buildReceiptHtml — lines and money', () => {
     expect(html).toContain('3,312.50')
   })
 
-  it('prints gross and tare under a gross-minus-tare line', () => {
+  it('prints the before-fill and after-fill weights under a weighed line', () => {
     const html = buildReceiptHtml(creditInvoice, settings)
     expect(html).toContain('Before fill 15.200 kg, after fill 26.400 kg')
   })
@@ -331,6 +331,17 @@ describe('buildInvoiceA4Html', () => {
     expect(html).toContain('2711.1910')
     expect(html).toContain('Total payable')
     expect(html).toContain('Rs 7,040')
+  })
+
+  it('prints the before-fill and after-fill weights under a weighed line', () => {
+    // The gross/tare pair is the scale reading before and after the fill
+    // (docs/superpowers: the P5 tare ruling), and the quantity column is the
+    // net in the line's FBR unit — 26.400 − 15.200 = 11.200.
+    const html = buildInvoiceA4Html(creditInvoice, settings)
+    expect(html).toContain('<div class="muted">Before fill 15.200 kg, after fill 26.400 kg</div>')
+    expect(html).toContain('11.200 KG')
+    // A line typed straight in kg carries no weight note at all.
+    expect(buildInvoiceA4Html(cashInvoice, settings)).not.toContain('Before fill')
   })
 
   it('stamps VOID on a voided invoice', () => {

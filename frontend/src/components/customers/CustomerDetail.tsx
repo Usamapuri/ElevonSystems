@@ -80,7 +80,7 @@ export function CustomerDetail({ customerId, onOpenChange }: Props) {
               <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
                 <div>
                   <p className="text-xs text-muted-foreground">Balance</p>
-                  <p className={`text-lg font-semibold ${customer.balance > 0 ? 'text-warning-ink' : ''}`}>{formatMoney(customer.balance)}</p>
+                  <p className={`text-lg font-semibold tabular ${customer.balance > 0 ? 'text-warning-ink' : ''}`}>{formatMoney(customer.balance)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Status</p>
@@ -95,7 +95,7 @@ export function CustomerDetail({ customerId, onOpenChange }: Props) {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Credit limit</p>
-                  <p className="text-sm">{customer.credit_limit === null ? 'No limit' : formatMoney(customer.credit_limit)}</p>
+                  <p className="text-sm tabular">{customer.credit_limit === null ? 'No limit' : formatMoney(customer.credit_limit)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">NTN</p>
@@ -171,9 +171,9 @@ export function CustomerDetail({ customerId, onOpenChange }: Props) {
                       <TableCell className="text-muted-foreground">{formatBusinessDate(row.business_date)}</TableCell>
                       <TableCell>{entryTypeLabel(row.entry_type)}</TableCell>
                       <TableCell className="hidden sm:table-cell text-muted-foreground">{row.invoice_number ?? row.receipt_number ?? row.note ?? '—'}</TableCell>
-                      <TableCell className="text-right">{row.debit ? formatMoney(row.debit) : '—'}</TableCell>
-                      <TableCell className="text-right">{row.credit ? formatMoney(row.credit) : '—'}</TableCell>
-                      <TableCell className="text-right font-medium">{formatMoney(row.running_balance)}</TableCell>
+                      <TableCell className="text-right tabular">{row.debit ? formatMoney(row.debit) : '—'}</TableCell>
+                      <TableCell className="text-right tabular">{row.credit ? formatMoney(row.credit) : '—'}</TableCell>
+                      <TableCell className="text-right tabular font-medium">{formatMoney(row.running_balance)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

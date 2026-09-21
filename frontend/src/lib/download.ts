@@ -34,14 +34,19 @@ export function parseContentDispositionFilename(header: string | null | undefine
  */
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
   try {
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
     a.click()
-    a.remove()
   } finally {
-    URL.revokeObjectURL(url)
+    a.remove()
+    // Revoked on the next tick, not in the same one as the click: Chrome
+    // tolerates a synchronous revoke, but Firefox and older WebKit can
+    // cancel the save because the URL is gone before the download thread
+    // reads it, and the Phase 8 desktop shell is a third unknown. The
+    // anchor still goes straight away — only the URL waits.
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 }

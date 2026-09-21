@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatMoney } from '@/lib/money'
+import { formatMoney, signedMoney } from '@/lib/money'
 import { formatBusinessDate, formatDateTimePK, formatTimePK } from '@/lib/print/format'
 import { cn } from '@/lib/utils'
 import type { AppSettings, ZReport } from '@/types'
@@ -30,13 +30,6 @@ const DASH = '—'
 /** A nullable money figure. Null is "nobody counted", not zero. */
 function money(n: number | null | undefined): string {
   return typeof n === 'number' && Number.isFinite(n) ? formatMoney(n) : DASH
-}
-
-/** A nullable signed money figure, for the variance column. */
-function signedMoney(n: number | null | undefined): string {
-  if (typeof n !== 'number' || !Number.isFinite(n)) return DASH
-  if (n === 0) return formatMoney(0)
-  return (n > 0 ? '+' : '-') + formatMoney(Math.abs(n))
 }
 
 /** A nullable count. */
@@ -207,7 +200,7 @@ function Figure({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium">{value}</p>
+      <p className="text-sm font-medium tabular">{value}</p>
     </div>
   )
 }

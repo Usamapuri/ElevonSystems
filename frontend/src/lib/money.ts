@@ -9,6 +9,21 @@ export function formatMoney(amount: number): string {
   return `${amount < 0 ? '-' : ''}Rs ${body}`
 }
 
+/** A signed rupee figure, for a variance: an explicit `+` on a surplus and
+ * `-` on a shortfall, because "which way is it out?" is the only question a
+ * variance is ever asked. Zero carries no sign. A null or non-finite figure
+ * is "nobody counted", not zero, and renders the em dash — the Z-report's
+ * rule for every nullable figure on the day-close screen.
+ *
+ * One export rather than a copy per screen: the day-close screen and the
+ * Day-closes report tab now show the same row side by side, so the sign
+ * convention has to come from one place. */
+export function signedMoney(n: number | null | undefined): string {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '—'
+  if (n === 0) return formatMoney(0)
+  return (n > 0 ? '+' : '-') + formatMoney(Math.abs(n))
+}
+
 /** Weight for a screen: always 3 decimals, thousands grouped, kg unit
  * appended ("1,250.000 kg"). Named apart from lib/weight.ts's `formatKg`,
  * which is the ungrouped scale format the pad and the print builders use —

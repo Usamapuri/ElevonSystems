@@ -77,6 +77,45 @@ export function cellShade(value: number, thresholds: number[]): number {
   return thresholds.length + 1
 }
 
+/** One band of the shading legend: the ramp alpha it paints and the rupee
+ * range it stands for. `from` is exclusive, `to` inclusive; `to === null` is
+ * the open top band and `from === 0` the bottom one. */
+export interface LegendBand {
+  alpha: number
+  from: number
+  to: number | null
+}
+
+/**
+ * The bands the legend should draw for a set of quantile thresholds.
+ *
+ * Normally that is one band per ramp step. But a window with a single busy
+ * cell — or several holding an identical figure — makes `quantileSteps`
+ * return the same number `HEAT_STEPS - 1` times, and the five-band legend
+ * degenerates to "Up to v · v–v · v–v · Over v". The grid is not wrong
+ * (every such cell is `<= thresholds[0]`, so it shades to step 1 and they
+ * all match); only the legend reads as broken. So when the thresholds
+ * collapse to one distinct value, so does the legend: one band, the step the
+ * grid actually paints. Likeliest on the default `today` preset in a quiet
+ * first hour.
+ *
+ * No thresholds at all means no sales in the window, and the caller renders
+ * its empty state instead of a legend.
+ */
+export function legendBands(thresholds: number[]): LegendBand[] {
+  const only = thresholds[0]
+  if (only === undefined) return []
+  if (new Set(thresholds).size < 2) {
+    return [{ alpha: STEP_ALPHAS[0], from: 0, to: only }]
+  }
+  const last = STEP_ALPHAS.length - 1
+  return STEP_ALPHAS.map((alpha, i) => ({
+    alpha,
+    from: i === 0 ? 0 : (thresholds[i - 1] ?? 0),
+    to: i === last ? null : (thresholds[i] ?? null),
+  }))
+}
+
 /** One row of the rendered grid: a label and the hour(s) of day it covers —
  * one hour normally, or all six night hours when they collapse. */
 export interface HeatRowPlan {

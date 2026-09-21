@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { HeatCell } from '@/types'
 import {
-  HEAT_STEPS, WEEKDAY_LABELS, buildHeatGrid, cellShade, heatRowPlan, isGridNavKey, nextCellPos,
-  quantileSteps, sumCellsForRow,
+  HEAT_STEPS, STEP_ALPHAS, WEEKDAY_LABELS, buildHeatGrid, cellShade, heatRowPlan, isGridNavKey,
+  legendBands, nextCellPos, quantileSteps, sumCellsForRow,
 } from './hourlyHeat'
 
 /** All 168 zero cells, with a few overridden — the same shape the backend
@@ -60,6 +60,32 @@ describe('quantileSteps', () => {
     const step = cellShade(500, thresholds)
     expect(step).toBeGreaterThanOrEqual(1)
     expect(step).toBeLessThanOrEqual(HEAT_STEPS)
+  })
+})
+
+describe('legendBands', () => {
+  it('draws one band per ramp step for a spread window', () => {
+    const bands = legendBands([100, 200, 300, 400])
+    expect(bands).toHaveLength(HEAT_STEPS)
+    expect(bands[0]).toEqual({ alpha: STEP_ALPHAS[0], from: 0, to: 100 })
+    expect(bands[1]).toEqual({ alpha: STEP_ALPHAS[1], from: 100, to: 200 })
+    expect(bands[HEAT_STEPS - 1]).toEqual({ alpha: STEP_ALPHAS[HEAT_STEPS - 1], from: 400, to: null })
+  })
+
+  it('collapses to a single band when every threshold is the same value', () => {
+    // One busy cell in the window: quantileSteps returns [v, v, v, v], which
+    // would otherwise render "Up to v · v–v · v–v · Over v".
+    const thresholds = quantileSteps([500])
+    expect(new Set(thresholds).size).toBe(1)
+    const bands = legendBands(thresholds)
+    expect(bands).toHaveLength(1)
+    expect(bands[0]).toEqual({ alpha: STEP_ALPHAS[0], from: 0, to: 500 })
+    // And that one band is the step the grid actually paints for that cell.
+    expect(cellShade(500, thresholds)).toBe(1)
+  })
+
+  it('draws nothing when the window has no sales at all', () => {
+    expect(legendBands(quantileSteps([0, 0, 0]))).toEqual([])
   })
 })
 

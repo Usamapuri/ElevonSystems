@@ -39,7 +39,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ReportTable } from './ReportTable'
 import { hourlyColumns, hourlyTotals } from './reportColumns'
 import {
-  HEAT_STEPS, LABEL_MIN_STEP, STEP_ALPHAS, WEEKDAY_LABELS, buildHeatGrid, isGridNavKey, nextCellPos,
+  HEAT_STEPS, LABEL_MIN_STEP, STEP_ALPHAS, WEEKDAY_LABELS, buildHeatGrid, isGridNavKey, legendBands,
+  nextCellPos,
 } from './hourlyHeat'
 import { compactMoney, formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
@@ -195,24 +196,24 @@ export function HourlyHeatmap({ cells, rows, totals }: Props) {
  * (sequential / diverging)"), plus the zero swatch — the step thresholds
  * are the whole point of a legend on a quantile ramp, since the same shade
  * means a different rupee band on a busy window than on a quiet one.
- * `thresholds` is always exactly `HEAT_STEPS - 1` here: `HourlyHeatmap`
- * already renders "No sales in this range" instead of this legend when the
- * window has no sales, which is the only case `buildHeatGrid` returns
- * fewer. */
+ * How many bands there are is `legendBands`' decision, not this
+ * component's: a window whose thresholds all collapse to one value gets a
+ * single band rather than four that read "v–v". */
 function HeatmapLegend({ thresholds }: { thresholds: number[] }) {
-  const bounds = [0, ...thresholds]
+  const bands = legendBands(thresholds)
+  if (bands.length === 0) return null
   return (
     <div role="group" aria-label="Shading legend" className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
       <span className="font-semibold text-foreground">Net sales</span>
       <LegendSwatch color="transparent" label="No sales" bordered />
-      {STEP_ALPHAS.map((alpha, i) => {
+      {bands.map((band) => {
         const label =
-          i === 0
-            ? `Up to ${compactMoney(thresholds[i])}`
-            : i === STEP_ALPHAS.length - 1
-              ? `Over ${compactMoney(bounds[i])}`
-              : `${compactMoney(bounds[i])}–${compactMoney(thresholds[i])}`
-        return <LegendSwatch key={alpha} color={`hsl(var(--primary) / ${alpha})`} label={label} />
+          band.to === null
+            ? `Over ${compactMoney(band.from)}`
+            : band.from === 0
+              ? `Up to ${compactMoney(band.to)}`
+              : `${compactMoney(band.from)}–${compactMoney(band.to)}`
+        return <LegendSwatch key={band.alpha} color={`hsl(var(--primary) / ${band.alpha})`} label={label} />
       })}
     </div>
   )

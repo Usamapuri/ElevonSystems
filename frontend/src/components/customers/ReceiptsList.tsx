@@ -106,7 +106,7 @@ export function ReceiptsList({ customerId, enabled }: Props) {
                 {paymentMethodLabel(r.method)}
                 {r.sub_method && <span className="text-muted-foreground"> · {subMethodLabel(r.sub_method)}</span>}
               </TableCell>
-              <TableCell className="text-right">{formatMoney(r.amount)}</TableCell>
+              <TableCell className="text-right tabular">{formatMoney(r.amount)}</TableCell>
               <TableCell className="text-right">
                 {r.voided_at ? (
                   <Badge variant="secondary">Voided</Badge>

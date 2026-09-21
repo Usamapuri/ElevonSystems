@@ -15,7 +15,7 @@ import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import type { ReportColumn } from './ReportTable'
-import { formatKgGrouped, formatMoney } from '@/lib/money'
+import { formatKgGrouped, formatMoney, signedMoney } from '@/lib/money'
 import { formatBusinessDate, percentLabel, plainPercentLabel } from '@/lib/print/format'
 import type {
   CashierRow, DailyRow, DayCloseRow, HourRow, PeriodSummary, ProductRow, ReceivableRow, TaxBand,
@@ -82,11 +82,19 @@ export const productColumns: ReportColumn<ProductRow>[] = [
   { key: 'share', label: 'Share %', align: 'right', format: (r) => plainPercentLabel(r.share) },
 ]
 
+// The Invoices column is the one figure in this table that does not sum:
+// each row is COUNT(DISTINCT invoice_id) for that product
+// (backend/internal/reports/queries.go Products), so a two-product sale is
+// counted once per row and the column adds up to more than the window's
+// invoice count. Kg and Gross do sum exactly. Rather than put a number in
+// the footer that is not the column's total — which reads as an arithmetic
+// error — the cell is left as a dash; the window's real invoice count is on
+// the Daily tab and in the tiles above.
 export function productTotals(t: PeriodSummary): Record<string, ReactNode> {
   return {
     name: 'Total',
     kg: formatKgGrouped(t.kg_sold),
-    invoices: String(t.invoices),
+    invoices: DASH,
     gross: formatMoney(t.gross),
     share: t.gross !== 0 ? plainPercentLabel(100) : DASH,
   }
@@ -194,15 +202,6 @@ function statusLabel(status: DayCloseRow['status']): string {
     default:
       return status
   }
-}
-
-/** A signed money figure — mirrors `ZReportView`'s own local `signedMoney`,
- * so a variance carries the same `+`/`-` sign convention wherever it is
- * shown (the day-close screen's tender table and this report row for the
- * same day should read identically). */
-function signedMoney(n: number): string {
-  if (n === 0) return formatMoney(0)
-  return (n > 0 ? '+' : '-') + formatMoney(Math.abs(n))
 }
 
 /** `onOpenZReport` is supplied by the tab, which owns the dialog's open

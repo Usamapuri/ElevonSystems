@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactMoney, formatKgGrouped, formatKgTick, formatMoney } from './money'
+import { compactMoney, formatKgGrouped, formatKgTick, formatMoney, signedMoney } from './money'
 
 describe('formatMoney', () => {
   it('formats whole rupees with thousands separators', () => {
@@ -10,6 +10,21 @@ describe('formatMoney', () => {
   })
   it('handles negatives', () => {
     expect(formatMoney(-300)).toBe('-Rs 300')
+  })
+})
+
+describe('signedMoney', () => {
+  it('signs a surplus and a shortfall explicitly', () => {
+    expect(signedMoney(250)).toBe('+Rs 250')
+    expect(signedMoney(-250)).toBe('-Rs 250')
+  })
+  it('leaves zero unsigned', () => {
+    expect(signedMoney(0)).toBe('Rs 0')
+  })
+  it('renders an em dash for a figure nobody counted', () => {
+    expect(signedMoney(null)).toBe('—')
+    expect(signedMoney(undefined)).toBe('—')
+    expect(signedMoney(NaN)).toBe('—')
   })
 })
 
