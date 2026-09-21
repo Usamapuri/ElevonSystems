@@ -262,6 +262,37 @@ func TestReports_EachNameReturnsSeededTotals(t *testing.T) {
 		t.Errorf("hourly net = %.2f, want %.2f", hourlyNet, fxNet)
 	}
 
+	// The heatmap grid rides alongside the flat rows: all 168 cells, zero-
+	// filled, summing to the same net the flat rows and the totals block
+	// already agree on.
+	cells := decodeCells(t, r, f.todayWindow())
+	if len(cells) != 168 {
+		t.Fatalf("hourly cells = %d, want 168", len(cells))
+	}
+	var cellInvoices int
+	var cellNet float64
+	for _, c := range cells {
+		cellInvoices += c.Invoices
+		cellNet += c.Net
+	}
+	if cellInvoices != fxInvoices || !sameMoney(cellNet, fxNet) {
+		t.Errorf("Σ cells invoices=%d net=%.2f, want %d/%.2f", cellInvoices, cellNet, fxInvoices, fxNet)
+	}
+
+	// Every other report's JSON stays exactly {rows, totals} — no stray
+	// cells field on a report that has no heatmap.
+	for _, name := range []string{"daily", "products", "tax", "cashiers"} {
+		w := doJSON(r, http.MethodGet, "/admin/reports/"+name+f.todayWindow(), nil)
+		env := decodeEnvelope(t, w)
+		data, ok := env.Data.(map[string]any)
+		if !ok {
+			t.Fatalf("%s: data is %T, want an object", name, env.Data)
+		}
+		if _, exists := data["cells"]; exists {
+			t.Errorf("%s: must not carry a cells field", name)
+		}
+	}
+
 	// The two position reports carry no totals block.
 	for _, name := range []string{"receivables", "day-closes"} {
 		w, body := getReport(t, r, name, f.todayWindow())
@@ -300,6 +331,20 @@ func decodeRows[T any](t *testing.T, r http.Handler, name, query string) []T {
 	}
 	dataAs(t, decodeEnvelope(t, w), &body)
 	return body.Rows
+}
+
+// decodeCells re-decodes the hourly report's heatmap grid.
+func decodeCells(t *testing.T, r http.Handler, query string) []reports.HeatCell {
+	t.Helper()
+	w := doJSON(r, http.MethodGet, "/admin/reports/hourly"+query, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("hourly: %d %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Cells []reports.HeatCell `json:"cells"`
+	}
+	dataAs(t, decodeEnvelope(t, w), &body)
+	return body.Cells
 }
 
 // ── validation ───────────────────────────────────────────────────────────

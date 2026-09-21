@@ -85,6 +85,7 @@ var reportSheets = map[string]string{
 // a "period summary" of either would be a number nobody should add up.
 type reportView struct {
 	rows    any
+	cells   any // only hourly sets this — the hour × weekday heatmap grid
 	totals  *reports.PeriodSummary
 	headers []string
 	csvRows [][]string
@@ -155,7 +156,11 @@ func (h *ReportsHandler) Report(c *gin.Context) {
 			Name: view.sheet, Headers: view.headers, Rows: view.xlsRows,
 		}})
 	default:
-		c.JSON(http.StatusOK, models.OK("OK", gin.H{"rows": view.rows, "totals": view.totals}))
+		body := gin.H{"rows": view.rows, "totals": view.totals}
+		if view.cells != nil {
+			body["cells"] = view.cells
+		}
+		c.JSON(http.StatusOK, models.OK("OK", body))
 	}
 }
 
@@ -373,12 +378,20 @@ func (h *ReportsHandler) hourlyView(ctx context.Context, r reports.Range) (*repo
 	if err != nil {
 		return nil, err
 	}
+	// The heatmap grid rides alongside the flat hourly rows in JSON only —
+	// CSV/XLSX keep exporting the flat rows, spreadsheets have no use for a
+	// 168-cell grid.
+	cells, err := reports.HourlyHeat(ctx, h.db, r)
+	if err != nil {
+		return nil, err
+	}
 	totals, err := reports.LoadPeriodSummary(ctx, h.db, r)
 	if err != nil {
 		return nil, err
 	}
 	v := &reportView{
 		rows:    rows,
+		cells:   cells,
 		totals:  &totals,
 		sheet:   reportSheets["hourly"],
 		headers: []string{"Hour", "Invoices", "Net"},

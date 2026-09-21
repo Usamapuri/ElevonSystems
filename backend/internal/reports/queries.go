@@ -255,6 +255,61 @@ func Hourly(ctx context.Context, db Querier, r Range) ([]HourRow, error) {
 	return out, rows.Err()
 }
 
+// HeatCell is one hour × weekday bucket, both in the business timezone.
+// Weekday follows ISO 8601 minus one, so Monday is 0 and Sunday is 6 —
+// EXTRACT(ISODOW ...) is 1 (Monday) .. 7 (Sunday), and a zero-based Monday
+// is what a Mon–Sun grid indexes by.
+type HeatCell struct {
+	Weekday  int     `json:"weekday"`
+	Hour     int     `json:"hour"`
+	Invoices int     `json:"invoices"`
+	Net      float64 `json:"net"`
+}
+
+// HourlyHeat buckets the window's completed invoices by weekday and hour of
+// day, in the business timezone — the same explicit AT TIME ZONE conversion
+// Hourly uses on created_at, extended with EXTRACT(ISODOW ...) for the
+// weekday. Rows are still selected by business_date, like every other
+// report; only the bucketing is on the wall clock.
+//
+// All 7×24 = 168 cells are always returned, zero-filled, in weekday-major
+// order (Monday 00:00 … Monday 23:00, Tuesday 00:00 …), so the heatmap has a
+// fixed grid regardless of what the window actually sold.
+func HourlyHeat(ctx context.Context, db Querier, r Range) ([]HeatCell, error) {
+	from, to := r.keys()
+	rows, err := db.QueryContext(ctx, `
+		SELECT wd.weekday::int, hr.hour::int,
+		       COALESCE(a.invoices, 0),
+		       COALESCE(a.net, 0)::float8
+		FROM generate_series(0, 6) AS wd(weekday)
+		CROSS JOIN generate_series(0, 23) AS hr(hour)
+		LEFT JOIN (
+			SELECT (EXTRACT(ISODOW FROM created_at AT TIME ZONE $3)::int - 1) AS weekday,
+			       EXTRACT(HOUR FROM created_at AT TIME ZONE $3)::int         AS hour,
+			       COUNT(*)                                                  AS invoices,
+			       COALESCE(SUM(total_payable), 0)::float8                   AS net
+			FROM invoices
+			WHERE status = 'completed'
+			  AND business_date BETWEEN $1::date AND $2::date
+			GROUP BY 1, 2
+		) a ON a.weekday = wd.weekday AND a.hour = hr.hour
+		ORDER BY wd.weekday, hr.hour`, from, to, util.BusinessTimezoneName())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]HeatCell, 0, 168)
+	for rows.Next() {
+		var c HeatCell
+		if err := rows.Scan(&c.Weekday, &c.Hour, &c.Invoices, &c.Net); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // ── receivables and ageing ───────────────────────────────────────────────
 
 // ReceivableRow is one customer's outstanding account as of a date. Balance

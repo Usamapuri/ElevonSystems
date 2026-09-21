@@ -184,6 +184,66 @@ func TestHourlyBucketsInBusinessTimezone(t *testing.T) {
 	}
 }
 
+// The window's five completed invoices land on three different weekdays at
+// five different hours (day1=Tuesday, day2=Wednesday, day3=Thursday); the
+// voided INV-0003 (Tuesday, hour 12 in Asia/Karachi) must not appear
+// anywhere in the grid.
+func TestHourlyHeatGridInBusinessTimezone(t *testing.T) {
+	db := testdb.Fresh(t)
+	seedPeriod(t, db)
+
+	cells, err := HourlyHeat(ctx(), db, testRange())
+	if err != nil {
+		t.Fatalf("HourlyHeat: %v", err)
+	}
+	if len(cells) != 168 {
+		t.Fatalf("got %d heat cells, want 168", len(cells))
+	}
+
+	byKey := make(map[[2]int]HeatCell, len(cells))
+	for _, c := range cells {
+		byKey[[2]int{c.Weekday, c.Hour}] = c
+	}
+
+	want := map[[2]int]struct {
+		invoices int
+		net      float64
+	}{
+		{1, 10}: {1, 1180}, // Tuesday 10:00 — INV-0001
+		{1, 11}: {1, 590},  // Tuesday 11:00 — INV-0002
+		{1, 12}: {0, 0},    // Tuesday 12:00 — INV-0003 is voided, excluded
+		{2, 10}: {1, 2360}, // Wednesday 10:00 — INV-0004
+		{2, 11}: {1, 105},  // Wednesday 11:00 — INV-0005
+		{3, 4}:  {1, 472},  // Thursday 04:00 — INV-0006, rung 23:30 UTC the evening before
+	}
+	for key, w := range want {
+		c, ok := byKey[key]
+		if !ok {
+			t.Fatalf("missing cell weekday=%d hour=%d", key[0], key[1])
+		}
+		label := "weekday=" + strconv.Itoa(key[0]) + " hour=" + strconv.Itoa(key[1])
+		eqInt(t, "invoices "+label, c.Invoices, w.invoices)
+		eq(t, "net "+label, c.Net, w.net)
+	}
+
+	// Every other cell in the grid is zero, and the grid's own total agrees
+	// with the window's period summary — the same reconciliation Hourly's
+	// own test relies on.
+	var totalInvoices int
+	var totalNet float64
+	for _, c := range cells {
+		totalInvoices += c.Invoices
+		totalNet += c.Net
+	}
+	eqInt(t, "Σ cell invoices", totalInvoices, 5)
+	eq(t, "Σ cell net", totalNet, 4707)
+
+	if util.BusinessTimezoneName() != "Asia/Karachi" {
+		t.Fatalf("business timezone moved to %s — the weekday/hour assumptions above no longer hold",
+			util.BusinessTimezoneName())
+	}
+}
+
 // FIFO ageing, hand-computed: an invoice of 1,000 seventy days ago, an
 // invoice of 2,000 twenty days ago, a receipt of 1,200 ten days ago.
 // Balance 1,800, all of it in 0–30, because the payment settles the oldest
