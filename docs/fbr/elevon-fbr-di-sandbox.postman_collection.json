@@ -1,0 +1,1050 @@
+{
+  "info": {
+    "_postman_id": "a20cb1e6-7bd1-4675-b0b3-a069fde1c3c8",
+    "name": "Elevon POS - FBR Digital Invoicing sandbox",
+    "description": "Payloads for PRAL DI API v1.12 exactly as Elevon POS will build them (spec section 7). Set token and the seller/buyer fields in a Postman ENVIRONMENT, never in this file. Order: 1 Reference lists, 2 Validate, 3 Post, 4 Negative. Sandbox only: every URL here ends in _sb or is a read-only reference list.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Business date and reference-list date, pinned to Asia/Karachi.",
+          "const now = new Date();",
+          "const ymd = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' }); // YYYY-MM-DD",
+          "const parts = now.toLocaleDateString('en-GB', { timeZone: 'Asia/Karachi', day: '2-digit', month: 'short', year: 'numeric' }).split(' ');",
+          "pm.collectionVariables.set('invoice_date', ymd);",
+          "pm.collectionVariables.set('ref_date', parts[0] + '-' + parts[1] + '-' + parts[2]); // DD-MMM-YYYY",
+          "if (!pm.environment.get('token') && !pm.collectionVariables.get('token')) {",
+          "  console.warn('No token set: create a Postman environment with token = your IRIS sandbox bearer token.');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base",
+      "value": "https://gw.fbr.gov.pk"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "description": "Override in an environment. IRIS sandbox bearer token."
+    },
+    {
+      "key": "seller_ntn",
+      "value": "",
+      "description": "Seller NTN (7 digits) or CNIC (13 digits), digits only"
+    },
+    {
+      "key": "seller_name",
+      "value": ""
+    },
+    {
+      "key": "seller_province",
+      "value": "Punjab",
+      "description": "Must match a name from /pdi/v1/provinces"
+    },
+    {
+      "key": "seller_address",
+      "value": ""
+    },
+    {
+      "key": "buyer_ntn",
+      "value": "",
+      "description": "For scenario SN001 (registered buyer)"
+    },
+    {
+      "key": "buyer_name",
+      "value": "Registered Buyer Ltd"
+    },
+    {
+      "key": "buyer_province",
+      "value": "Punjab"
+    },
+    {
+      "key": "buyer_address",
+      "value": "Lahore"
+    },
+    {
+      "key": "hs_code",
+      "value": "2711.1910",
+      "description": "PCT 2711.1910 L.P.G.; advisor to confirm before enabling"
+    },
+    {
+      "key": "uom",
+      "value": "KG"
+    },
+    {
+      "key": "rate_desc",
+      "value": "18%",
+      "description": "Must equal a ratE_DESC from SaleTypeToRate"
+    },
+    {
+      "key": "sale_type",
+      "value": "Goods at Standard Rate (default)"
+    },
+    {
+      "key": "trans_type_id",
+      "value": "18",
+      "description": "Check /pdi/v1/transtypecode; 18 is the usual Sale id"
+    },
+    {
+      "key": "invoice_date",
+      "value": ""
+    },
+    {
+      "key": "ref_date",
+      "value": ""
+    },
+    {
+      "key": "last_invoice_number",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Reference lists (read-only)",
+      "item": [
+        {
+          "name": "Provinces",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/pdi/v1/provinces"
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log(Array.isArray(b) ? b.length + ' rows' : b);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Document type codes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/pdi/v1/doctypecode"
+            },
+            "description": "Confirms whether Credit Note is a listed doc type."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log(Array.isArray(b) ? b.length + ' rows' : b);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Item description codes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/pdi/v1/itemdesccode"
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log(Array.isArray(b) ? b.length + ' rows' : b);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transaction type codes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/pdi/v1/transtypecode"
+            },
+            "description": "Find the id for Sale and set trans_type_id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log(Array.isArray(b) ? b.length + ' rows' : b);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Units of measure",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/pdi/v1/uom"
+            },
+            "description": "KG should be uoM_ID 13."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log(Array.isArray(b) ? b.length + ' rows' : b);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SRO item codes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/pdi/v1/sroitemcode"
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log(Array.isArray(b) ? b.length + ' rows' : b);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SRO schedule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/pdi/v1/SroSchedule"
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log(Array.isArray(b) ? b.length + ' rows' : b);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SaleTypeToRate (today, Sale)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/pdi/v2/SaleTypeToRate?date={{ref_date}}&transTypeId={{trans_type_id}}&originationSupplier=1"
+            },
+            "description": "rate_desc must equal one of the returned ratE_DESC values (expect 18%)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log(Array.isArray(b) ? b.length + ' rows' : b);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HS_UOM for LPG (annexure 3)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/pdi/v2/HS_UOM?hs_code={{hs_code}}&annexure_id=3"
+            },
+            "description": "KG must appear here or FBR answers 0099/0165 on every invoice. The app will refuse to enable fiscal if it does not."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log(Array.isArray(b) ? b.length + ' rows' : b);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SROItem",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/pdi/v2/SROItem"
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log(Array.isArray(b) ? b.length + ' rows' : b);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Validate (sandbox _sb, nothing is filed)",
+      "item": [
+        {
+          "name": "A. SN002 walk-in, one kg line",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "Unregistered walk-in buyer. 12.500 kg x Rs 265.00 = 3,312.50; 18 % = 596.25; totalValues 3,908.75. The app rounds the receipt to Rs 3,909 but the rounding adjustment is NOT sent (spec 7.4).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) {",
+                  "  pm.collectionVariables.set('last_invoice_number', body.invoiceNumber);",
+                  "  console.log('FBR invoice number', body.invoiceNumber);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B. SN001 registered buyer, tonne line",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "Registered buyer (set buyer_ntn etc. in the environment). 1 tonne entered as 1000.000 kg x Rs 262.00 = 262,000.00; tax 47,160.00; totalValues 309,160.00.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"{{buyer_ntn}}\",\n  \"buyerBusinessName\": \"{{buyer_name}}\",\n  \"buyerProvince\": \"{{buyer_province}}\",\n  \"buyerAddress\": \"{{buyer_address}}\",\n  \"buyerRegistrationType\": \"Registered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN001\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 1000.000 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 1000.0,\n      \"totalValues\": 309160.0,\n      \"valueSalesExcludingST\": 262000.0,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 47160.0,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) {",
+                  "  pm.collectionVariables.set('last_invoice_number', body.invoiceNumber);",
+                  "  console.log('FBR invoice number', body.invoiceNumber);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "C. SN002 two lines with Rs 500 invoice discount",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "Invoice-level discount of Rs 500 pro-rated by line value (109.67 + 390.33). valueSalesExcludingST = line total minus its discount share; salesTaxApplicable = 18 % of that. Exercises the discount field and multi-line invoiceStatuses.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3779.34,\n      \"valueSalesExcludingST\": 3202.83,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 576.51,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 109.67,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    },\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG 45 kg cylinder fill 45.000 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 45.0,\n      \"totalValues\": 13451.61,\n      \"valueSalesExcludingST\": 11399.67,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 2051.94,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 390.33,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) {",
+                  "  pm.collectionVariables.set('last_invoice_number', body.invoiceNumber);",
+                  "  console.log('FBR invoice number', body.invoiceNumber);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D. SN002 further tax 4 % on unregistered buyer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "Only relevant if the tax advisor says further tax applies (spec 7.5). furtherTax = 4 % of value excl. ST = 132.50; totalValues includes it (4,041.25).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 4041.25,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 132.5,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) {",
+                  "  pm.collectionVariables.set('last_invoice_number', body.invoiceNumber);",
+                  "  console.log('FBR invoice number', body.invoiceNumber);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E. Credit Note against last posted invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "Run a POST scenario first so last_invoice_number is set. Verifies the credit-note doc type string in sandbox (spec 7.6: v1.12 lists only Sale Invoice and Debit Note but its error catalogue handles credit notes). If rejected with a doc-type error, retry with invoiceType 'Debit Note' and the same invoiceRefNo, and record which one FBR accepts.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Credit Note\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"{{last_invoice_number}}\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) {",
+                  "  pm.collectionVariables.set('last_invoice_number', body.invoiceNumber);",
+                  "  console.log('FBR invoice number', body.invoiceNumber);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Post (sandbox _sb, files a test invoice)",
+      "item": [
+        {
+          "name": "A. SN002 walk-in, one kg line",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "Unregistered walk-in buyer. 12.500 kg x Rs 265.00 = 3,312.50; 18 % = 596.25; totalValues 3,908.75. The app rounds the receipt to Rs 3,909 but the rounding adjustment is NOT sent (spec 7.4).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) {",
+                  "  pm.collectionVariables.set('last_invoice_number', body.invoiceNumber);",
+                  "  console.log('FBR invoice number', body.invoiceNumber);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B. SN001 registered buyer, tonne line",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "Registered buyer (set buyer_ntn etc. in the environment). 1 tonne entered as 1000.000 kg x Rs 262.00 = 262,000.00; tax 47,160.00; totalValues 309,160.00.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"{{buyer_ntn}}\",\n  \"buyerBusinessName\": \"{{buyer_name}}\",\n  \"buyerProvince\": \"{{buyer_province}}\",\n  \"buyerAddress\": \"{{buyer_address}}\",\n  \"buyerRegistrationType\": \"Registered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN001\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 1000.000 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 1000.0,\n      \"totalValues\": 309160.0,\n      \"valueSalesExcludingST\": 262000.0,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 47160.0,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) {",
+                  "  pm.collectionVariables.set('last_invoice_number', body.invoiceNumber);",
+                  "  console.log('FBR invoice number', body.invoiceNumber);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "C. SN002 two lines with Rs 500 invoice discount",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "Invoice-level discount of Rs 500 pro-rated by line value (109.67 + 390.33). valueSalesExcludingST = line total minus its discount share; salesTaxApplicable = 18 % of that. Exercises the discount field and multi-line invoiceStatuses.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3779.34,\n      \"valueSalesExcludingST\": 3202.83,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 576.51,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 109.67,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    },\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG 45 kg cylinder fill 45.000 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 45.0,\n      \"totalValues\": 13451.61,\n      \"valueSalesExcludingST\": 11399.67,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 2051.94,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 390.33,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) {",
+                  "  pm.collectionVariables.set('last_invoice_number', body.invoiceNumber);",
+                  "  console.log('FBR invoice number', body.invoiceNumber);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D. SN002 further tax 4 % on unregistered buyer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "Only relevant if the tax advisor says further tax applies (spec 7.5). furtherTax = 4 % of value excl. ST = 132.50; totalValues includes it (4,041.25).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 4041.25,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 132.5,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) {",
+                  "  pm.collectionVariables.set('last_invoice_number', body.invoiceNumber);",
+                  "  console.log('FBR invoice number', body.invoiceNumber);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E. Credit Note against last posted invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "Run a POST scenario first so last_invoice_number is set. Verifies the credit-note doc type string in sandbox (spec 7.6: v1.12 lists only Sale Invoice and Debit Note but its error catalogue handles credit notes). If rejected with a doc-type error, retry with invoiceType 'Debit Note' and the same invoiceRefNo, and record which one FBR accepts.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Credit Note\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"{{last_invoice_number}}\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) {",
+                  "  pm.collectionVariables.set('last_invoice_number', body.invoiceNumber);",
+                  "  console.log('FBR invoice number', body.invoiceNumber);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Negative cases (expect statusCode 01)",
+      "item": [
+        {
+          "name": "Wrong UoM (Litre)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "Expect error 0099 or 0165 (UoM not allowed for HS code).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"Litre\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const vr = (pm.response.json().validationResponse) || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('FBR rejects it (statusCode 01)', () => pm.expect(vr.statusCode).to.eql('01'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tax does not match rate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "salesTaxApplicable 500.00 instead of 596.25. Records which error code FBR gives for a mismatch, which tells us how strict the sandbox is about paisa.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3812.5,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 500.0,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const vr = (pm.response.json().validationResponse) || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('FBR rejects it (statusCode 01)', () => pm.expect(vr.statusCode).to.eql('01'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown HS code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN002\",\n  \"items\": [\n    {\n      \"hsCode\": \"0000.0000\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const vr = (pm.response.json().validationResponse) || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('FBR rejects it (statusCode 01)', () => pm.expect(vr.statusCode).to.eql('01'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registered scenario with blank buyer NTN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "SN001 requires a buyer NTN/CNIC.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"{{buyer_name}}\",\n  \"buyerProvince\": \"{{buyer_province}}\",\n  \"buyerAddress\": \"{{buyer_address}}\",\n  \"buyerRegistrationType\": \"Registered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN001\",\n  \"items\": [\n    {\n      \"hsCode\": \"{{hs_code}}\",\n      \"productDescription\": \"LPG bulk 12.500 kg\",\n      \"rate\": \"{{rate_desc}}\",\n      \"uoM\": \"{{uom}}\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0.0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0.0,\n      \"saleType\": \"{{sale_type}}\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const vr = (pm.response.json().validationResponse) || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('FBR rejects it (statusCode 01)', () => pm.expect(vr.statusCode).to.eql('01'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
