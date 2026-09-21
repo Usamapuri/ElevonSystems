@@ -52,75 +52,29 @@ const maxInvoiceLines = 100
 // maxNotesLen bounds the free-text note (the column is TEXT).
 const maxNotesLen = 2000
 
-// Invoice money columns are cast to float8 on the way out so lib/pq hands
-// back numbers rather than NUMERIC strings; total_payable is cast to bigint
-// because it is whole rupees and scans into an int64.
-const invoiceColumns = `id, invoice_number, client_op_id, business_day_id, business_date, status,
-	cashier_id, cashier_name, customer_id, customer_name, customer_phone, customer_ntn, customer_cnic,
-	subtotal::float8, discount_amount::float8, discount_percent::float8, tax_rate::float8,
-	tax_amount::float8, further_tax_amount::float8, total_amount::float8, rounding_adjustment::float8,
-	total_payable::bigint, payment_method, payment_reference, payment_sub_method, notes,
-	fiscal_status, fiscal_invoice_number, fiscal_void_status, fiscal_debit_note_number,
-	created_at, voided_at, voided_by, void_reason`
+// The invoice read helpers live in internal/invoice: internal/fiscal builds
+// its FBR payload from the same rows and must not import handlers. These
+// wrappers keep the package-local names every call site below already uses.
+const invoiceColumns = invoice.Columns
 
-const invoiceLineColumns = `id, invoice_id, product_id, product_name, hs_code, fbr_uom,
-	quantity::float8, entered_as, gross_weight::float8, tare_weight::float8,
-	unit_price::float8, line_total::float8, line_discount::float8, line_tax::float8, sort_order`
+const invoiceLineColumns = invoice.LineColumns
 
-func scanInvoice(row interface {
-	Scan(dest ...interface{}) error
-}) (models.Invoice, error) {
-	var inv models.Invoice
-	err := row.Scan(&inv.ID, &inv.InvoiceNumber, &inv.ClientOpID, &inv.BusinessDayID, &inv.BusinessDate, &inv.Status,
-		&inv.CashierID, &inv.CashierName, &inv.CustomerID, &inv.CustomerName, &inv.CustomerPhone, &inv.CustomerNTN, &inv.CustomerCNIC,
-		&inv.Subtotal, &inv.DiscountAmount, &inv.DiscountPercent, &inv.TaxRate,
-		&inv.TaxAmount, &inv.FurtherTaxAmount, &inv.TotalAmount, &inv.RoundingAdjustment,
-		&inv.TotalPayable, &inv.PaymentMethod, &inv.PaymentReference, &inv.PaymentSubMethod, &inv.Notes,
-		&inv.FiscalStatus, &inv.FiscalInvoiceNumber, &inv.FiscalVoidStatus, &inv.FiscalDebitNoteNumber,
-		&inv.CreatedAt, &inv.VoidedAt, &inv.VoidedBy, &inv.VoidReason)
-	return inv, err
+func scanInvoice(row invoice.RowScanner) (models.Invoice, error) {
+	return invoice.ScanInvoice(row)
 }
 
-func scanInvoiceLine(row interface {
-	Scan(dest ...interface{}) error
-}) (models.InvoiceLine, error) {
-	var l models.InvoiceLine
-	err := row.Scan(&l.ID, &l.InvoiceID, &l.ProductID, &l.ProductName, &l.HSCode, &l.FBRUoM,
-		&l.Quantity, &l.EnteredAs, &l.GrossWeight, &l.TareWeight,
-		&l.UnitPrice, &l.LineTotal, &l.LineDiscount, &l.LineTax, &l.SortOrder)
-	return l, err
+func scanInvoiceLine(row invoice.RowScanner) (models.InvoiceLine, error) {
+	return invoice.ScanLine(row)
 }
 
 // loadInvoiceLines reads one invoice's lines in cart order.
 func loadInvoiceLines(q runner, invoiceID uuid.UUID) ([]models.InvoiceLine, error) {
-	rows, err := q.Query(`SELECT `+invoiceLineColumns+` FROM invoice_lines WHERE invoice_id = $1 ORDER BY sort_order, id`, invoiceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	lines := []models.InvoiceLine{}
-	for rows.Next() {
-		l, err := scanInvoiceLine(rows)
-		if err != nil {
-			return nil, err
-		}
-		lines = append(lines, l)
-	}
-	return lines, rows.Err()
+	return invoice.LoadLines(q, invoiceID)
 }
 
 // loadInvoiceWithLines reads a whole invoice. sql.ErrNoRows means no such id.
 func loadInvoiceWithLines(q runner, id uuid.UUID) (models.Invoice, error) {
-	inv, err := scanInvoice(q.QueryRow(`SELECT `+invoiceColumns+` FROM invoices WHERE id = $1`, id))
-	if err != nil {
-		return models.Invoice{}, err
-	}
-	lines, err := loadInvoiceLines(q, id)
-	if err != nil {
-		return models.Invoice{}, err
-	}
-	inv.Lines = lines
-	return inv, nil
+	return invoice.LoadWithLines(q, id)
 }
 
 // ── request parsing ──────────────────────────────────────────────────────
