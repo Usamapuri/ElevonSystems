@@ -21,7 +21,7 @@ import {
   cashierColumns, cashierTotals, dailyColumns, dailyTotals, dayCloseColumns,
   productColumns, productTotals, receivableColumns, taxColumns, taxTotals,
 } from './reportColumns'
-import { formatKg, formatMoney } from '@/lib/money'
+import { formatKgGrouped, formatMoney } from '@/lib/money'
 import { formatBusinessDate } from '@/lib/print/format'
 import type {
   CashierRow, DailyRow, DayCloseRow, HourRow, ProductRow, ReceivableRow, ReportName, ReportResponse, TaxBand,
@@ -94,7 +94,7 @@ export function DailyPanel({ from, to, params, enabled }: PanelProps) {
           <MetricTile label="Net sales" value={formatMoney(totals.net)} hint={`${totals.invoices} invoices, ${totals.voids} voided`} />
           <MetricTile label="Gross" value={formatMoney(totals.gross)} />
           <MetricTile label="Tax + further tax" value={formatMoney(totals.tax + totals.further_tax)} />
-          <MetricTile label="Kg sold" value={formatKg(totals.kg_sold)} />
+          <MetricTile label="Kg sold" value={formatKgGrouped(totals.kg_sold)} />
           <MetricTile label="Receipts collected" value={formatMoney(totals.receipts_total)} />
         </div>
       )}
@@ -121,7 +121,7 @@ export function ProductsPanel({ from, to, params, enabled }: PanelProps) {
       {totals && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <MetricTile label="Gross" value={formatMoney(totals.gross)} />
-          <MetricTile label="Kg sold" value={formatKg(totals.kg_sold)} />
+          <MetricTile label="Kg sold" value={formatKgGrouped(totals.kg_sold)} />
           <MetricTile label="Invoices" value={String(totals.invoices)} />
         </div>
       )}

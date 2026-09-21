@@ -15,7 +15,7 @@ import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import type { ReportColumn } from './ReportTable'
-import { formatKg, formatMoney } from '@/lib/money'
+import { formatKgGrouped, formatMoney } from '@/lib/money'
 import { formatBusinessDate, percentLabel, plainPercentLabel } from '@/lib/print/format'
 import type {
   CashierRow, DailyRow, DayCloseRow, HourRow, PeriodSummary, ProductRow, ReceivableRow, TaxBand,
@@ -36,7 +36,7 @@ export const dailyColumns: ReportColumn<DailyRow>[] = [
   { key: 'date', label: 'Date', format: (r) => formatBusinessDate(r.business_date) },
   { key: 'invoices', label: 'Invoices', align: 'right', format: (r) => String(r.invoices) },
   { key: 'voids', label: 'Voids', align: 'right', format: (r) => String(r.voids) },
-  { key: 'kg', label: 'Kg', align: 'right', format: (r) => formatKg(r.kg_sold) },
+  { key: 'kg', label: 'Kg', align: 'right', format: (r) => formatKgGrouped(r.kg_sold) },
   { key: 'gross', label: 'Gross', align: 'right', format: (r) => formatMoney(r.gross) },
   { key: 'discount', label: 'Discount', align: 'right', format: (r) => formatMoney(r.discount) },
   { key: 'taxable', label: 'Taxable', align: 'right', format: (r) => formatMoney(r.taxable) },
@@ -56,7 +56,7 @@ export function dailyTotals(t: PeriodSummary): Record<string, ReactNode> {
     date: 'Total',
     invoices: String(t.invoices),
     voids: String(t.voids),
-    kg: formatKg(t.kg_sold),
+    kg: formatKgGrouped(t.kg_sold),
     gross: formatMoney(t.gross),
     discount: formatMoney(t.discount),
     taxable: formatMoney(t.taxable),
@@ -76,7 +76,7 @@ export function dailyTotals(t: PeriodSummary): Record<string, ReactNode> {
 
 export const productColumns: ReportColumn<ProductRow>[] = [
   { key: 'name', label: 'Product', format: (r) => r.name },
-  { key: 'kg', label: 'Kg', align: 'right', format: (r) => formatKg(r.kg) },
+  { key: 'kg', label: 'Kg', align: 'right', format: (r) => formatKgGrouped(r.kg) },
   { key: 'invoices', label: 'Invoices', align: 'right', format: (r) => String(r.invoices) },
   { key: 'gross', label: 'Gross', align: 'right', format: (r) => formatMoney(r.gross) },
   { key: 'share', label: 'Share %', align: 'right', format: (r) => plainPercentLabel(r.share) },
@@ -85,7 +85,7 @@ export const productColumns: ReportColumn<ProductRow>[] = [
 export function productTotals(t: PeriodSummary): Record<string, ReactNode> {
   return {
     name: 'Total',
-    kg: formatKg(t.kg_sold),
+    kg: formatKgGrouped(t.kg_sold),
     invoices: String(t.invoices),
     gross: formatMoney(t.gross),
     share: t.gross !== 0 ? plainPercentLabel(100) : DASH,

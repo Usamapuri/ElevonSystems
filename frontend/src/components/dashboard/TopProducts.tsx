@@ -7,7 +7,7 @@
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, tableInCard } from '@/components/ui/table'
-import { formatKg, formatMoney } from '@/lib/money'
+import { formatKgGrouped, formatMoney } from '@/lib/money'
 import type { ProductRow } from '@/types'
 
 interface Props {
@@ -39,7 +39,7 @@ export function TopProducts({ products }: Props) {
               {products.map((p) => (
                 <TableRow key={p.product_id ?? p.name}>
                   <TableCell className="font-semibold">{p.name}</TableCell>
-                  <TableCell className="text-right tabular">{formatKg(p.kg)}</TableCell>
+                  <TableCell className="text-right tabular">{formatKgGrouped(p.kg)}</TableCell>
                   <TableCell className="text-right tabular">{p.invoices}</TableCell>
                   <TableCell className="text-right tabular">{formatMoney(p.gross)}</TableCell>
                   <TableCell className="text-right tabular">{p.share.toFixed(1)}%</TableCell>

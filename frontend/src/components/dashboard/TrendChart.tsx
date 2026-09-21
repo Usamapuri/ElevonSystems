@@ -25,7 +25,7 @@ import {
 } from 'recharts'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatKg, formatKgTick, formatMoney } from '@/lib/money'
+import { formatKgGrouped, formatKgTick, formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { dayMonthLabel } from './kpis'
 import type { DailyRow } from '@/types'
@@ -59,7 +59,7 @@ function toChartRow(row: DailyRow): ChartRow {
 function tooltipValue(value: unknown, name: unknown): [string, string] {
   const n = typeof value === 'number' ? value : Number(Array.isArray(value) ? value[0] : value)
   const label = String(name ?? '')
-  if (label === 'Kg sold') return [formatKg(n), label]
+  if (label === 'Kg sold') return [formatKgGrouped(n), label]
   return [formatMoney(n), label]
 }
 

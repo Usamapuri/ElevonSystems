@@ -13,7 +13,7 @@
  * unit-testable without mounting this component.
  */
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatKg, formatMoney } from '@/lib/money'
+import { formatKgGrouped, formatMoney } from '@/lib/money'
 import { averageInvoice, tenderMix, type TenderMixEntry } from './kpis'
 import type { PeriodSummary } from '@/types'
 
@@ -42,7 +42,7 @@ export function KpiRow({ today, receivablesOutstanding }: Props) {
       */}
       <div className="grid gap-px overflow-hidden rounded-lg bg-white/10 sm:grid-cols-2">
         <PlateFigure label="Net revenue today" value={formatMoney(today.net)} hint="Voids excluded" />
-        <PlateFigure label="Kg sold today" value={formatKg(today.kg_sold)} hint={`Across ${today.invoices} ${today.invoices === 1 ? 'sale' : 'sales'}`} />
+        <PlateFigure label="Kg sold today" value={formatKgGrouped(today.kg_sold)} hint={`Across ${today.invoices} ${today.invoices === 1 ? 'sale' : 'sales'}`} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

@@ -9,15 +9,19 @@ export function formatMoney(amount: number): string {
   return `${amount < 0 ? '-' : ''}Rs ${body}`
 }
 
-/** Weight display: always 3 decimals, kg unit. */
-export function formatKg(kg: number): string {
+/** Weight for a screen: always 3 decimals, thousands grouped, kg unit
+ * appended ("1,250.000 kg"). Named apart from lib/weight.ts's `formatKg`,
+ * which is the ungrouped scale format the pad and the print builders use —
+ * the two produce different strings for the same load, so the name has to
+ * say which one a call site is asking for. */
+export function formatKgGrouped(kg: number): string {
   return `${kg.toLocaleString('en-PK', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`
 }
 
-/** Weight for a chart axis tick: whole kilos, no unit — `formatKg`'s 3
- * decimals make a Y-axis (`TrendChart`) wider than the plot it labels.
- * Kept separate from `formatKg` rather than a formatting option on it: the
- * tooltip next to the same axis still wants the exact 3-decimal figure. */
+/** Weight for a chart axis tick: whole kilos, no unit — `formatKgGrouped`'s
+ * 3 decimals make a Y-axis (`TrendChart`) wider than the plot it labels.
+ * Kept separate rather than a formatting option on it: the tooltip next to
+ * the same axis still wants the exact 3-decimal figure. */
 export function formatKgTick(kg: number): string {
   return Math.round(kg).toLocaleString('en-PK')
 }

@@ -25,7 +25,7 @@ import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTit
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PinEntryModal } from '@/components/shared/PinEntryModal'
 import { toast } from '@/hooks/use-toast'
-import { formatKg, formatMoney } from '@/lib/money'
+import { formatKgGrouped, formatMoney } from '@/lib/money'
 import {
   formatBusinessDate,
   formatDateTimePK,
@@ -230,12 +230,12 @@ export function InvoiceDrawer({ invoiceId, onOpenChange }: Props) {
                             <span className="block text-xs text-muted-foreground">
                               rung {enteredAsLabel(line.entered_as)}
                               {line.entered_as === 'gross_tare' && line.gross_weight !== null && line.tare_weight !== null
-                                ? ` · ${formatKg(line.gross_weight)} − ${formatKg(line.tare_weight)}`
+                                ? ` · ${formatKgGrouped(line.gross_weight)} − ${formatKgGrouped(line.tare_weight)}`
                                 : ''}
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right tabular">{formatKg(line.quantity)}</TableCell>
+                        <TableCell className="text-right tabular">{formatKgGrouped(line.quantity)}</TableCell>
                         <TableCell className="text-right tabular">{formatMoney(line.unit_price)}</TableCell>
                         <TableCell className="text-right tabular">{formatMoney(line.line_total)}</TableCell>
                         <TableCell className="hidden sm:table-cell text-right tabular">

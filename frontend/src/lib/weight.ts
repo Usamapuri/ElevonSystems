@@ -97,10 +97,13 @@ export function netFromGrossTare(gross: number, tare: number): number {
 }
 
 /**
- * Bare 3-decimal weight for the pad and the cart line ("12.500"). This is
- * deliberately NOT lib/money.ts's formatKg, which adds thousands separators
- * and a " kg" suffix for display; this one is the raw number an input field
- * and a "12.500 kg × 265.00" line want.
+ * Bare 3-decimal weight for the pad, the cart line and the printed documents
+ * ("12.500"). This is the scale format: deliberately NOT lib/money.ts's
+ * formatKgGrouped, which adds thousands separators and a " kg" suffix for
+ * display. This one is the raw number an input field and a
+ * "12.500 kg × 265.00" line want, and it is the only formatter a receipt or
+ * an A4 invoice may use — the two names differ so an auto-import cannot
+ * quietly swap one for the other.
  */
 export function formatKg(n: number): string {
   if (!Number.isFinite(n)) return '0.000'

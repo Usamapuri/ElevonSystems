@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactMoney, formatKg, formatKgTick, formatMoney } from './money'
+import { compactMoney, formatKgGrouped, formatKgTick, formatMoney } from './money'
 
 describe('formatMoney', () => {
   it('formats whole rupees with thousands separators', () => {
@@ -13,10 +13,10 @@ describe('formatMoney', () => {
   })
 })
 
-describe('formatKg', () => {
+describe('formatKgGrouped', () => {
   it('always shows three decimals and the unit', () => {
-    expect(formatKg(12.5)).toBe('12.500 kg')
-    expect(formatKg(1250)).toBe('1,250.000 kg')
+    expect(formatKgGrouped(12.5)).toBe('12.500 kg')
+    expect(formatKgGrouped(1250)).toBe('1,250.000 kg')
   })
 })
 
