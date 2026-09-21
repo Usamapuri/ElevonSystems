@@ -588,7 +588,7 @@ func (h *ReportsHandler) Dashboard(c *gin.Context) {
 		products = products[:dashboardTopN]
 	}
 
-	outstanding, err := h.outstandingReceivables(ctx, today)
+	outstanding, err := reports.OutstandingReceivables(ctx, h.db, today)
 	if err != nil {
 		fail("receivables", err)
 		return
@@ -641,24 +641,6 @@ func fillDailySeries(rows []reports.DailyRow, from, to time.Time) []reports.Dail
 		})
 	}
 	return out
-}
-
-// outstandingReceivables is what customers owe the store as of asOf: the sum
-// of the positive balances only. A negative balance is an advance the
-// customer has paid ahead — a liability, not a receivable — and netting it
-// off would understate the debt the owner is actually chasing.
-func (h *ReportsHandler) outstandingReceivables(ctx context.Context, asOf time.Time) (float64, error) {
-	rows, err := reports.Receivables(ctx, h.db, asOf)
-	if err != nil {
-		return 0, err
-	}
-	var total float64
-	for _, row := range rows {
-		if row.Balance > 0 {
-			total += row.Balance
-		}
-	}
-	return pricing.Round2(total), nil
 }
 
 // recentInvoices is the last few sales, voids included: a void the cashier

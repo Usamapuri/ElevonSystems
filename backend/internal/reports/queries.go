@@ -472,6 +472,45 @@ func Receivables(ctx context.Context, db Querier, asOf time.Time) ([]ReceivableR
 	return out, nil
 }
 
+// OutstandingReceivables is the single scalar the dashboard shows: what
+// customers owe the store as of asOf, the positive balances only. A negative
+// balance is an advance the customer has paid ahead — a liability, not a
+// receivable — and netting it off would understate the debt the owner is
+// actually chasing.
+//
+// This is deliberately NOT Receivables summed in Go. The report needs every
+// ledger row because FIFO ageing cannot be expressed as one aggregate; the
+// dashboard needs one number, polls for it every 30 seconds, and
+// customer_ledger_entries is append-only (invariant 6) so it only ever
+// grows. One grouped aggregate keeps that poll flat as the ledger fills.
+//
+// It returns the same figure by construction: a customer's balance is
+// Σ debit − Σ credit over their entries on or before asOf, exactly what
+// Receivables accumulates, and a void is a reversing entry in that same sum
+// rather than a row this has to exclude. debit and credit are NUMERIC(12,2),
+// so the per-customer sums are exact at the paisa and need no rounding
+// before the > 0 test; Round2 on the total mirrors what the report's caller
+// did and costs nothing. The customers join Receivables carries is omitted
+// on purpose: customer_id is NOT NULL REFERENCES customers(id) with no ON
+// DELETE clause, so an entry without a customer row cannot exist and the
+// join could only ever be a no-op.
+func OutstandingReceivables(ctx context.Context, db Querier, asOf time.Time) (float64, error) {
+	var total float64
+	err := db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(b.balance), 0)::float8
+		FROM (
+			SELECT SUM(e.debit - e.credit) AS balance
+			FROM customer_ledger_entries e
+			WHERE e.business_date <= $1::date
+			GROUP BY e.customer_id
+		) b
+		WHERE b.balance > 0`, asOf.Format(dateLayout)).Scan(&total)
+	if err != nil {
+		return 0, err
+	}
+	return pricing.Round2(total), nil
+}
+
 // lastReceiptByCustomer maps each customer to the ISO business date of their
 // most recent non-voided receipt on or before asOf.
 func lastReceiptByCustomer(ctx context.Context, db Querier, asOfKey string) (map[uuid.UUID]*string, error) {

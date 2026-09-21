@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"elevon-backend/internal/dayops"
+	"elevon-backend/internal/pricing"
 	"elevon-backend/internal/testdb"
 	"elevon-backend/internal/util"
 
@@ -341,6 +342,84 @@ func TestReceivablesFIFOAgeing(t *testing.T) {
 	if *r.LastReceipt != key(10) {
 		t.Errorf("last receipt = %s, want %s", *r.LastReceipt, key(10))
 	}
+}
+
+// The dashboard scalar and the receivables report are two different
+// implementations of the same number — one grouped SQL aggregate, one Go
+// FIFO walk over every ledger row — and the owner reads them on two screens.
+// This pins them together on a fixture that exercises every way they could
+// drift: an account in debt, one settled to exactly zero, one in advance
+// (a negative balance that must not net the others down), and a void, which
+// is a reversing credit rather than a row either side excludes.
+//
+// Hand-computed: Owing Co has 1,000 + 2,000.55 invoiced, 1,200 receipted and
+// a 400 invoice reversed by its own void — 1,800.55 outstanding. Settled Co
+// is 500 in and 500 out, so it is not a receivable at all. Advance Co has
+// paid 700 against 500, so it is −200 and contributes nothing.
+func TestOutstandingReceivablesMatchesReportPositives(t *testing.T) {
+	db := testdb.Fresh(t)
+
+	today := util.BusinessDate(time.Now())
+	key := func(daysAgo int) string { return today.AddDate(0, 0, -daysAgo).Format(dateLayout) }
+
+	owing := seedCustomer(t, db, "Owing Co", "03001112233")
+	settled := seedCustomer(t, db, "Settled Co", "03002223344")
+	advance := seedCustomer(t, db, "Advance Co", "03003334455")
+	day := seedDay(t, db, key(10), dayops.StatusClosed, 0)
+
+	seedLedger(t, db, owing, "invoice", 1000, 0, key(70), nil)
+	seedLedger(t, db, owing, "invoice", 2000.55, 0, key(20), nil)
+	receipt := seedReceipt(t, db, "REC-9200", day, key(10), owing, 1200, "cash", false)
+	seedLedger(t, db, owing, "receipt", 0, 1200, key(10), &receipt)
+	seedLedger(t, db, owing, "invoice", 400, 0, key(3), nil)
+	seedLedger(t, db, owing, "invoice_void", 0, 400, key(3), nil)
+
+	seedLedger(t, db, settled, "invoice", 500, 0, key(40), nil)
+	seedLedger(t, db, settled, "receipt", 0, 500, key(5), nil)
+
+	seedLedger(t, db, advance, "invoice", 500, 0, key(10), nil)
+	seedLedger(t, db, advance, "receipt", 0, 700, key(2), nil)
+
+	rows, err := Receivables(ctx(), db, today)
+	if err != nil {
+		t.Fatalf("Receivables: %v", err)
+	}
+	var want float64
+	for _, r := range rows {
+		if r.Balance > 0 {
+			want += r.Balance
+		}
+	}
+	want = pricing.Round2(want)
+
+	got, err := OutstandingReceivables(ctx(), db, today)
+	if err != nil {
+		t.Fatalf("OutstandingReceivables: %v", err)
+	}
+	eq(t, "aggregate vs report positives", got, want)
+	eq(t, "aggregate", got, 1800.55)
+
+	// asOf is respected the same way: as of the day before the last receipt,
+	// Advance Co is still 500 in debt and counts.
+	asOf := today.AddDate(0, 0, -3)
+	rows, err = Receivables(ctx(), db, asOf)
+	if err != nil {
+		t.Fatalf("Receivables asOf: %v", err)
+	}
+	want = 0
+	for _, r := range rows {
+		if r.Balance > 0 {
+			want += r.Balance
+		}
+	}
+	want = pricing.Round2(want)
+
+	got, err = OutstandingReceivables(ctx(), db, asOf)
+	if err != nil {
+		t.Fatalf("OutstandingReceivables asOf: %v", err)
+	}
+	eq(t, "aggregate vs report positives asOf", got, want)
+	eq(t, "aggregate asOf", got, 2300.55)
 }
 
 // With nothing paid, each invoice ages into its own bucket — the other half
