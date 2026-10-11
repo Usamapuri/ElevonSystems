@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"elevon-backend/internal/models"
 )
@@ -236,13 +237,19 @@ func build(in BuildInput, cfg Config, invoiceType, refNumber, reason string) (DI
 	if err != nil {
 		return DIInvoice{}, err
 	}
+	out := header(in.Invoice.BusinessDate, in.Buyer, cfg, invoiceType, refNumber, reason)
+	out.Items = items
+	return out, nil
+}
 
-	registered := isRegisteredBuyer(in.Buyer)
-	ntn, name, province, address, regType := buildBuyerFields(in.Buyer, cfg)
-
+// header is everything on a DI document except its items: the seller from
+// config, the buyer (walk-in when nil), the date and the document type.
+func header(businessDate time.Time, buyer *Buyer, cfg Config, invoiceType, refNumber, reason string) DIInvoice {
+	registered := isRegisteredBuyer(buyer)
+	ntn, name, province, address, regType := buildBuyerFields(buyer, cfg)
 	return DIInvoice{
 		InvoiceType:           invoiceType,
-		InvoiceDate:           in.Invoice.BusinessDate.Format("2006-01-02"),
+		InvoiceDate:           businessDate.Format("2006-01-02"),
 		SellerNTNCNIC:         cfg.SellerNTNCNIC,
 		SellerBusinessName:    cfg.SellerBusinessName,
 		SellerProvince:        cfg.SellerProvince,
@@ -255,8 +262,46 @@ func build(in BuildInput, cfg Config, invoiceType, refNumber, reason string) (DI
 		InvoiceRefNo:          refNumber,
 		ScenarioID:            scenarioFor(registered, cfg),
 		Reason:                reason,
-		Items:                 items,
-	}, nil
+	}
+}
+
+// BatchInput is what BuildBatchInvoice needs: the business date the combined
+// invoice is dated, the invoices it covers (each with its lines, in
+// invoice_number order) and settings.default_hs_code on the same terms as
+// BuildInput.
+type BatchInput struct {
+	BusinessDate  time.Time
+	Invoices      []models.Invoice
+	DefaultHSCode string
+}
+
+// ErrBatchEmpty: a combined invoice with nothing in it is refused, never sent.
+var ErrBatchEmpty = errors.New("fiscal_batch_empty")
+
+// BuildBatchInvoice is one combined Sale Invoice to the walk-in buyer for a
+// set of sales (spec 2026-10-12 §2.3). It emits one item per source invoice
+// line and sums nothing: FBR recomputes tax on every item with no tolerance
+// (sandbox 0104), and a sum of per-line rounded taxes can differ from the
+// tax on a summed value. Each item's description is prefixed with the source
+// invoice number so the filing can be traced back line by line.
+func BuildBatchInvoice(in BatchInput, cfg Config) (DIInvoice, error) {
+	out := header(in.BusinessDate, nil, cfg, "Sale Invoice", "", "")
+	out.Items = []DIItem{}
+	for _, inv := range in.Invoices {
+		further := SplitFurtherTax(round2(inv.FurtherTaxAmount), taxableValues(inv))
+		items, err := buildItems(inv, cfg, in.DefaultHSCode, further)
+		if err != nil {
+			return DIInvoice{}, err
+		}
+		for i := range items {
+			items[i].ProductDescription = inv.InvoiceNumber + " " + items[i].ProductDescription
+		}
+		out.Items = append(out.Items, items...)
+	}
+	if len(out.Items) == 0 {
+		return DIInvoice{}, ErrBatchEmpty
+	}
+	return out, nil
 }
 
 // SplitFurtherTax divides total (further_tax_amount, already rounded to 2

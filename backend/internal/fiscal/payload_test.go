@@ -2,6 +2,7 @@ package fiscal
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -413,5 +414,55 @@ func TestSplitFurtherTax_ManyLinesSumExactly(t *testing.T) {
 		if round2(sum) != round2(total) {
 			t.Fatalf("total %v: sum = %v, want %v (got %v)", total, round2(sum), round2(total), got)
 		}
+	}
+}
+
+// --- Combined invoice (spec 2026-10-12 §2.3): one item per source line ------
+
+func TestBuildBatchInvoice_OneItemPerSourceLine(t *testing.T) {
+	hs := "2711.1910"
+	day := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
+	a := models.Invoice{InvoiceNumber: "20261012-001", BusinessDate: day, TaxRate: 0.18, Lines: []models.InvoiceLine{
+		{ProductName: "LPG bulk", HSCode: &hs, Quantity: 12.5, LineTotal: 3312.50, LineDiscount: 0, LineTax: 596.25},
+		{ProductName: "LPG bulk", HSCode: &hs, Quantity: 3.333, LineTotal: 883.25, LineDiscount: 0, LineTax: 158.99},
+	}}
+	b := models.Invoice{InvoiceNumber: "20261012-002", BusinessDate: day, TaxRate: 0.18, Lines: []models.InvoiceLine{
+		{ProductName: "LPG cylinder", HSCode: &hs, Quantity: 11.8, LineTotal: 3127.00, LineDiscount: 127.00, LineTax: 540.00},
+	}}
+	got, err := BuildBatchInvoice(BatchInput{BusinessDate: day, Invoices: []models.Invoice{a, b}, DefaultHSCode: ""}, sandboxCfg())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.InvoiceType != "Sale Invoice" || got.InvoiceDate != "2026-10-12" || got.BuyerRegistrationType != "Unregistered" || got.BuyerBusinessName != "Walk-in Customer" {
+		t.Fatalf("header: %+v", got)
+	}
+	if len(got.Items) != 3 {
+		t.Fatalf("one item per source line, got %d", len(got.Items))
+	}
+	// Per-item figures are the stored line figures, untouched: FBR recomputes
+	// tax per item (0104), so nothing may be summed and re-rounded.
+	if got.Items[1].ValueSalesExcludingST != 883.25 || got.Items[1].SalesTaxApplicable != 158.99 {
+		t.Fatalf("line 2 copied verbatim: %+v", got.Items[1])
+	}
+	if got.Items[2].ValueSalesExcludingST != 3000.00 || got.Items[2].Discount != 127.00 {
+		t.Fatalf("discounted line: %+v", got.Items[2])
+	}
+	if got.Items[0].ProductDescription != "20261012-001 LPG bulk 12.500 kg" {
+		t.Fatalf("description carries the source invoice: %q", got.Items[0].ProductDescription)
+	}
+	assertGolden(t, got, "batch_two_invoices.json")
+}
+
+func TestBuildBatchInvoice_Refusals(t *testing.T) {
+	cfg := sandboxCfg()
+	if _, err := BuildBatchInvoice(BatchInput{}, cfg); !errors.Is(err, ErrBatchEmpty) {
+		t.Fatalf("empty batch: %v", err)
+	}
+	inv := models.Invoice{InvoiceNumber: "x", Lines: []models.InvoiceLine{{ProductName: "LPG", Quantity: 1, LineTotal: 100, LineTax: 18}}}
+	if _, err := BuildBatchInvoice(BatchInput{Invoices: []models.Invoice{inv}}, cfg); !errors.Is(err, ErrHSCodeMissing) {
+		t.Fatalf("no HS code anywhere: %v", err)
+	}
+	if ErrorCode(ErrBatchEmpty) != "fiscal_batch_empty" {
+		t.Fatalf("ErrorCode must know the batch refusal: %q", ErrorCode(ErrBatchEmpty))
 	}
 }
