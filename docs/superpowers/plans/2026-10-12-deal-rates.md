@@ -55,7 +55,7 @@ frontend/src/components/reports/reportColumns.tsx   deal variance column
 
 ---
 
-### Task D1 (E-09): Migration, setting, models
+### Task 1 (D1, E-09): Migration, setting, models
 
 **Files:** Create `backend/migrations/004_deal_rates.sql`. Modify `backend/internal/settings/settings.go`, `backend/internal/settings/settings_test.go`, `backend/internal/models/invoice.go`, `backend/internal/invoice/load.go`.
 
@@ -116,7 +116,7 @@ INSERT INTO settings (key, value) VALUES ('rate_override_band', '0') ON CONFLICT
 
 ---
 
-### Task D2 (E-09): Band and PIN decision in invoice create
+### Task 2 (D2, E-09): Band and PIN decision in invoice create
 
 **Files:** Modify `backend/internal/handlers/invoices.go`, `backend/internal/handlers/invoices_db_test.go`.
 
@@ -314,7 +314,7 @@ Pricing then uses `Rate: chargedRate[i]`; replace the step-9 comment with "Rates
 
 ---
 
-### Task D3 (E-09): Till — rate field, PIN retry, band setting
+### Task 3 (D3, E-09): Till — rate field, PIN retry, band setting
 
 **Files:** Create `frontend/src/components/pos/dealRate.ts`, `dealRate.test.ts`, `RateDialog.tsx`. Modify `frontend/src/types/index.ts`, `components/pos/cart.ts`, `cart.test.ts`, `CartRail.tsx`, `routes/_app/pos.tsx`, `components/settings/TaxForm.tsx`, `lib/settings.ts` (+ its test if it enumerates keys).
 
@@ -414,7 +414,7 @@ export function effectiveRate(line: { rate: number; rate_override?: number }): n
 
 ---
 
-### Task D4 (E-09): Invoice detail, products report, docs
+### Task 4 (D4, E-09): Invoice detail, products report, docs
 
 **Files:** Modify `backend/internal/reports/queries.go`, `queries_db_test.go`, `export.go` (if columns are enumerated there), `frontend/src/components/invoices/InvoiceDrawer.tsx`, `frontend/src/components/reports/reportColumns.tsx`, `frontend/src/types/index.ts`, `CLAUDE.md`, `docs/superpowers/specs/2026-09-19-elevon-lpg-pos-design.md`.
 

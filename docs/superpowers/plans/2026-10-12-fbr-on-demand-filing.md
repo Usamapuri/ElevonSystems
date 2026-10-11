@@ -71,7 +71,7 @@ scripts/fbr-sandbox-checks.http                  the §5 checks
 
 ---
 
-### Task B1 (E-07): Migration 005 and the two token slots
+### Task 1 (B1, E-07): Migration 005 and the two token slots
 
 **Files:** Create `backend/migrations/005_fiscal_on_demand.sql`. Modify `internal/fiscal/config.go`, `config_test.go`, `config_db_test.go`, `submit.go` (one call site), `internal/settings/settings.go`, `settings_test.go`, `internal/handlers/settings_db_test.go`.
 
@@ -169,7 +169,7 @@ Note: `fiscal_audit_events` is append-only by trigger, but `ON DELETE SET NULL` 
 
 ---
 
-### Task B2 (E-07): Combined-invoice payload
+### Task 2 (B2, E-07): Combined-invoice payload
 
 **Files:** Modify `internal/fiscal/payload.go`, `payload_test.go`. Create `internal/fiscal/testdata/batch_two_invoices.json`.
 
@@ -273,7 +273,7 @@ func BuildBatchInvoice(in BatchInput, cfg Config) (DIInvoice, error) {
 
 ---
 
-### Task B3 (E-07): Batches — eligibility, claim, SubmitBatch
+### Task 3 (B3, E-07): Batches — eligibility, claim, SubmitBatch
 
 **Files:** Create `internal/fiscal/batch.go`, `batch_db_test.go`. Modify `submit.go`, `ledger.go`, `audit.go`, `submit_ledger_first_contract_test.go`.
 
@@ -403,7 +403,7 @@ func applyBatch(db *sql.DB, batchID uuid.UUID, number string) error {
 
 ---
 
-### Task B4 (E-07): Queue, worker, `file_fbr` on create, void rules
+### Task 4 (B4, E-07): Queue, worker, `file_fbr` on create, void rules
 
 **Files:** Create `internal/fiscal/queue.go`, `queue_db_test.go`. Modify `internal/models/invoice.go`, `internal/invoice/load.go`, `internal/handlers/invoices.go`, `invoices_db_test.go`, `backend/main.go`.
 
@@ -487,7 +487,7 @@ if fiscalStatus == "pending" {
 
 ---
 
-### Task B5 (E-07): Admin endpoints, the Settings test, pending summary
+### Task 5 (B5, E-07): Admin endpoints, the Settings test, pending summary
 
 **Files:** Create `internal/fiscal/probe.go`, `probe_test.go`, `reference.go`, `reference_test.go`, `pending.go`, `internal/handlers/fiscal.go`, `fiscal_db_test.go`. Modify `internal/api/routes.go`, `internal/reports/queries.go`, `queries_db_test.go`.
 
@@ -553,7 +553,7 @@ Nothing in `dayops`, `handlers/invoices.go` or the day-close handlers may import
 
 ---
 
-### Task B6 (E-07): Settings → FBR tab with the two-environment test
+### Task 6 (B6, E-07): Settings → FBR tab with the two-environment test
 
 **Files:** Create `frontend/src/lib/fiscal.ts`, `fiscal.test.ts`, `lib/print/fbrQr.ts`, `components/settings/FiscalForm.tsx`, `FiscalEnvCard.tsx`, `FiscalTestDialog.tsx`. Modify `frontend/package.json` (`qrcode`, `@types/qrcode`), `types/index.ts`, `api/client.ts`, `routes/_app/settings.tsx`.
 
@@ -584,7 +584,7 @@ export function fbrQrDataUrl(invoiceNumber: string): Promise<string>   // qrcode
 
 ---
 
-### Task B7 (E-07): Till button, pending line, File with FBR screen
+### Task 7 (B7, E-07): Till button, pending line, File with FBR screen
 
 **Files:** Create `components/fiscal/FileWithFbr.tsx`, `BatchList.tsx`, `routes/_app/fbr.tsx`. Modify `lib/fiscal.ts` (+test), `types/index.ts`, `api/client.ts`, `components/pos/CartRail.tsx`, `routes/_app/pos.tsx`, `components/shell/Sidebar.tsx`, `components/invoices/InvoiceDrawer.tsx`, `InvoiceTable.tsx`, `routes/_app/dashboard.tsx` (or its card component).
 
@@ -614,7 +614,7 @@ export function ineligibleReason(reason: EligibleInvoice['reason']): string
 
 ---
 
-### Task B8 (E-07): FBR block on receipts, fiscal report columns
+### Task 8 (B8, E-07): FBR block on receipts, fiscal report columns
 
 **Files:** Create `lib/print/fbrBlock.ts`, `fbrBlock.test.ts`, `components/reports/FiscalQueueTab.tsx`. Modify `lib/print/receipt.ts`, `invoiceA4.ts`, `printInvoice.ts`, `receipt.test.ts`, `components/reports/reportColumns.tsx`, `ReportsTabs.tsx`.
 
@@ -629,7 +629,7 @@ export function ineligibleReason(reason: EligibleInvoice['reason']): string
 
 ---
 
-### Task B9 (E-07): Sandbox checks, docs
+### Task 9 (B9, E-07): Sandbox checks, docs
 
 **Files:** Create `scripts/fbr-sandbox-checks.http`, `audit/FBR_SANDBOX_2026-10-12.md` (dated the day it is run). Modify `docs/superpowers/specs/2026-09-19-elevon-lpg-pos-design.md`, `docs/superpowers/plans/2026-09-21-phase-7-fbr-digital-invoicing.md`, `CLAUDE.md`, `backend/.env.example`.
 
