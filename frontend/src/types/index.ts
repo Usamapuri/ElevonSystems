@@ -40,7 +40,7 @@ export interface LoginResponse {
   user: User
 }
 
-/** Mirrors the 21 keys seeded in backend/migrations/001_init.sql. Tax rates are fractions. */
+/** Mirrors the public setting keys seeded in backend/migrations (001_init, 004_deal_rates). Tax rates are fractions. */
 export interface AppSettings {
   business_name: string
   business_address: string
@@ -55,6 +55,8 @@ export interface AppSettings {
   tax_rate_credit: number | null
   further_tax_rate: number
   default_hs_code: string
+  /** Rs per kg a cashier may move a line's rate without an admin PIN. */
+  rate_override_band: number
   receipt_paper_width_mm: 58 | 80
   receipt_printable_area_mm: number
   receipt_logo_url: string
@@ -421,7 +423,13 @@ export interface InvoiceLine {
   entered_as: EnteredAs | null
   gross_weight: number | null
   tare_weight: number | null
+  /** The rate charged. list_rate is products.rate at the time; they differ
+   * only on a deal-rate line, and rate_approved_by names the admin whose PIN
+   * approved a rate outside the band. */
   unit_price: number
+  list_rate: number
+  rate_approved_by: string | null
+  rate_approved_by_name: string | null
   line_total: number
   line_discount: number
   line_tax: number
@@ -472,14 +480,16 @@ export interface Invoice {
   customer_balance_after: number | null
 }
 
-/** One cart line as submitted. There is deliberately no money field: the
- * server prices every line from products.rate. */
+/** One cart line as submitted. The only money-adjacent field is a deal
+ * rate: the server prices every line from products.rate or from a
+ * rate_override it has band-checked or PIN-approved. */
 export interface InvoiceLineRequest {
   product_id: string
   quantity: number
   entered_as: EnteredAs
   gross_weight?: number
   tare_weight?: number
+  rate_override?: number
 }
 
 /** POST /invoices — create and settle in one call. `client_op_id` is the

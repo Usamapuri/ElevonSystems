@@ -36,6 +36,7 @@ const FALLBACK_SETTINGS: AppSettings = {
   business_strn: '',
   business_province: '',
   day_boundary_hour: 0,
+  rate_override_band: 0,
   tax_rate_cash: 0,
   tax_rate_card: 0,
   tax_rate_online: 0,

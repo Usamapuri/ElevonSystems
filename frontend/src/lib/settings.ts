@@ -57,6 +57,8 @@ export const taxSchema = z.object({
   tax_rate_credit: optionalPercent,
   further_tax_rate: percent,
   default_hs_code: z.union([z.literal(''), z.string().trim().regex(/^\d{4}\.\d{4}$/, 'Format is 2711.1910')]),
+  /** Rs per kg, 2 dp. 0 means every deal rate needs an admin PIN. */
+  rate_override_band: z.string().trim().regex(/^\d{1,6}(\.\d{1,2})?$/, 'Enter rupees per kg such as 2 or 2.50'),
 })
 export type TaxFormValues = z.infer<typeof taxSchema>
 
@@ -68,6 +70,7 @@ export function taxFromSettings(s: AppSettings): TaxFormValues {
     tax_rate_credit: fractionToPercent(s.tax_rate_credit),
     further_tax_rate: fractionToPercent(s.further_tax_rate),
     default_hs_code: s.default_hs_code,
+    rate_override_band: String(s.rate_override_band),
   }
 }
 
@@ -78,6 +81,7 @@ export function taxToPatch(v: TaxFormValues): SettingsPatch {
     tax_rate_online: percentToFraction(v.tax_rate_online),
     tax_rate_credit: v.tax_rate_credit === '' ? null : percentToFraction(v.tax_rate_credit),
     further_tax_rate: percentToFraction(v.further_tax_rate),
+    rate_override_band: Math.round(Number(v.rate_override_band) * 100) / 100,
     default_hs_code: v.default_hs_code,
   }
 }

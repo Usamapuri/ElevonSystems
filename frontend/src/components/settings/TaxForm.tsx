@@ -47,6 +47,14 @@ export function TaxForm({ settings }: { settings: AppSettings }) {
           >
             <Input id="default_hs_code" placeholder="2711.1910" {...form.register('default_hs_code')} />
           </Field>
+          <Field
+            label="Rate change without PIN (Rs per kg)"
+            htmlFor="rate_override_band"
+            error={errors.rate_override_band?.message}
+            hint="A cashier may move a line's rate this far from the list rate on their own. 0 means every rate change needs an admin PIN."
+          >
+            <Input id="rate_override_band" inputMode="decimal" placeholder="0" {...form.register('rate_override_band')} />
+          </Field>
           <div className="flex items-end justify-end md:col-span-2">
             <Button type="submit" disabled={!isDirty || save.isPending}>
               {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save tax settings'}

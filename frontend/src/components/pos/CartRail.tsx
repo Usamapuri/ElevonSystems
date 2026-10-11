@@ -18,6 +18,7 @@ import { formatKg } from '@/lib/weight'
 import type { Totals } from '@/lib/pricing'
 import type { Customer, PaymentMethod } from '@/types'
 import type { CartAction, CartLine, CartState } from './cart'
+import { effectiveRate } from './dealRate'
 
 interface Props {
   cart: CartState
@@ -32,6 +33,8 @@ interface Props {
    * rail always says which rate this tender attracts. */
   taxRate: number
   onEditLine: (line: CartLine) => void
+  /** Opens the deal-rate field for the line. */
+  onRateLine: (line: CartLine) => void
   onCharge: () => void
   chargeDisabled: boolean
   /** Shown under the Charge button when it is off. */
@@ -57,6 +60,7 @@ export function CartRail({
   tender,
   taxRate,
   onEditLine,
+  onRateLine,
   onCharge,
   chargeDisabled,
   chargeHint,
@@ -98,7 +102,7 @@ export function CartRail({
                     >
                       <p className="truncate text-sm font-semibold">{line.product_name}</p>
                       <p className="tabular text-xs text-muted-foreground">
-                        {formatKg(line.quantity)} kg at {line.rate.toFixed(2)}
+                        {formatKg(line.quantity)} kg
                         {line.entered_as === 'gross_tare' && line.gross_weight !== undefined && line.tare_weight !== undefined && (
                           <> — {formatKg(line.tare_weight)} before, {formatKg(line.gross_weight)} after</>
                         )}
@@ -109,8 +113,17 @@ export function CartRail({
                       </p>
                     </button>
                     <div className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        className="tabular flex h-11 flex-col items-end justify-center rounded-md px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={`Rate ${effectiveRate(line).toFixed(2)} per kg — tap to change`}
+                        onClick={() => onRateLine(line)}
+                      >
+                        {line.rate_override !== undefined && <span className="line-through">{line.rate.toFixed(2)}</span>}
+                        <span className={cn(line.rate_override !== undefined && 'text-foreground')}>@ {effectiveRate(line).toFixed(2)}</span>
+                      </button>
                       <span className="tabular text-sm font-bold">
-                        <Money amount={lineTotal ? lineTotal.line_total : line.quantity * line.rate} />
+                        <Money amount={lineTotal ? lineTotal.line_total : line.quantity * effectiveRate(line)} />
                       </span>
                       <Button variant="ghost" size="icon" className="h-11 w-11" aria-label="Edit line" onClick={() => onEditLine(line)}>
                         <Pencil className="h-4 w-4" />

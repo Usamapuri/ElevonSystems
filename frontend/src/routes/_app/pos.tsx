@@ -25,6 +25,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient, { ApiClientError } from '@/api/client'
 import { CartRail } from '@/components/pos/CartRail'
+import { RateDialog } from '@/components/pos/RateDialog'
 import { DayGateBanner } from '@/components/pos/DayGateBanner'
 import { ProductTiles } from '@/components/pos/ProductTiles'
 import { RECENT_INVOICES_KEY, RecentInvoices } from '@/components/pos/RecentInvoices'
@@ -76,6 +77,10 @@ function PosPage() {
   const [chargeError, setChargeError] = useState<string | null>(null)
   const [pinOpen, setPinOpen] = useState(false)
   const [pinError, setPinError] = useState<string | null>(null)
+  /** Which approval the PIN modal is asking for: the copy differs, the
+   * retry (same body, same client_op_id, plus the PIN) does not. */
+  const [pinFor, setPinFor] = useState<'credit_limit' | 'rate_override'>('credit_limit')
+  const [rateLine, setRateLine] = useState<CartLine | null>(null)
   const [gateOverride, setGateOverride] = useState<DayGate | null>(null)
 
   const searchRef = useRef<HTMLInputElement>(null)
@@ -209,8 +214,9 @@ function PosPage() {
         qc.invalidateQueries({ queryKey: DAY_CURRENT_KEY })
         return
       }
-      if (code === 'credit_limit_exceeded') {
+      if (code === 'credit_limit_exceeded' || code === 'rate_override_pin_required') {
         // Same attempt, same client_op_id — the retry carries the PIN.
+        setPinFor(code === 'credit_limit_exceeded' ? 'credit_limit' : 'rate_override')
         setChargeError(message)
         setPinError(null)
         setPinOpen(true)
@@ -341,6 +347,7 @@ function PosPage() {
           tender={tender}
           taxRate={taxRate}
           onEditLine={openPadForLine}
+          onRateLine={setRateLine}
           onCharge={openTender}
           // Also off while a POST is in flight: the button is the other way
           // into openTender, and a second press must not re-key a live
@@ -393,6 +400,17 @@ function PosPage() {
         }}
       />
 
+      <RateDialog
+        line={rateLine}
+        band={settings?.rate_override_band ?? 0}
+        open={rateLine !== null}
+        onOpenChange={(open) => !open && setRateLine(null)}
+        onConfirm={(rate) => {
+          if (rateLine) dispatch({ type: 'set_rate', key: rateLine.key, rate })
+          setRateLine(null)
+        }}
+      />
+
       <PinEntryModal
         open={pinOpen}
         onOpenChange={(open) => {
@@ -402,9 +420,9 @@ function PosPage() {
           setPinOpen(open)
           if (!open) setPinError(null)
         }}
-        title="Credit limit"
+        title={pinFor === 'rate_override' ? 'Admin PIN to approve this rate' : 'Credit limit'}
         description={chargeError ?? 'An admin PIN can let this sale through.'}
-        submitLabel="Override and charge"
+        submitLabel={pinFor === 'rate_override' ? 'Approve and charge' : 'Override and charge'}
         pending={charge.isPending}
         error={pinError}
         onSubmit={(pin) => {

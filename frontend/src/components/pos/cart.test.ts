@@ -158,3 +158,32 @@ describe('pricingLines / requestLines', () => {
     ])
   })
 })
+
+describe('cartReducer — set_rate (deal rates, spec 2026-10-12 §3)', () => {
+  it('stores a deal rate on the line', () => {
+    const s = cartReducer(withLines(draft({ rate: 250 })), { type: 'set_rate', key: 'line-1', rate: 249.5 })
+    expect(s.lines[0].rate_override).toBe(249.5)
+    expect(s.lines[0].rate).toBe(250)
+  })
+  it('clears the override when set back to the list rate or to null', () => {
+    const over = cartReducer(withLines(draft({ rate: 250 })), { type: 'set_rate', key: 'line-1', rate: 240 })
+    expect(cartReducer(over, { type: 'set_rate', key: 'line-1', rate: 250 }).lines[0].rate_override).toBeUndefined()
+    expect(cartReducer(over, { type: 'set_rate', key: 'line-1', rate: null }).lines[0].rate_override).toBeUndefined()
+  })
+  it('recomputes an amount-mode quantity from the typed amount at the new rate', () => {
+    const s = cartReducer(
+      withLines(draft({ rate: 250, entered_as: 'amount', typed_amount: 50000, quantity: 200 })),
+      { type: 'set_rate', key: 'line-1', rate: 249.5 },
+    )
+    expect(s.lines[0].quantity).toBe(200.401)
+    const back = cartReducer(s, { type: 'set_rate', key: 'line-1', rate: null })
+    expect(back.lines[0].quantity).toBe(200)
+  })
+  it('prices and submits at the deal rate, and sends no rate_override otherwise', () => {
+    const s = cartReducer(withLines(draft({ rate: 250 }), draft({ rate: 250 })), { type: 'set_rate', key: 'line-1', rate: 249.5 })
+    expect(pricingLines(s).map((l) => l.rate)).toEqual([249.5, 250])
+    const req = requestLines(s)
+    expect(req[0].rate_override).toBe(249.5)
+    expect('rate_override' in req[1]).toBe(false)
+  })
+})
