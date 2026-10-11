@@ -108,7 +108,24 @@ An invoice is in at most one non-failed batch, enforced by the status check unde
 - Tax report: per band, counts and amounts for filed (`synced` + `covered`), unfiled and failed.
 - Fiscal queue tab: batches and single filings, with status, FBR number, error code and retry.
 
-### 2.7 Removed from the Phase 7 plan
+### 2.7 Settings → FBR: two tokens and a test panel
+
+Added 2026-10-12 at the owner's request.
+
+**Two token slots.** The single private key `fiscal_api_key_enc` is replaced by `fiscal_api_key_sandbox_enc` and `fiscal_api_key_production_enc` (both private, both AES-GCM with `FISCAL_SECRETS_KEY`; migration `004` moves an existing value into the sandbox slot). `PUT /admin/fiscal/token` and `DELETE /admin/fiscal/token` take `environment: "sandbox" | "production"`. Status returns `set` and `masked` (`****` + last 4) per slot, never a token. `fiscal_config.is_sandbox` still chooses which environment live filing uses, and the token for that environment is the one read. The production slot cannot be cleared while fiscal is enabled in production mode, and likewise for sandbox.
+
+**Test per environment.** The tab has a Sandbox card and a Production card, each with its token field, masked state and a **Run test** button. `POST /admin/fiscal/test {environment}` builds the one-line sample sale already specified (1.000 kg, value 100.00, tax from `tax_rate_cash`, HS from `default_hs_code`, walk-in buyer) and:
+
+| Environment | What it sends | Result |
+|---|---|---|
+| Sandbox | validate, then post, to the `_sb` URLs | FBR invoice number and QR |
+| Production | **validate only** | valid / invalid; no number, because posting would file a real invoice against the store's NTN |
+
+The sandbox test still obeys the sandbox-in-release guard (`sandbox_in_release` unless `FISCAL_ALLOW_SANDBOX=true`). Every test writes a `fiscal_audit_events` row of kind `test`; a sandbox test's posted number is not written to `fiscal_invoices`.
+
+**Result dialog.** Passed / Failed badge and the environment; the URL(s) called; the exact outbound JSON body with a Download JSON button; the FBR invoice number and its QR (sandbox pass only), rendered by the same builder the receipt uses; the raw gateway response; and on failure the error code, message and offending line index. The response shape is `{ok, environment, steps: [{phase, url, status_code, error_code, error, line, raw_response}], request_body, invoice_number}`. The request body never contains the token (it travels in the header).
+
+### 2.8 Removed from the Phase 7 plan
 
 The "every completed sale is filed" goal and F4's unconditional create hook. The queue, worker, ledger, audit trail, Settings → FBR tab, test connection and reference refresh are unchanged.
 
