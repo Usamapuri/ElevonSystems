@@ -148,8 +148,8 @@ func seedInvoice(t *testing.T, db *sql.DB, in invoiceIn) uuid.UUID {
 func seedLine(t *testing.T, db *sql.DB, invoiceID, productID uuid.UUID, name string, qty, unitPrice, lineTotal float64) {
 	t.Helper()
 	if _, err := db.Exec(`
-		INSERT INTO invoice_lines (invoice_id, product_id, product_name, quantity, unit_price, line_total)
-		VALUES ($1, $2, $3, $4, $5, $6)`, invoiceID, productID, name, qty, unitPrice, lineTotal); err != nil {
+		INSERT INTO invoice_lines (invoice_id, product_id, product_name, quantity, unit_price, list_rate, line_total)
+		VALUES ($1, $2, $3, $4, $5, $5, $6)`, invoiceID, productID, name, qty, unitPrice, lineTotal); err != nil {
 		t.Fatalf("seed line for %s: %v", name, err)
 	}
 }

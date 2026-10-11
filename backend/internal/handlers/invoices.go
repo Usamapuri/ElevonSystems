@@ -706,12 +706,12 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 		line, err := scanInvoiceLine(tx.QueryRow(`
 			INSERT INTO invoice_lines (invoice_id, product_id, product_name, hs_code, fbr_uom,
 				quantity, entered_as, gross_weight, tare_weight,
-				unit_price, line_total, line_discount, line_tax, sort_order)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+				unit_price, line_total, line_discount, line_tax, sort_order, list_rate)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 			RETURNING `+invoiceLineColumns,
 			inv.ID, prod.id, prod.name, prod.hsCode, prod.fbrUoM,
 			l.quantity, l.enteredAs, l.grossWeight, l.tareWeight,
-			out.UnitPrice, out.LineTotal, out.LineDiscount, out.LineTax, i))
+			out.UnitPrice, out.LineTotal, out.LineDiscount, out.LineTax, i, prod.rate))
 		if err != nil {
 			log.Printf("invoice create: line %d: %v", i+1, err)
 			c.JSON(http.StatusInternalServerError, models.Fail("Could not record the sale", "internal_error"))

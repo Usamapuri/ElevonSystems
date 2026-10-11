@@ -55,6 +55,9 @@ var rules = map[string]rule{
 	"tax_rate_credit":  nullable(number(0, 1)),
 	"further_tax_rate": notNull(number(0, 1)),
 	"default_hs_code":  notNull(hsCode),
+	// Rs per kg a cashier may move a line's rate without an admin PIN
+	// (004_deal_rates). 0 means every deal rate needs a PIN.
+	"rate_override_band": notNull(number(0, 100000)),
 
 	"receipt_paper_width_mm":    notNull(oneOfInt(58, 80)),
 	"receipt_printable_area_mm": notNull(integer(40, 80)),

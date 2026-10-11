@@ -28,8 +28,15 @@ type InvoiceLine struct {
 	GrossWeight *float64 `json:"gross_weight"`
 	TareWeight  *float64 `json:"tare_weight"`
 
-	UnitPrice    float64 `json:"unit_price"`
-	LineTotal    float64 `json:"line_total"`
+	// UnitPrice is the rate actually charged; ListRate is products.rate at
+	// the time of sale. They differ only on a deal-rate line, and
+	// RateApprovedBy names the admin whose PIN approved a deal rate outside
+	// the owner's band (nil inside it, or at the list rate).
+	UnitPrice          float64    `json:"unit_price"`
+	ListRate           float64    `json:"list_rate"`
+	RateApprovedBy     *uuid.UUID `json:"rate_approved_by"`
+	RateApprovedByName *string    `json:"rate_approved_by_name"`
+	LineTotal          float64    `json:"line_total"`
 	LineDiscount float64 `json:"line_discount"`
 	LineTax      float64 `json:"line_tax"`
 	SortOrder    int     `json:"sort_order"`
@@ -118,6 +125,11 @@ type InvoiceLineRequest struct {
 	EnteredAs   string   `json:"entered_as"`
 	GrossWeight *float64 `json:"gross_weight"`
 	TareWeight  *float64 `json:"tare_weight"`
+	// RateOverride is a deal rate in Rs/kg for this line, the one number a
+	// client may name that touches money. The server still computes every
+	// rupee from it, band-checks it against products.rate, and demands an
+	// admin PIN outside the band (spec 2026-10-12 §3).
+	RateOverride *float64 `json:"rate_override"`
 }
 
 // CreateInvoiceRequest is POST /invoices: create and settle in one call.

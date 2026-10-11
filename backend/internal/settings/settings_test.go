@@ -88,10 +88,10 @@ func TestCheckConsistency_PrintableAreaFitsPaper(t *testing.T) {
 }
 
 func TestKeys_MatchTheSeededList(t *testing.T) {
-	if n := len(Keys()); n != 24 {
-		t.Fatalf("001_init seeds 21 keys and 003_fiscal three more; rules cover %d", n)
+	if n := len(Keys()); n != 25 {
+		t.Fatalf("001_init seeds 21 keys, 003_fiscal three more and 004_deal_rates one; rules cover %d", n)
 	}
-	for _, k := range []string{"fiscal_config", "fiscal_api_key_enc", "fiscal_reference"} {
+	for _, k := range []string{"fiscal_config", "fiscal_api_key_enc", "fiscal_reference", "rate_override_band"} {
 		if !Known(k) {
 			t.Errorf("%s is seeded by 003_fiscal and needs a rule", k)
 		}
@@ -182,5 +182,19 @@ func TestCheckConsistency_FiscalGate(t *testing.T) {
 	exact["fiscal_config"] = json.RawMessage(`{"enabled":true,"rate_desc":"18.0%","default_uom":"KG"}`)
 	if err := CheckConsistency(exact); err != nil {
 		t.Fatalf("18.0%% is the same rate as 18%%: %v", err)
+	}
+}
+
+// rate_override_band is rupees per kg a cashier may move a rate without a
+// PIN (spec 2026-10-12 §3.1): a non-negative number, never null.
+func TestRateOverrideBand_Rule(t *testing.T) {
+	for raw, ok := range map[string]bool{`0`: true, `5`: true, `2.5`: true, `100000`: true, `-1`: false, `100001`: false, `null`: false, `"5"`: false} {
+		err := Validate("rate_override_band", json.RawMessage(raw))
+		if ok && err != nil {
+			t.Errorf("%s should be accepted: %v", raw, err)
+		}
+		if !ok && err == nil {
+			t.Errorf("%s should be refused", raw)
+		}
 	}
 }

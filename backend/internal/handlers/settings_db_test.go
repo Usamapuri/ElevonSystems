@@ -26,8 +26,8 @@ func TestSettings_GetUpdateValidateAndReloadBoundary(t *testing.T) {
 	w := doJSON(r, http.MethodGet, "/settings", nil)
 	var all map[string]json.RawMessage
 	dataAs(t, decodeEnvelope(t, w), &all)
-	// 24 keys are seeded; the private one is withheld from every response.
-	if w.Code != http.StatusOK || len(all) != 23 || string(all["tax_rate_cash"]) != "0" {
+	// 25 keys are seeded; the private one is withheld from every response.
+	if w.Code != http.StatusOK || len(all) != 24 || string(all["tax_rate_cash"]) != "0" {
 		t.Fatalf("seeded settings: %d %d %s", w.Code, len(all), all["tax_rate_cash"])
 	}
 

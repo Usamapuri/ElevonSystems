@@ -37,7 +37,8 @@ const Columns = `id, invoice_number, client_op_id, business_day_id, business_dat
 // LineColumns is the invoice_lines projection, on the same rule as Columns.
 const LineColumns = `id, invoice_id, product_id, product_name, hs_code, fbr_uom,
 	quantity::float8, entered_as, gross_weight::float8, tare_weight::float8,
-	unit_price::float8, line_total::float8, line_discount::float8, line_tax::float8, sort_order`
+	unit_price::float8, line_total::float8, line_discount::float8, line_tax::float8, sort_order,
+	list_rate::float8, rate_approved_by, rate_approved_by_name`
 
 // ScanInvoice reads one Columns row.
 func ScanInvoice(row RowScanner) (models.Invoice, error) {
@@ -57,7 +58,8 @@ func ScanLine(row RowScanner) (models.InvoiceLine, error) {
 	var l models.InvoiceLine
 	err := row.Scan(&l.ID, &l.InvoiceID, &l.ProductID, &l.ProductName, &l.HSCode, &l.FBRUoM,
 		&l.Quantity, &l.EnteredAs, &l.GrossWeight, &l.TareWeight,
-		&l.UnitPrice, &l.LineTotal, &l.LineDiscount, &l.LineTax, &l.SortOrder)
+		&l.UnitPrice, &l.LineTotal, &l.LineDiscount, &l.LineTax, &l.SortOrder,
+		&l.ListRate, &l.RateApprovedBy, &l.RateApprovedByName)
 	return l, err
 }
 

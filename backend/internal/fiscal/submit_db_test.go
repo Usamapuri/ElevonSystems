@@ -190,8 +190,8 @@ func seedSale(t *testing.T, db *sql.DB, customerID *uuid.UUID) uuid.UUID {
 	// hs_code is deliberately NULL so the payload has to fall back to
 	// settings.default_hs_code (CLAUDE.md invariant 7).
 	if _, err := db.Exec(`INSERT INTO invoice_lines
-		(invoice_id, product_name, quantity, unit_price, line_total, line_discount, line_tax, sort_order)
-		VALUES ($1, 'LPG bulk', 12.500, 265.00, 3312.50, 0, 596.25, 0)`, invoiceID); err != nil {
+		(invoice_id, product_name, quantity, unit_price, list_rate, line_total, line_discount, line_tax, sort_order)
+		VALUES ($1, 'LPG bulk', 12.500, 265.00, 265.00, 3312.50, 0, 596.25, 0)`, invoiceID); err != nil {
 		t.Fatalf("seed line: %v", err)
 	}
 	return invoiceID
