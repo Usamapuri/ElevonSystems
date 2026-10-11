@@ -496,6 +496,7 @@ Each phase ends green (§10 gate) and is one PR from `dev`.
 | **6 First deploy** | Railway project, env, admin created, smoke test on the real printer, `docs/DEPLOY.md`, `verify` skill | Go-live candidate with fiscal off. |
 | **7 FBR DI** | `fiscal/` port, settings panel with test connection + reference refresh, payload builder with golden tests, inline + queued submission, credit note on void, receipt block, fiscal queue report; **sandbox run of SN001/SN002 (and SN026 if assigned) with the tenant's token** | §7. Blocked on the tenant's IRIS sandbox token and the advisor's HS/rate confirmation. |
 | **8 Desktop** | Electron wrapper (`electron/` port): silent print, auto-update from a new `Usamapuri/elevon-pos-releases` repo, own appId/GUID | Frontend unchanged. |
+| **9 Deal rates** | Per-line deal rate at the till, band-checked or admin-PIN-approved server-side; `list_rate` + approver on `invoice_lines`; `rate_override_band` setting; deal variance on the products report | Addendum `docs/superpowers/specs/2026-10-12-on-demand-fbr-and-deal-rates-design.md` §3, plan `docs/superpowers/plans/2026-10-12-deal-rates.md`. **DONE 2026-10-12** on `dev`. Deviation: the approver's name is snapshotted on the line beside the id. Invariant 6 reworded in CLAUDE.md. |
 | Later candidates | Empty-cylinder deposits and returns, receipt-to-invoice allocation, staged rates, weighbridge serial feed, `manager` role, second store | Each is its own spec. |
 
 ---

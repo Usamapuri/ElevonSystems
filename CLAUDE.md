@@ -29,7 +29,7 @@ This repo is a **sibling** of Bhookly Retail (`ArtyReal/POS-System-General`, loc
 backend/main.go                     boot: env → DB → Migrate → EnsureInitialAdmin → router
 backend/migrations/NNN_*.sql        embedded, applied in order, each idempotent; cmd/migrate applies without booting
 backend/internal/api/routes.go      ALL route registration; every route inside RequireRoles
-backend/internal/settings/          the 24 setting keys, their rules, Load/LoadPublic/Save, Private, LoadDayBoundaryHour
+backend/internal/settings/          the 25 setting keys, their rules, Load/LoadPublic/Save, Private, LoadDayBoundaryHour
 backend/internal/staffpin/          admin PIN identify (bcrypt, iterates every candidate)
 backend/internal/middleware/auth.go JWT (24h, X-POS-JWT fallback), CheckTokenNotRevoked fails closed, RequireRoles
 backend/internal/util/roles.go      canonical roles ↔ frontend/src/lib/roles.ts
@@ -52,7 +52,7 @@ frontend/src/routes/                file-based routes; routeTree.gen.ts is gener
 3. `JWT_SECRET` is per store and mandatory in release mode; never hardcoded.
 4. Migrations are idempotent DDL (`migrations_idempotent_contract_test.go`) and `Migrate` runs before `EnsureInitialAdmin` (`boot_order_contract_test.go`).
 5. `SetTrustedProxies(nil)` stays (`boot_order_contract_test.go`).
-6. Invoice money is computed server-side from `products.rate`; Go and TS pricing share one fixture; `void_log`, `customer_ledger_entries`, `day_close_audit_log`, `fiscal_audit_events` are append-only; reports filter on `business_date` only; every invoice has a `business_day_id` and there is no auto-open; every rate change writes a `product_rate_history` row in the same transaction.
+6. Invoice money is computed server-side from `products.rate`, or from a per-line deal rate that is band-checked (`rate_override_band`) or admin-PIN-approved server-side and stored beside the list rate (`invoice_lines.list_rate`); Go and TS pricing share one fixture; `void_log`, `customer_ledger_entries`, `day_close_audit_log`, `fiscal_audit_events` are append-only; reports filter on `business_date` only; every invoice has a `business_day_id` and there is no auto-open; every rate change writes a `product_rate_history` row in the same transaction.
 7. (from Phase 7) no HS-code default in code; sandbox validate URL is `_sb`; sandbox config in release refuses; retries consult `fiscal_invoices` first.
 8. Customer-visible money changes (rates, rounding, tax base, further tax) are stop-and-ask: compute before/after and put it to the owner first.
 

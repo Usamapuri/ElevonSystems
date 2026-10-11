@@ -309,13 +309,13 @@ func (h *ReportsHandler) productsView(ctx context.Context, r reports.Range) (*re
 		rows:    rows,
 		totals:  &totals,
 		sheet:   reportSheets["products"],
-		headers: []string{"Product", "Kg", "Invoices", "Gross", "Share %"},
+		headers: []string{"Product", "Kg", "Invoices", "Gross", "Deal variance", "Share %"},
 	}
 	for _, row := range rows {
 		v.csvRows = append(v.csvRows, []string{
-			csvText(row.Name), kg3(row.Kg), strconv.Itoa(row.Invoices), money2(row.Gross), money2(row.Share),
+			csvText(row.Name), kg3(row.Kg), strconv.Itoa(row.Invoices), money2(row.Gross), money2(row.DealVariance), money2(row.Share),
 		})
-		v.xlsRows = append(v.xlsRows, []any{row.Name, row.Kg, row.Invoices, row.Gross, row.Share})
+		v.xlsRows = append(v.xlsRows, []any{row.Name, row.Kg, row.Invoices, row.Gross, row.DealVariance, row.Share})
 	}
 	return v, nil
 }

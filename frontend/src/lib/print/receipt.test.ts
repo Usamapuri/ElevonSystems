@@ -196,6 +196,16 @@ describe('buildReceiptHtml — lines and money', () => {
     expect(html).toContain('3,312.50')
   })
 
+  it('prints the charged rate on a deal-rate line, never the list rate', () => {
+    const deal: Invoice = {
+      ...cashInvoice,
+      lines: [{ ...cashLine, unit_price: 249.5, list_rate: 265, line_total: 3118.75 }],
+    }
+    const html = buildReceiptHtml(deal, settings)
+    expect(html).toContain('12.500 kg &times; 249.50')
+    expect(html).not.toContain('265.00')
+  })
+
   it('prints the before-fill and after-fill weights under a weighed line', () => {
     const html = buildReceiptHtml(creditInvoice, settings)
     expect(html).toContain('Before fill 15.200 kg, after fill 26.400 kg')

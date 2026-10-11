@@ -236,7 +236,15 @@ export function InvoiceDrawer({ invoiceId, onOpenChange }: Props) {
                           )}
                         </TableCell>
                         <TableCell className="text-right tabular">{formatKgGrouped(line.quantity)}</TableCell>
-                        <TableCell className="text-right tabular">{formatMoney(line.unit_price)}</TableCell>
+                        <TableCell className="text-right tabular">
+                          {formatMoney(line.unit_price)}
+                          {line.unit_price !== line.list_rate && (
+                            <span className="block text-xs text-muted-foreground">
+                              list {formatMoney(line.list_rate)}
+                              {line.rate_approved_by_name ? ` · approved by ${line.rate_approved_by_name}` : ''}
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right tabular">{formatMoney(line.line_total)}</TableCell>
                         <TableCell className="hidden sm:table-cell text-right tabular">
                           {formatMoney(line.line_tax)}

@@ -79,6 +79,12 @@ export const productColumns: ReportColumn<ProductRow>[] = [
   { key: 'kg', label: 'Kg', align: 'right', format: (r) => formatKgGrouped(r.kg) },
   { key: 'invoices', label: 'Invoices', align: 'right', format: (r) => String(r.invoices) },
   { key: 'gross', label: 'Gross', align: 'right', format: (r) => formatMoney(r.gross) },
+  {
+    key: 'deal_variance',
+    label: 'Deal variance',
+    align: 'right',
+    format: (r) => <span className={r.deal_variance < 0 ? 'text-destructive' : undefined}>{signedMoney(r.deal_variance)}</span>,
+  },
   { key: 'share', label: 'Share %', align: 'right', format: (r) => plainPercentLabel(r.share) },
 ]
 

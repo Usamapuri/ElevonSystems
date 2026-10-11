@@ -632,6 +632,8 @@ export interface ProductRow {
   invoices: number
   gross: number
   share: number
+  /** Σ (unit_price − list_rate) × kg: what deal rates gave away (negative) or added. */
+  deal_variance: number
 }
 
 /** The dashboard's recent-sales row — deliberately not the full Invoice

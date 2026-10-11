@@ -18,14 +18,17 @@ import (
 // product has since been deleted (invoice_lines.product_id is ON DELETE SET
 // NULL); the line's snapshot name is used in that case, which is why the
 // invoice keeps one. Share is a percentage of the window's gross, so the
-// column sums to 100 whenever anything was sold.
+// column sums to 100 whenever anything was sold. DealVariance is
+// Σ (unit_price − list_rate) × quantity (spec 2026-10-12 §3.5): what deal
+// rates gave away (negative) or added (positive) against the list rate.
 type ProductRow struct {
-	ProductID *uuid.UUID `json:"product_id"`
-	Name      string     `json:"name"`
-	Kg        float64    `json:"kg"`
-	Invoices  int        `json:"invoices"`
-	Gross     float64    `json:"gross"`
-	Share     float64    `json:"share"`
+	ProductID    *uuid.UUID `json:"product_id"`
+	Name         string     `json:"name"`
+	Kg           float64    `json:"kg"`
+	Invoices     int        `json:"invoices"`
+	Gross        float64    `json:"gross"`
+	Share        float64    `json:"share"`
+	DealVariance float64    `json:"deal_variance"`
 }
 
 // Products returns kg and gross by product over the window, biggest first.
@@ -56,7 +59,8 @@ func Products(ctx context.Context, db Querier, r Range) ([]ProductRow, error) {
 		       COALESCE(p.name, MIN(l.product_name))          AS name,
 		       COALESCE(SUM(l.quantity), 0)::float8           AS kg,
 		       COUNT(DISTINCT l.invoice_id)                   AS invoices,
-		       COALESCE(SUM(l.line_total), 0)::float8         AS gross
+		       COALESCE(SUM(l.line_total), 0)::float8         AS gross,
+		       COALESCE(ROUND(SUM((l.unit_price - l.list_rate) * l.quantity), 2), 0)::float8 AS deal_variance
 		FROM invoice_lines l
 		JOIN invoices i ON i.id = l.invoice_id
 		LEFT JOIN products p ON p.id = l.product_id
@@ -73,7 +77,7 @@ func Products(ctx context.Context, db Querier, r Range) ([]ProductRow, error) {
 	var total float64
 	for rows.Next() {
 		var row ProductRow
-		if err := rows.Scan(&row.ProductID, &row.Name, &row.Kg, &row.Invoices, &row.Gross); err != nil {
+		if err := rows.Scan(&row.ProductID, &row.Name, &row.Kg, &row.Invoices, &row.Gross, &row.DealVariance); err != nil {
 			return nil, err
 		}
 		total += row.Gross

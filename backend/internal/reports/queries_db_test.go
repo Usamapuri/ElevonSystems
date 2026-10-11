@@ -592,3 +592,40 @@ func TestReportsWindowOnBusinessDateNotCreatedAt(t *testing.T) {
 		t.Fatalf("day3 products = %+v", products)
 	}
 }
+
+// Deal variance (spec 2026-10-12 §3.5): Σ (unit_price − list_rate) × quantity
+// over completed lines. Negative means the product was sold under list.
+func TestProductsDealVariance(t *testing.T) {
+	db := testdb.Fresh(t)
+	cashier := seedUser(t, db, "owner", "admin")
+	dayID := seedDay(t, db, day1, "closed", 0)
+	bulk := seedProduct(t, db, "LPG bulk", 250)
+	cyl := seedProduct(t, db, "LPG cylinder", 300)
+	at := mustDate(day1).Add(10 * time.Hour)
+	mk := func(number, status string, subtotal float64) uuid.UUID {
+		return seedInvoice(t, db, invoiceIn{number: number, dayID: dayID, dateKey: day1, status: status, method: "cash",
+			cashier: cashier, cashierRef: "Owner", subtotal: subtotal, payable: subtotal, createdAt: at})
+	}
+	dealLine := func(invoiceID, productID uuid.UUID, name string, qty, charged, list float64) {
+		t.Helper()
+		if _, err := db.Exec(`INSERT INTO invoice_lines (invoice_id, product_id, product_name, quantity, unit_price, list_rate, line_total)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`, invoiceID, productID, name, qty, charged, list, qty*charged); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seedLine(t, db, mk("INV-0001", "completed", 25000), bulk, "LPG bulk", 100, 250, 25000)
+	dealLine(mk("INV-0002", "completed", 249500), bulk, "LPG bulk", 1000, 249.50, 250)
+	dealLine(mk("INV-0003", "voided", 240000), bulk, "LPG bulk", 1000, 240, 250)
+	seedLine(t, db, mk("INV-0004", "completed", 3000), cyl, "LPG cylinder", 10, 300, 3000)
+
+	rows, err := Products(ctx(), db, testRange())
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]ProductRow{}
+	for _, r := range rows {
+		byName[r.Name] = r
+	}
+	eq(t, "bulk deal variance", byName["LPG bulk"].DealVariance, -500)
+	eq(t, "cylinder deal variance", byName["LPG cylinder"].DealVariance, 0)
+}
