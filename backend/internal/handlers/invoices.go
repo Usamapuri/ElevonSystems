@@ -29,9 +29,10 @@ import (
 
 // InvoicesHandler is the money core: create-and-settle, the invoice browser
 // and whole-invoice voids (spec §6.2, §6.4). Everything money here is
-// computed by pricing.ComputeTotals from products.rate and the submitted
-// quantities — a client can submit what quantities it likes and never a
-// price.
+// computed by pricing.ComputeTotals from products.rate — or from a per-line
+// deal rate that is band-checked or PIN-approved here and stored beside the
+// list rate — and the submitted quantities. A client can submit what
+// quantities it likes and never a line total, tax or payable.
 type InvoicesHandler struct{ db *sql.DB }
 
 // NewInvoicesHandler builds an InvoicesHandler.
@@ -102,6 +103,9 @@ type parsedLine struct {
 	enteredAs   *string
 	grossWeight *float64
 	tareWeight  *float64
+	// rateOverride is the deal rate the cashier named, shape-checked only;
+	// whether it may stand is decided against the locked product row.
+	rateOverride *float64
 }
 
 // parsedInvoice is a CreateInvoiceRequest after shape validation: ids parsed,
@@ -220,6 +224,14 @@ func parseCreateInvoice(req models.CreateInvoiceRequest) (parsedInvoice, *apiErr
 				return p, badRequest("invalid_quantity", fmt.Sprintf("Line %d: gross − tare does not equal the quantity being charged", i+1))
 			}
 			line.grossWeight, line.tareWeight = &gross, &tare
+		}
+		// A deal rate is a positive rupee amount at 2 dp, like products.rate.
+		if l.RateOverride != nil {
+			if *l.RateOverride <= 0 || !validRate(*l.RateOverride) {
+				return p, badRequest("invalid_rate", fmt.Sprintf("Line %d has a rate that is not a positive rupee amount", i+1))
+			}
+			v := *l.RateOverride
+			line.rateOverride = &v
 		}
 		p.lines = append(p.lines, line)
 	}
@@ -464,7 +476,9 @@ func failDayGate(c *gin.Context, err error) bool {
 //  7. the tender's tax rate, further tax and limit enforcement, read from
 //     settings just before the transaction opens (see the note there);
 //  8. resolve the customer and the credit terms;
-//  9. price everything server-side from products.rate;
+//  8b. decide each line's rate: products.rate, or a deal rate inside the
+//      band or approved by an admin PIN;
+//  9. price everything server-side from those rates;
 //  10. the credit-limit check (it needs total_payable, so it can only run
 //     after pricing) with the admin-PIN override;
 //  11. insert the invoice, its lines and, for a credit sale, the ledger debit;
@@ -597,7 +611,74 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 		}
 	}
 
-	// 9 — price it. Rates come from the locked product rows, never the body.
+	// 8b — deal rates. A line is priced at products.rate unless the cashier
+	// named another rate; that rate stands on its own inside the owner's
+	// band and needs an admin PIN outside it (spec 2026-10-12 §3). The band
+	// is measured in whole paisa from the row lockProducts holds, so a rate
+	// change cannot widen it mid-sale.
+	//
+	// adminByPin resolves the request's PIN at most once: bcrypt is
+	// deliberately slow, and one PIN may approve both a deal rate and the
+	// credit-limit override below.
+	var pinIdentity *staffpin.Identity
+	var pinErr error
+	pinTried := false
+	adminByPin := func() (*staffpin.Identity, error) {
+		if !pinTried {
+			pinTried = true
+			id, err := staffpin.Identify(tx, p.pin, staffpin.AdminOnly)
+			if err != nil {
+				pinErr = err
+			} else {
+				pinIdentity = &id
+			}
+		}
+		return pinIdentity, pinErr
+	}
+	band := pricing.Paisa(settingNumber(all, "rate_override_band"))
+	chargedRate := make([]float64, len(p.lines))
+	approved := make([]bool, len(p.lines))
+	needPin := false
+	for i, l := range p.lines {
+		list := products[l.productID].rate
+		chargedRate[i] = list
+		if l.rateOverride == nil {
+			continue
+		}
+		diff := pricing.Paisa(*l.rateOverride) - pricing.Paisa(list)
+		if diff == 0 {
+			continue
+		}
+		chargedRate[i] = *l.rateOverride
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff > band {
+			approved[i] = true
+			needPin = true
+		}
+	}
+	var rateApprover *staffpin.Identity
+	if needPin {
+		if p.pin == "" {
+			c.JSON(http.StatusForbidden, models.Fail("This rate is outside the allowed band — an admin PIN can approve it", "rate_override_pin_required"))
+			return
+		}
+		identity, err := adminByPin()
+		if errors.Is(err, staffpin.ErrNoMatch) {
+			c.JSON(http.StatusUnauthorized, models.Fail("That PIN does not match an active admin", "invalid_pin"))
+			return
+		}
+		if err != nil {
+			log.Printf("invoice create: pin: %v", err)
+			c.JSON(http.StatusInternalServerError, models.Fail("Could not record the sale", "internal_error"))
+			return
+		}
+		rateApprover = identity
+	}
+
+	// 9 — price it. Rates come from the locked product rows or a deal rate
+	// approved in 8b, never unchecked from the body.
 	in := pricing.Input{
 		Lines:           make([]pricing.LineIn, 0, len(p.lines)),
 		DiscountAmount:  p.discountAmount,
@@ -606,8 +687,8 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 		FurtherTaxRate:  furtherTaxRate,
 		BuyerRegistered: customer != nil && customer.buyerType == "Registered",
 	}
-	for _, l := range p.lines {
-		in.Lines = append(in.Lines, pricing.LineIn{ProductID: l.productID, Quantity: l.quantity, Rate: products[l.productID].rate})
+	for i, l := range p.lines {
+		in.Lines = append(in.Lines, pricing.LineIn{ProductID: l.productID, Quantity: l.quantity, Rate: chargedRate[i]})
 	}
 	totals, err := pricing.ComputeTotals(in)
 	if err != nil {
@@ -637,7 +718,7 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 					"credit_limit_exceeded"))
 				return
 			}
-			identity, err := staffpin.Identify(tx, p.pin, staffpin.AdminOnly)
+			identity, err := adminByPin()
 			if errors.Is(err, staffpin.ErrNoMatch) {
 				// A PIN was offered and matched nobody. Answering
 				// credit_limit_exceeded here would send the cashier back to
@@ -703,15 +784,22 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 	for i, l := range p.lines {
 		prod := products[l.productID]
 		out := totals.Lines[i]
+		var approvedBy *uuid.UUID
+		var approvedByName *string
+		if approved[i] {
+			approvedBy, approvedByName = &rateApprover.UserID, &rateApprover.Name
+		}
 		line, err := scanInvoiceLine(tx.QueryRow(`
 			INSERT INTO invoice_lines (invoice_id, product_id, product_name, hs_code, fbr_uom,
 				quantity, entered_as, gross_weight, tare_weight,
-				unit_price, line_total, line_discount, line_tax, sort_order, list_rate)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+				unit_price, line_total, line_discount, line_tax, sort_order,
+				list_rate, rate_approved_by, rate_approved_by_name)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 			RETURNING `+invoiceLineColumns,
 			inv.ID, prod.id, prod.name, prod.hsCode, prod.fbrUoM,
 			l.quantity, l.enteredAs, l.grossWeight, l.tareWeight,
-			out.UnitPrice, out.LineTotal, out.LineDiscount, out.LineTax, i, prod.rate))
+			out.UnitPrice, out.LineTotal, out.LineDiscount, out.LineTax, i,
+			prod.rate, approvedBy, approvedByName))
 		if err != nil {
 			log.Printf("invoice create: line %d: %v", i+1, err)
 			c.JSON(http.StatusInternalServerError, models.Fail("Could not record the sale", "internal_error"))
