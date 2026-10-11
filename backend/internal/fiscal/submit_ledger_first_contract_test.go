@@ -42,3 +42,31 @@ func TestSubmit_ConsultsTheLedgerBeforeAnyHTTP(t *testing.T) {
 			"validate then post", validate, post)
 	}
 }
+
+// The same contract for combined invoices: SubmitBatch consults
+// fiscal_invoices (FindSyncedBatch) before handing the document to file(),
+// which is where the HTTP happens.
+func TestSubmitBatch_ConsultsTheLedgerBeforeAnyHTTP(t *testing.T) {
+	src, err := os.ReadFile("batch.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger := bytes.Index(src, []byte("FindSyncedBatch("))
+	if ledger < 0 {
+		t.Fatal("batch.go must call FindSyncedBatch")
+	}
+	send := bytes.Index(src, []byte("file("))
+	if send < 0 {
+		t.Fatal("batch.go must send through file()")
+	}
+	if ledger > send {
+		t.Fatalf("FindSyncedBatch (offset %d) must appear before file( (offset %d)", ledger, send)
+	}
+	// And file() is the only place in the package that opens a socket.
+	for _, name := range []string{"batch.go"} {
+		body, _ := os.ReadFile(name)
+		if bytes.Contains(body, []byte(".Validate(")) || bytes.Contains(body, []byte(".Post(")) {
+			t.Fatalf("%s must not call the client directly; Submit and SubmitBatch share file()", name)
+		}
+	}
+}

@@ -26,6 +26,9 @@ const (
 	// KindDebitNote files the reversal of a voided invoice (there is no
 	// Credit Note in DI — audit/FBR_SANDBOX_2026-09-21.md decision 1).
 	KindDebitNote Kind = "debit_note"
+	// KindBatch files a combined invoice covering several sales (spec
+	// 2026-10-12 §2.3); its rows key on batch_id rather than invoice_id.
+	KindBatch Kind = "batch"
 )
 
 // Audit phases and outcomes, matching migration 003's column comments.
@@ -209,62 +212,14 @@ func Submit(ctx context.Context, d Deps, invoiceID uuid.UUID, kind Kind, actor *
 		return "", err
 	}
 
-	cl := d.client(cfg, token)
-	request := string(mustJSON(payload))
-
-	started := d.now()
-	validated, err := cl.Validate(ctx, payload)
+	// 5. Validate, then post.
+	posted, number, postEvent, err := file(ctx, d, d.client(cfg, token), payload, auditRef{InvoiceID: &invoiceID, Kind: kind}, actor)
 	if err != nil {
-		Record(d.DB, Event{
-			InvoiceID: &invoiceID, Kind: string(kind), Phase: PhaseValidate, Outcome: OutcomeUnreachable,
-			LatencyMs: msSince(started, d.now()), ErrorCode: ErrorCode(err),
-			RequestExcerpt: request, ResponseExcerpt: err.Error(), CreatedBy: actor,
-		})
 		return "", err
-	}
-	if rejected := validated.Rejection(); rejected != nil {
-		Record(d.DB, Event{
-			InvoiceID: &invoiceID, Kind: string(kind), Phase: PhaseValidate, Outcome: OutcomeRejected,
-			HTTPStatus: intPtr(validated.HTTPStatus), LatencyMs: msSince(started, d.now()),
-			ErrorCode: rejected.Code, RequestExcerpt: request, ResponseExcerpt: string(validated.Raw),
-			CreatedBy: actor,
-		})
-		return "", rejected
-	}
-
-	// 5. Post.
-	started = d.now()
-	posted, err := cl.Post(ctx, payload)
-	if err != nil {
-		Record(d.DB, Event{
-			InvoiceID: &invoiceID, Kind: string(kind), Phase: PhasePost, Outcome: OutcomeUnreachable,
-			LatencyMs: msSince(started, d.now()), ErrorCode: ErrorCode(err),
-			RequestExcerpt: request, ResponseExcerpt: err.Error(), CreatedBy: actor,
-		})
-		return "", err
-	}
-	postEvent := Event{
-		InvoiceID: &invoiceID, Kind: string(kind), Phase: PhasePost,
-		HTTPStatus: intPtr(posted.HTTPStatus), LatencyMs: msSince(started, d.now()),
-		RequestExcerpt: request, ResponseExcerpt: string(posted.Raw), CreatedBy: actor,
-	}
-	if rejected := posted.Rejection(); rejected != nil {
-		postEvent.Outcome = OutcomeRejected
-		postEvent.ErrorCode = rejected.Code
-		Record(d.DB, postEvent)
-		return "", rejected
-	}
-	number = strings.TrimSpace(posted.InvoiceNumber)
-	if number == "" {
-		postEvent.Outcome = OutcomeRejected
-		postEvent.ErrorCode = ErrNoInvoiceNumber.Error()
-		Record(d.DB, postEvent)
-		return "", ErrNoInvoiceNumber
 	}
 
 	// The ledger row first, the invoice second: if the process dies between
 	// them, step 1 of the next attempt finds the number here.
-	postEvent.Outcome = OutcomeOK
 	if err := RecordSynced(d.DB, invoiceID, string(kind), number, posted.Raw); err != nil {
 		postEvent.ErrorCode = codeLedgerWriteFailed
 		Record(d.DB, postEvent)
@@ -279,6 +234,72 @@ func Submit(ctx context.Context, d Deps, invoiceID uuid.UUID, kind Kind, actor *
 	}
 	Record(d.DB, postEvent)
 	return number, nil
+}
+
+// auditRef says which document an audit row belongs to: exactly one of an
+// invoice or a batch.
+type auditRef struct {
+	InvoiceID *uuid.UUID
+	BatchID   *uuid.UUID
+	Kind      Kind
+}
+
+func (r auditRef) event(phase string) Event {
+	return Event{InvoiceID: r.InvoiceID, BatchID: r.BatchID, Kind: string(r.Kind), Phase: phase}
+}
+
+// file validates then posts one document and returns FBR's post response
+// and the trimmed invoice number. It writes the audit rows for both calls
+// except the successful post's, which it returns (Outcome ok, not yet
+// recorded) so the caller can annotate it with a ledger or apply failure
+// before recording it. The ledger row and the invoice/batch update belong
+// to the caller, which is what lets Submit and SubmitBatch each stay
+// ledger-first. This is the only place in the package that talks to FBR.
+func file(ctx context.Context, d Deps, cl Client, payload DIInvoice, ref auditRef, actor *uuid.UUID) (Response, string, Event, error) {
+	request := string(mustJSON(payload))
+
+	started := d.now()
+	validated, err := cl.Validate(ctx, payload)
+	if err != nil {
+		ev := ref.event(PhaseValidate)
+		ev.Outcome, ev.LatencyMs, ev.ErrorCode = OutcomeUnreachable, msSince(started, d.now()), ErrorCode(err)
+		ev.RequestExcerpt, ev.ResponseExcerpt, ev.CreatedBy = request, err.Error(), actor
+		Record(d.DB, ev)
+		return Response{}, "", Event{}, err
+	}
+	if rejected := validated.Rejection(); rejected != nil {
+		ev := ref.event(PhaseValidate)
+		ev.Outcome, ev.HTTPStatus, ev.LatencyMs = OutcomeRejected, intPtr(validated.HTTPStatus), msSince(started, d.now())
+		ev.ErrorCode, ev.RequestExcerpt, ev.ResponseExcerpt, ev.CreatedBy = rejected.Code, request, string(validated.Raw), actor
+		Record(d.DB, ev)
+		return Response{}, "", Event{}, rejected
+	}
+
+	started = d.now()
+	posted, err := cl.Post(ctx, payload)
+	if err != nil {
+		ev := ref.event(PhasePost)
+		ev.Outcome, ev.LatencyMs, ev.ErrorCode = OutcomeUnreachable, msSince(started, d.now()), ErrorCode(err)
+		ev.RequestExcerpt, ev.ResponseExcerpt, ev.CreatedBy = request, err.Error(), actor
+		Record(d.DB, ev)
+		return Response{}, "", Event{}, err
+	}
+	postEvent := ref.event(PhasePost)
+	postEvent.HTTPStatus, postEvent.LatencyMs = intPtr(posted.HTTPStatus), msSince(started, d.now())
+	postEvent.RequestExcerpt, postEvent.ResponseExcerpt, postEvent.CreatedBy = request, string(posted.Raw), actor
+	if rejected := posted.Rejection(); rejected != nil {
+		postEvent.Outcome, postEvent.ErrorCode = OutcomeRejected, rejected.Code
+		Record(d.DB, postEvent)
+		return Response{}, "", Event{}, rejected
+	}
+	number := strings.TrimSpace(posted.InvoiceNumber)
+	if number == "" {
+		postEvent.Outcome, postEvent.ErrorCode = OutcomeRejected, ErrNoInvoiceNumber.Error()
+		Record(d.DB, postEvent)
+		return Response{}, "", Event{}, ErrNoInvoiceNumber
+	}
+	postEvent.Outcome = OutcomeOK
+	return posted, number, postEvent, nil
 }
 
 // buildPayload assembles the document for this Kind, including the checks
@@ -402,7 +423,7 @@ func ErrorCode(err error) string {
 		ErrDisabled, ErrTokenMissing, ErrInvoiceNotFound, ErrNotSynced,
 		ErrBuyerUnregistered, ErrVoidReasonMissing, ErrNoInvoiceNumber, ErrUnknownKind,
 		ErrSandboxInRelease, ErrSecretsKeyMissing, ErrSecretsKeyInvalid, ErrCiphertextInvalid,
-		ErrHSCodeMissing, ErrBatchEmpty,
+		ErrHSCodeMissing, ErrBatchEmpty, ErrBatchNotFound,
 	} {
 		if errors.Is(err, known) {
 			return known.Error()

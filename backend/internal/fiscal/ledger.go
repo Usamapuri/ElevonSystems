@@ -55,3 +55,32 @@ func FindSynced(q Querier, invoiceID uuid.UUID, kind string) (string, bool, erro
 	}
 	return number, true, nil
 }
+
+// RecordSyncedBatch is RecordSynced for a combined invoice: one row per
+// batch, first number filed stands.
+func RecordSyncedBatch(q Execer, batchID uuid.UUID, number string, raw json.RawMessage) error {
+	var response any
+	if len(raw) > 0 {
+		response = string(raw)
+	}
+	_, err := q.Exec(`
+		INSERT INTO fiscal_invoices (batch_id, kind, fbr_invoice_number, response)
+		VALUES ($1, $2, $3, $4::jsonb)
+		ON CONFLICT (batch_id, kind) WHERE batch_id IS NOT NULL DO NOTHING`,
+		batchID, string(KindBatch), number, response)
+	return err
+}
+
+// FindSyncedBatch is FindSynced for a combined invoice.
+func FindSyncedBatch(q Querier, batchID uuid.UUID) (string, bool, error) {
+	var number string
+	err := q.QueryRow(`SELECT fbr_invoice_number FROM fiscal_invoices WHERE batch_id = $1 AND kind = $2`,
+		batchID, string(KindBatch)).Scan(&number)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return number, true, nil
+}

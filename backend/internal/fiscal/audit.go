@@ -27,9 +27,11 @@ const maxErrorCode = 32
 // writes an Event may put the token in either excerpt.
 type Event struct {
 	InvoiceID *uuid.UUID
-	Kind      string
-	Phase     string
-	Outcome   string
+	// BatchID is set instead of InvoiceID for a combined invoice's rows.
+	BatchID *uuid.UUID
+	Kind    string
+	Phase   string
+	Outcome string
 
 	HTTPStatus *int
 	LatencyMs  *int64
@@ -54,9 +56,9 @@ func Record(db *sql.DB, e Event) {
 	}
 	_, err := db.Exec(`
 		INSERT INTO fiscal_audit_events
-			(invoice_id, kind, phase, outcome, http_status, latency_ms, error_code, request_excerpt, response_excerpt, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		e.InvoiceID, e.Kind, e.Phase, e.Outcome, e.HTTPStatus, e.LatencyMs,
+			(invoice_id, batch_id, kind, phase, outcome, http_status, latency_ms, error_code, request_excerpt, response_excerpt, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		e.InvoiceID, e.BatchID, e.Kind, e.Phase, e.Outcome, e.HTTPStatus, e.LatencyMs,
 		nullableText(truncate(e.ErrorCode, maxErrorCode)),
 		nullableText(truncate(e.RequestExcerpt, maxExcerpt)),
 		nullableText(truncate(e.ResponseExcerpt, maxExcerpt)),
