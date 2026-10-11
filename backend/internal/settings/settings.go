@@ -69,19 +69,20 @@ var rules = map[string]rule{
 	"day_close_variance_threshold": notNull(number(0, 1_000_000)),
 	"credit_limit_enforced":        notNull(boolean),
 
-	// Phase 7, seeded by migrations/003_fiscal.sql. fiscal_api_key_enc holds
-	// the AES-GCM ciphertext of the FBR token and is private: it never leaves
-	// the server through GET /settings and is not writable through
-	// PUT /admin/settings.
-	"fiscal_config":      notNull(fiscalConfig),
-	"fiscal_api_key_enc": notNull(text(0, 512)),
-	"fiscal_reference":   notNull(jsonObject),
+	// Phase 7, seeded by migrations/003_fiscal.sql and 005_fiscal_on_demand.
+	// The two token slots hold the AES-GCM ciphertext of the sandbox and
+	// production FBR tokens and are private: they never leave the server
+	// through GET /settings and are not writable through PUT /admin/settings.
+	"fiscal_config":               notNull(fiscalConfig),
+	fiscal.KeyAPIKeySandboxEnc:    notNull(text(0, 512)),
+	fiscal.KeyAPIKeyProductionEnc: notNull(text(0, 512)),
+	"fiscal_reference":            notNull(jsonObject),
 }
 
 // privateKeys never leave the server in a settings response and cannot be
 // written through the general settings endpoint. Each has its own guarded
-// route instead (the FBR token: PUT /admin/fiscal/token).
-var privateKeys = map[string]bool{"fiscal_api_key_enc": true}
+// route instead (the FBR tokens: PUT /admin/fiscal/token).
+var privateKeys = map[string]bool{fiscal.KeyAPIKeySandboxEnc: true, fiscal.KeyAPIKeyProductionEnc: true}
 
 // Private reports whether key is withheld from GET /settings and refused by
 // PUT /admin/settings.
@@ -169,7 +170,7 @@ func checkFiscal(all map[string]json.RawMessage) error {
 	}
 
 	var token string
-	if err := json.Unmarshal(all[fiscal.KeyAPIKeyEnc], &token); err != nil || strings.TrimSpace(token) == "" {
+	if err := json.Unmarshal(all[fiscal.KeyFor(cfg.Environment())], &token); err != nil || strings.TrimSpace(token) == "" {
 		return &ValueError{
 			Key:     fiscal.KeyConfig,
 			Code:    "fiscal_token_missing",

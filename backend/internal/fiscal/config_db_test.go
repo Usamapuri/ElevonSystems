@@ -58,9 +58,11 @@ func TestLoadAPIKey_UnsetThenRoundTrip(t *testing.T) {
 	t.Setenv("GIN_MODE", "debug")
 	t.Setenv(fiscal.EnvSecretsKey, base64.StdEncoding.EncodeToString(make([]byte, 32)))
 
-	got, err := fiscal.LoadAPIKey(db)
-	if err != nil || got != "" {
-		t.Fatalf("the seed is an empty token: %q %v", got, err)
+	for _, env := range []fiscal.Environment{fiscal.EnvSandbox, fiscal.EnvProduction} {
+		got, err := fiscal.LoadAPIKey(db, env)
+		if err != nil || got != "" {
+			t.Fatalf("the %s seed is an empty token: %q %v", env, got, err)
+		}
 	}
 
 	key, err := fiscal.KeyFromEnv()
@@ -71,30 +73,47 @@ func TestLoadAPIKey_UnsetThenRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`UPDATE settings SET value = to_jsonb($1::text) WHERE key = $2`, sealed, fiscal.KeyAPIKeyEnc); err != nil {
+	if _, err := db.Exec(`UPDATE settings SET value = to_jsonb($1::text) WHERE key = $2`, sealed, fiscal.KeyAPIKeySandboxEnc); err != nil {
 		t.Fatal(err)
 	}
 
 	// What is stored is ciphertext, not the token.
 	var stored string
-	if err := db.QueryRow(`SELECT value #>> '{}' FROM settings WHERE key = $1`, fiscal.KeyAPIKeyEnc).Scan(&stored); err != nil {
+	if err := db.QueryRow(`SELECT value #>> '{}' FROM settings WHERE key = $1`, fiscal.KeyAPIKeySandboxEnc).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(stored, "iris-sandbox-token") {
 		t.Fatalf("the token must never be stored in the clear: %s", stored)
 	}
 
-	got, err = fiscal.LoadAPIKey(db)
+	got, err := fiscal.LoadAPIKey(db, fiscal.EnvSandbox)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != "iris-sandbox-token-4242" {
 		t.Fatalf("round trip through settings: %q", got)
 	}
+	// The slots are independent: a sandbox token says nothing about production.
+	if got, err := fiscal.LoadAPIKey(db, fiscal.EnvProduction); err != nil || got != "" {
+		t.Fatalf("production slot must stay empty: %q %v", got, err)
+	}
+	prod, err := fiscal.Encrypt(key, "iris-live-token-7777")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE settings SET value = to_jsonb($1::text) WHERE key = $2`, prod, fiscal.KeyAPIKeyProductionEnc); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := fiscal.LoadAPIKey(db, fiscal.EnvProduction); err != nil || got != "iris-live-token-7777" {
+		t.Fatalf("production round trip: %q %v", got, err)
+	}
+	if got, err := fiscal.LoadAPIKey(db, fiscal.EnvSandbox); err != nil || got != "iris-sandbox-token-4242" {
+		t.Fatalf("sandbox slot untouched by the production write: %q %v", got, err)
+	}
 
 	// A different key cannot read it back.
 	t.Setenv(fiscal.EnvSecretsKey, base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", 32))))
-	if _, err := fiscal.LoadAPIKey(db); err != fiscal.ErrCiphertextInvalid {
+	if _, err := fiscal.LoadAPIKey(db, fiscal.EnvSandbox); err != fiscal.ErrCiphertextInvalid {
 		t.Fatalf("a different secrets key must fail closed: %v", err)
 	}
 }

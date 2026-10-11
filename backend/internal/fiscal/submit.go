@@ -167,7 +167,7 @@ func Submit(ctx context.Context, d Deps, invoiceID uuid.UUID, kind Kind, actor *
 		})
 		return "", err
 	}
-	token, err := LoadAPIKey(d.DB)
+	token, err := LoadAPIKey(d.DB, cfg.Environment())
 	if err != nil {
 		// Includes ErrSecretsKeyMissing: a release store with a stored
 		// token and no key cannot read it, and must not file without it.

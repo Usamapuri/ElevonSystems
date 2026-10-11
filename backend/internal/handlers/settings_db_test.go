@@ -26,7 +26,7 @@ func TestSettings_GetUpdateValidateAndReloadBoundary(t *testing.T) {
 	w := doJSON(r, http.MethodGet, "/settings", nil)
 	var all map[string]json.RawMessage
 	dataAs(t, decodeEnvelope(t, w), &all)
-	// 25 keys are seeded; the private one is withheld from every response.
+	// 26 keys are seeded; the two private ones are withheld from every response.
 	if w.Code != http.StatusOK || len(all) != 24 || string(all["tax_rate_cash"]) != "0" {
 		t.Fatalf("seeded settings: %d %d %s", w.Code, len(all), all["tax_rate_cash"])
 	}
@@ -88,20 +88,25 @@ func TestSettings_FiscalTokenIsPrivate(t *testing.T) {
 
 	var all map[string]json.RawMessage
 	dataAs(t, decodeEnvelope(t, doJSON(r, http.MethodGet, "/settings", nil)), &all)
-	if _, leaked := all["fiscal_api_key_enc"]; leaked {
-		t.Fatal("GET /settings must never carry the encrypted token")
+	for _, k := range []string{"fiscal_api_key_sandbox_enc", "fiscal_api_key_production_enc", "fiscal_api_key_enc"} {
+		if _, leaked := all[k]; leaked {
+			t.Fatalf("GET /settings must never carry %s", k)
+		}
 	}
 	if _, ok := all["fiscal_config"]; !ok {
 		t.Fatal("fiscal_config is public and must be returned")
 	}
 
-	w := doJSON(r, http.MethodPut, "/admin/settings", map[string]any{"fiscal_api_key_enc": "whatever"})
-	if w.Code != http.StatusBadRequest || errCode(decodeEnvelope(t, w)) != "private_setting" {
-		t.Fatalf("writing the token here must be refused: %d %s", w.Code, w.Body.String())
+	for _, k := range []string{"fiscal_api_key_sandbox_enc", "fiscal_api_key_production_enc"} {
+		w := doJSON(r, http.MethodPut, "/admin/settings", map[string]any{k: "whatever"})
+		if w.Code != http.StatusBadRequest || errCode(decodeEnvelope(t, w)) != "private_setting" {
+			t.Fatalf("writing %s here must be refused: %d %s", k, w.Code, w.Body.String())
+		}
 	}
+	w := doJSON(r, http.MethodPut, "/admin/settings", map[string]any{"fiscal_api_key_sandbox_enc": "whatever"})
 	// Refused even when it rides along with a legitimate key, and nothing
 	// else in that request is saved either.
-	w = doJSON(r, http.MethodPut, "/admin/settings", map[string]any{"business_name": "Gas House", "fiscal_api_key_enc": "whatever"})
+	w = doJSON(r, http.MethodPut, "/admin/settings", map[string]any{"business_name": "Gas House", "fiscal_api_key_sandbox_enc": "whatever"})
 	if errCode(decodeEnvelope(t, w)) != "private_setting" {
 		t.Fatalf("mixed request: %s", w.Body.String())
 	}
@@ -112,7 +117,7 @@ func TestSettings_FiscalTokenIsPrivate(t *testing.T) {
 
 	// The seeded row is still there, untouched, for the token route to use.
 	var stored string
-	if err := db.QueryRow(`SELECT value #>> '{}' FROM settings WHERE key = 'fiscal_api_key_enc'`).Scan(&stored); err != nil {
+	if err := db.QueryRow(`SELECT value #>> '{}' FROM settings WHERE key = 'fiscal_api_key_sandbox_enc'`).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
 	if stored != "" {
@@ -151,7 +156,7 @@ func TestSettings_EnablingFiscalIsGated(t *testing.T) {
 
 	// The token only reaches the table through its own route, which F2 adds;
 	// stand in for it here so the reference rules can be exercised.
-	if _, err := db.Exec(`UPDATE settings SET value = to_jsonb('sealed'::text) WHERE key = 'fiscal_api_key_enc'`); err != nil {
+	if _, err := db.Exec(`UPDATE settings SET value = to_jsonb('sealed'::text) WHERE key = 'fiscal_api_key_sandbox_enc'`); err != nil {
 		t.Fatal(err)
 	}
 	w = doJSON(r, http.MethodPut, "/admin/settings", map[string]any{"fiscal_config": enabled, "tax_rate_cash": 0.18})
@@ -200,7 +205,7 @@ func TestSettings_EnablingFiscalIsGated(t *testing.T) {
 	if !cfg.Enabled || cfg.TransTypeID != 75 || cfg.RateDesc != "18%" {
 		t.Fatalf("saved fiscal_config: %+v", cfg)
 	}
-	if _, leaked := all["fiscal_api_key_enc"]; leaked {
+	if _, leaked := all["fiscal_api_key_sandbox_enc"]; leaked {
 		t.Fatal("the PUT response must not carry the token either")
 	}
 

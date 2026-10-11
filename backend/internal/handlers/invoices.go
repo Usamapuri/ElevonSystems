@@ -476,8 +476,8 @@ func failDayGate(c *gin.Context, err error) bool {
 //  7. the tender's tax rate, further tax and limit enforcement, read from
 //     settings just before the transaction opens (see the note there);
 //  8. resolve the customer and the credit terms;
-//  8b. decide each line's rate: products.rate, or a deal rate inside the
-//      band or approved by an admin PIN;
+//     8b. decide each line's rate: products.rate, or a deal rate inside the
+//     band or approved by an admin PIN;
 //  9. price everything server-side from those rates;
 //  10. the credit-limit check (it needs total_payable, so it can only run
 //     after pricing) with the admin-PIN override;

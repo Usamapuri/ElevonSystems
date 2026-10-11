@@ -37,9 +37,9 @@ type InvoiceLine struct {
 	RateApprovedBy     *uuid.UUID `json:"rate_approved_by"`
 	RateApprovedByName *string    `json:"rate_approved_by_name"`
 	LineTotal          float64    `json:"line_total"`
-	LineDiscount float64 `json:"line_discount"`
-	LineTax      float64 `json:"line_tax"`
-	SortOrder    int     `json:"sort_order"`
+	LineDiscount       float64    `json:"line_discount"`
+	LineTax            float64    `json:"line_tax"`
+	SortOrder          int        `json:"sort_order"`
 }
 
 // Invoice is one invoices row. It is also the list shape: Lines is omitted

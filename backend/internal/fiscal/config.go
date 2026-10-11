@@ -27,9 +27,48 @@ type Querier interface {
 // settings, to keep the dependency one way.
 const (
 	KeyConfig    = "fiscal_config"
-	KeyAPIKeyEnc = "fiscal_api_key_enc"
 	KeyReference = "fiscal_reference"
+	// The two token slots (migration 005). Both are private settings; which
+	// one a filing reads follows Config.IsSandbox.
+	KeyAPIKeySandboxEnc    = "fiscal_api_key_sandbox_enc"
+	KeyAPIKeyProductionEnc = "fiscal_api_key_production_enc"
 )
+
+// Environment names which FBR gateway and which token slot a call uses.
+type Environment string
+
+const (
+	EnvSandbox    Environment = "sandbox"
+	EnvProduction Environment = "production"
+)
+
+// ParseEnvironment reads the wire form exactly; anything else is refused so
+// a typo can never fall through to the wrong gateway.
+func ParseEnvironment(s string) (Environment, bool) {
+	switch Environment(s) {
+	case EnvSandbox:
+		return EnvSandbox, true
+	case EnvProduction:
+		return EnvProduction, true
+	}
+	return "", false
+}
+
+// KeyFor is the private settings key holding env's encrypted token.
+func KeyFor(env Environment) string {
+	if env == EnvProduction {
+		return KeyAPIKeyProductionEnc
+	}
+	return KeyAPIKeySandboxEnc
+}
+
+// Environment is the one live filing uses, per is_sandbox.
+func (c Config) Environment() Environment {
+	if c.IsSandbox {
+		return EnvSandbox
+	}
+	return EnvProduction
+}
 
 // Config is the fiscal_config setting. The JSON names are the wire contract
 // with the admin screen and with migration 003's seed; do not rename them.
@@ -213,12 +252,12 @@ func LoadConfig(q Querier) (Config, error) {
 	return ParseConfig(raw)
 }
 
-// LoadAPIKey reads fiscal_api_key_enc and decrypts it with the environment's
+// LoadAPIKey reads env's token slot and decrypts it with the process's
 // secrets key. An unset token is "" with no error; a set token with no usable
 // key is an error, because filing with the wrong token is not recoverable.
-func LoadAPIKey(q Querier) (string, error) {
+func LoadAPIKey(q Querier, env Environment) (string, error) {
 	var raw []byte
-	err := q.QueryRow(`SELECT value FROM settings WHERE key = $1`, KeyAPIKeyEnc).Scan(&raw)
+	err := q.QueryRow(`SELECT value FROM settings WHERE key = $1`, KeyFor(env)).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -227,7 +266,7 @@ func LoadAPIKey(q Querier) (string, error) {
 	}
 	var enc string
 	if err := json.Unmarshal(raw, &enc); err != nil {
-		return "", errors.New("fiscal_api_key_enc is not a string")
+		return "", errors.New(KeyFor(env) + " is not a string")
 	}
 	if strings.TrimSpace(enc) == "" {
 		return "", nil

@@ -22,7 +22,7 @@ func TestValidate_PerKeyRules(t *testing.T) {
 		{"day_close_variance_threshold", `100`}, {"credit_limit_enforced", `true`},
 		{"fiscal_config", `{}`}, {"fiscal_config", seededFiscalConfig},
 		{"fiscal_config", `{"enabled":true,"seller_ntn_cnic":"8951943","seller_business_name":"Elevon Gas","seller_province":"PUNJAB","seller_address":"Main Bazar"}`},
-		{"fiscal_api_key_enc", `""`}, {"fiscal_api_key_enc", `"AAAA"`},
+		{"fiscal_api_key_sandbox_enc", `""`}, {"fiscal_api_key_sandbox_enc", `"AAAA"`}, {"fiscal_api_key_production_enc", `"AAAA"`},
 		{"fiscal_reference", `{}`}, {"fiscal_reference", `{"hs_uom":{"2711.1910":["KG"]}}`},
 	}
 	for _, c := range ok {
@@ -42,7 +42,7 @@ func TestValidate_PerKeyRules(t *testing.T) {
 		{"fiscal_config", `{"nope":1}`}, {"fiscal_config", `{"trans_type_id":"75"}`}, {"fiscal_config", `[]`},
 		{"fiscal_config", `{"enabled":true}`}, {"fiscal_config", `{"enabled":true,"seller_province":"Punjab","seller_ntn_cnic":"8951943","seller_business_name":"G","seller_address":"A"}`},
 		{"fiscal_reference", `[]`}, {"fiscal_reference", `"x"`},
-		{"fiscal_api_key_enc", `"` + strings.Repeat("x", 513) + `"`}, {"fiscal_api_key_enc", `42`},
+		{"fiscal_api_key_sandbox_enc", `"` + strings.Repeat("x", 513) + `"`}, {"fiscal_api_key_production_enc", `42`},
 		{"nope", `1`},
 	}
 	for _, c := range bad {
@@ -88,22 +88,28 @@ func TestCheckConsistency_PrintableAreaFitsPaper(t *testing.T) {
 }
 
 func TestKeys_MatchTheSeededList(t *testing.T) {
-	if n := len(Keys()); n != 25 {
-		t.Fatalf("001_init seeds 21 keys, 003_fiscal three more and 004_deal_rates one; rules cover %d", n)
+	if n := len(Keys()); n != 26 {
+		t.Fatalf("001_init seeds 21 keys, 003_fiscal three, 004_deal_rates one, 005 replaces the token with two slots; rules cover %d", n)
 	}
-	for _, k := range []string{"fiscal_config", "fiscal_api_key_enc", "fiscal_reference", "rate_override_band"} {
+	for _, k := range []string{"fiscal_config", "fiscal_api_key_sandbox_enc", "fiscal_api_key_production_enc", "fiscal_reference", "rate_override_band"} {
 		if !Known(k) {
-			t.Errorf("%s is seeded by 003_fiscal and needs a rule", k)
+			t.Errorf("%s is seeded and needs a rule", k)
 		}
+	}
+	if Known("fiscal_api_key_enc") {
+		t.Error("the single token key was replaced by migration 005 and must no longer be known")
 	}
 }
 
-func TestPrivate_OnlyTheToken(t *testing.T) {
-	if !Private("fiscal_api_key_enc") {
-		t.Fatal("the encrypted FBR token must be private")
+func TestPrivate_OnlyTheTokens(t *testing.T) {
+	private := map[string]bool{"fiscal_api_key_sandbox_enc": true, "fiscal_api_key_production_enc": true}
+	for k := range private {
+		if !Private(k) {
+			t.Fatalf("%s must be private", k)
+		}
 	}
 	for _, k := range Keys() {
-		if k != "fiscal_api_key_enc" && Private(k) {
+		if !private[k] && Private(k) {
 			t.Errorf("%s must not be private", k)
 		}
 	}
@@ -114,11 +120,12 @@ func TestPrivate_OnlyTheToken(t *testing.T) {
 func TestCheckConsistency_FiscalGate(t *testing.T) {
 	base := func() map[string]json.RawMessage {
 		return map[string]json.RawMessage{
-			"tax_rate_cash":      json.RawMessage(`0.18`),
-			"default_hs_code":    json.RawMessage(`"2711.1910"`),
-			"fiscal_config":      json.RawMessage(`{"enabled":true,"rate_desc":"18%","default_uom":"KG"}`),
-			"fiscal_api_key_enc": json.RawMessage(`"c2VhbGVk"`),
-			"fiscal_reference":   json.RawMessage(`{"hs_uom":{"2711.1910":["KG"]}}`),
+			"tax_rate_cash":                 json.RawMessage(`0.18`),
+			"default_hs_code":               json.RawMessage(`"2711.1910"`),
+			"fiscal_config":                 json.RawMessage(`{"enabled":true,"rate_desc":"18%","default_uom":"KG"}`),
+			"fiscal_api_key_sandbox_enc":    json.RawMessage(`"c2VhbGVk"`),
+			"fiscal_api_key_production_enc": json.RawMessage(`""`),
+			"fiscal_reference":              json.RawMessage(`{"hs_uom":{"2711.1910":["KG"]}}`),
 		}
 	}
 
@@ -129,7 +136,7 @@ func TestCheckConsistency_FiscalGate(t *testing.T) {
 	// Disabled: none of it applies, so setup can happen in any order.
 	off := base()
 	off["fiscal_config"] = json.RawMessage(`{"enabled":false,"rate_desc":"18%"}`)
-	off["fiscal_api_key_enc"] = json.RawMessage(`""`)
+	off["fiscal_api_key_sandbox_enc"] = json.RawMessage(`""`)
 	off["fiscal_reference"] = json.RawMessage(`{}`)
 	if err := CheckConsistency(off); err != nil {
 		t.Fatalf("a disabled config must not be gated: %v", err)
@@ -147,7 +154,10 @@ func TestCheckConsistency_FiscalGate(t *testing.T) {
 			delete(m, "tax_rate_cash")
 		}},
 		{"no token", "fiscal_token_missing", func(m map[string]json.RawMessage) {
-			m["fiscal_api_key_enc"] = json.RawMessage(`"  "`)
+			m["fiscal_api_key_sandbox_enc"] = json.RawMessage(`"  "`)
+		}},
+		{"production selected with only a sandbox token", "fiscal_token_missing", func(m map[string]json.RawMessage) {
+			m["fiscal_config"] = json.RawMessage(`{"enabled":true,"is_sandbox":false,"rate_desc":"18%","default_uom":"KG"}`)
 		}},
 		{"reference never refreshed", "fiscal_reference_stale", func(m map[string]json.RawMessage) {
 			m["fiscal_reference"] = json.RawMessage(`{}`)

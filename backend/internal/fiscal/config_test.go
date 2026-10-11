@@ -140,3 +140,23 @@ func TestConfig_PublicNeverCarriesTheToken(t *testing.T) {
 		t.Fatalf("PublicConfig leaks the token: %s", raw)
 	}
 }
+
+func TestEnvironment_ParseAndSelect(t *testing.T) {
+	for raw, want := range map[string]Environment{"sandbox": EnvSandbox, "production": EnvProduction} {
+		got, ok := ParseEnvironment(raw)
+		if !ok || got != want {
+			t.Errorf("ParseEnvironment(%q) = %q %v", raw, got, ok)
+		}
+	}
+	for _, raw := range []string{"live", "", "SANDBOX "} {
+		if _, ok := ParseEnvironment(raw); ok {
+			t.Errorf("ParseEnvironment(%q) must be refused", raw)
+		}
+	}
+	if (Config{IsSandbox: true}).Environment() != EnvSandbox || (Config{IsSandbox: false}).Environment() != EnvProduction {
+		t.Fatal("Environment() follows is_sandbox")
+	}
+	if KeyFor(EnvSandbox) != "fiscal_api_key_sandbox_enc" || KeyFor(EnvProduction) != "fiscal_api_key_production_enc" {
+		t.Fatal("KeyFor names the two private settings")
+	}
+}

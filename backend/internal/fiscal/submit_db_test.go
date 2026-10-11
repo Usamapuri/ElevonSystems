@@ -132,7 +132,7 @@ func enableFiscal(t *testing.T, db *sql.DB, s *stub, sandbox bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	putSetting(t, db, fiscal.KeyAPIKeyEnc, string(encoded))
+	putSetting(t, db, fiscal.KeyAPIKeySandboxEnc, string(encoded))
 	putSetting(t, db, "default_hs_code", `"2711.1910"`)
 }
 
@@ -569,7 +569,7 @@ func TestSubmit_DisabledAndTokenMissing(t *testing.T) {
 	}
 
 	enableFiscal(t, db, s, true)
-	putSetting(t, db, fiscal.KeyAPIKeyEnc, `""`)
+	putSetting(t, db, fiscal.KeyAPIKeySandboxEnc, `""`)
 	if _, err := fiscal.Submit(context.Background(), deps(db), invoiceID, fiscal.KindSale, nil); !errors.Is(err, fiscal.ErrTokenMissing) {
 		t.Fatalf("err = %v, want fiscal_token_missing", err)
 	}
