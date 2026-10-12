@@ -12,9 +12,10 @@ import { useReportRange } from './useReportRange'
 import {
   CashiersPanel, DailyPanel, DayClosesPanel, HourlyPanel, ProductsPanel, ReceivablesPanel, TaxPanel,
 } from './ReportPanels'
+import { FiscalQueueTab } from './FiscalQueueTab'
 import type { ReportName } from '@/types'
 
-const TABS: { name: ReportName; label: string }[] = [
+const TABS: { name: ReportName | 'fbr-queue'; label: string }[] = [
   { name: 'daily', label: 'Daily' },
   { name: 'products', label: 'Products' },
   { name: 'tax', label: 'Tax' },
@@ -22,6 +23,7 @@ const TABS: { name: ReportName; label: string }[] = [
   { name: 'hourly', label: 'Hourly' },
   { name: 'receivables', label: 'Receivables' },
   { name: 'day-closes', label: 'Day closes' },
+  { name: 'fbr-queue', label: 'FBR queue' },
 ]
 
 export function ReportsTabs() {
@@ -62,6 +64,9 @@ export function ReportsTabs() {
         </TabsContent>
         <TabsContent value="day-closes">
           <DayClosesPanel {...panelProps} />
+        </TabsContent>
+        <TabsContent value="fbr-queue">
+          <FiscalQueueTab />
         </TabsContent>
       </Tabs>
     </div>

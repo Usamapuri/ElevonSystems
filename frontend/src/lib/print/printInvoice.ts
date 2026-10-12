@@ -17,6 +17,7 @@
  */
 import type { AppSettings, Invoice, PrintDocument, ZReport } from '@/types'
 import apiClient from '@/api/client'
+import { fbrQrDataUrl } from '@/lib/print/fbrQr'
 import { buildReceiptHtml } from '@/lib/print/receipt'
 import { type A4BuyerDetails, buildInvoiceA4Html } from '@/lib/print/invoiceA4'
 import { buildZReportHtml } from '@/lib/print/zReport'
@@ -91,16 +92,29 @@ async function loadBuyerDetails(invoice: Invoice): Promise<A4BuyerDetails> {
   }
 }
 
+/** The QR for an individually filed sale; a failure prints the block
+ * without the image rather than failing the print. */
+async function loadQr(invoice: Invoice): Promise<string | null> {
+  if (invoice.fiscal_status !== 'synced' || !invoice.fiscal_invoice_number) return null
+  try {
+    return await fbrQrDataUrl(invoice.fiscal_invoice_number)
+  } catch (err) {
+    printDebug.error('invoice', 'QR for ' + invoice.invoice_number + ' failed', err)
+    return null
+  }
+}
+
 /** Print one invoice as a thermal receipt or an A4 tax invoice. */
 export async function printInvoice(invoice: Invoice, document: PrintDocument): Promise<void> {
   const settings = await loadSettings()
   try {
+    const qrDataUrl = await loadQr(invoice)
     if (document === 'a4') {
       const buyer = await loadBuyerDetails(invoice)
-      await printHtml(buildInvoiceA4Html(invoice, settings, buyer), { pageSize: 'a4' })
+      await printHtml(buildInvoiceA4Html(invoice, settings, buyer, { qrDataUrl }), { pageSize: 'a4' })
       return
     }
-    await printHtml(buildReceiptHtml(invoice, settings), {
+    await printHtml(buildReceiptHtml(invoice, settings, { qrDataUrl }), {
       pageSize: pageSizeForWidth(settings.receipt_paper_width_mm),
       printableAreaMm: settings.receipt_printable_area_mm,
     })

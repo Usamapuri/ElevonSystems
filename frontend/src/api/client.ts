@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type {
-  EligibleInvoice, FiscalBatch, FiscalPending,
+  EligibleInvoice, FiscalBatch, FiscalJob, FiscalPending,
   FiscalEnvironment, FiscalReference, FiscalStatus, FiscalTestResult, FiscalTokenState,
   APIResponse, AppSettings, BusinessDay, CashMovement, CashMovementRequest, CloseDayRequest, CreateCustomerRequest,
   CreateInvoiceRequest, CreateProductRequest, CreateReceiptRequest, CreateUserRequest, Customer, CustomerAgeing,
@@ -342,6 +342,12 @@ class APIClient {
   }
   getFiscalBatch(id: string) {
     return this.request<{ batch: FiscalBatch; invoices: EligibleInvoice[] }>({ method: 'GET', url: `/admin/fiscal/batches/${id}` })
+  }
+  listFiscalJobs(status: 'pending' | 'dead' | 'all' = 'all') {
+    return this.request<FiscalJob[]>({ method: 'GET', url: '/admin/fiscal/jobs', params: { status, limit: 200 } })
+  }
+  retryFiscalJob(id: string) {
+    return this.request<{ id: string }>({ method: 'POST', url: `/admin/fiscal/jobs/${id}/retry` })
   }
   submitInvoiceToFbr(id: string) {
     return this.request<Invoice>({ method: 'POST', url: `/admin/fiscal/invoices/${id}/submit`, timeout: 45000 })

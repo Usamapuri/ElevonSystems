@@ -271,22 +271,33 @@ describe('buildReceiptHtml — tender and customer', () => {
   })
 })
 
-describe('buildReceiptHtml — fiscal block (§7.7)', () => {
+describe('buildReceiptHtml — fiscal block (§7.7, 2026-10-12 §2.6)', () => {
   it('says nothing at all when fiscal is off', () => {
     const html = buildReceiptHtml(cashInvoice, settings)
     expect(html).not.toContain('FBR')
   })
 
-  it('says "FBR submission pending" once a submission is queued', () => {
-    expect(buildReceiptHtml({ ...cashInvoice, fiscal_status: 'pending' }, settings)).toContain('FBR submission pending')
+  it('prints an ordinary receipt while unfiled, pending or failed — the till toasts the state instead', () => {
+    for (const status of ['unfiled', 'pending', 'failed']) {
+      expect(buildReceiptHtml({ ...cashInvoice, fiscal_status: status }, settings)).not.toContain('FBR')
+    }
   })
 
-  it('prints the FBR invoice number once synced', () => {
+  it('prints the FBR invoice number and the QR on an individually filed sale', () => {
+    const inv = { ...cashInvoice, fiscal_status: 'synced', fiscal_invoice_number: '7000007DI1747119701593' }
+    const html = buildReceiptHtml(inv, settings, { qrDataUrl: 'data:image/png;base64,AAAA' })
+    expect(html).toContain('FBR Invoice No.')
+    expect(html).toContain('7000007DI1747119701593')
+    expect(html).toContain('<img src="data:image/png')
+    expect(buildReceiptHtml(inv, settings)).not.toContain('<img src="data:image/png')
+  })
+
+  it('prints no FBR block on a sale covered by a combined invoice', () => {
     const html = buildReceiptHtml(
-      { ...cashInvoice, fiscal_status: 'synced', fiscal_invoice_number: '7000007DI1747119701593' },
+      { ...cashInvoice, fiscal_status: 'covered', fiscal_invoice_number: '7000007DI1747119701593' },
       settings,
     )
-    expect(html).toContain('FBR Invoice No. 7000007DI1747119701593')
+    expect(html).not.toContain('FBR')
   })
 })
 

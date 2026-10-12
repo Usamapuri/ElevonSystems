@@ -26,11 +26,20 @@ import {
   signedAmount2,
   subMethodLabel,
 } from '@/lib/print/format'
+import { fbrBlockHtml } from '@/lib/print/fbrBlock'
 
-export function buildReceiptHtml(invoice: Invoice, settings: AppSettings): string {
+/** What the invoice payload does not carry: the QR for an FBR-filed sale,
+ * rendered by printInvoice.ts because this module stays DOM-free. */
+export interface ReceiptExtras {
+  qrDataUrl?: string | null
+}
+
+export function buildReceiptHtml(invoice: Invoice, settings: AppSettings, extras: ReceiptExtras = {}): string {
   const paperWidthMm = settings.receipt_paper_width_mm ?? 80
   const printableAreaMm = settings.receipt_printable_area_mm ?? paperWidthMm - 8
-  const css = thermalPrintBaseCss({ paperWidthMm, printableAreaMm, fontScale: fontScaleFor(paperWidthMm) })
+  const css =
+    thermalPrintBaseCss({ paperWidthMm, printableAreaMm, fontScale: fontScaleFor(paperWidthMm) }) +
+    '.fbr{margin-top:2mm}.fbr-label{font-weight:700}.fbr-number{word-break:break-all}.fbr-qr{display:block;margin:2mm auto 0;width:28mm;height:28mm}'
 
   const body = [
     header(settings),
@@ -43,7 +52,7 @@ export function buildReceiptHtml(invoice: Invoice, settings: AppSettings): strin
     totals(invoice),
     '<div class="rule"></div>',
     tender(invoice),
-    fiscalBlock(invoice),
+    fiscalBlock(invoice, extras.qrDataUrl ?? null),
     footer(settings),
     invoice.status === 'voided' ? '<div class="void-stamp">VOID</div>' : '',
   ].join('\n')
@@ -167,16 +176,9 @@ function tender(inv: Invoice): string {
  * store does not have is worse than one that stays quiet. The other branches
  * are here so that turning fiscal on needs no change to this file.
  */
-function fiscalBlock(inv: Invoice): string {
-  if (inv.fiscal_status === 'pending' || inv.fiscal_status === 'failed') {
-    return '<div class="rule"></div><div class="center meta">FBR submission pending</div>'
-  }
-  if (inv.fiscal_status === 'synced' && inv.fiscal_invoice_number) {
-    return (
-      '<div class="rule"></div><div class="center meta">FBR Invoice No. ' + esc(inv.fiscal_invoice_number) + '</div>'
-    )
-  }
-  return ''
+function fiscalBlock(inv: Invoice, qrDataUrl: string | null): string {
+  const block = fbrBlockHtml(inv, qrDataUrl)
+  return block ? '<div class="rule"></div><div class="center meta">' + block + '</div>' : ''
 }
 
 function footer(s: AppSettings): string {

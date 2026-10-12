@@ -114,6 +114,9 @@ export const taxColumns: ReportColumn<TaxBand>[] = [
   { key: 'taxable', label: 'Taxable', align: 'right', format: (r) => formatMoney(r.taxable) },
   { key: 'tax', label: 'Tax', align: 'right', format: (r) => formatMoney(r.tax) },
   { key: 'further_tax', label: 'Further tax', align: 'right', format: (r) => formatMoney(r.further_tax) },
+  { key: 'filed', label: 'Filed', align: 'right', format: (r) => `${r.filed_count} · ${formatMoney(r.filed_amount)}` },
+  { key: 'unfiled', label: 'Unfiled', align: 'right', format: (r) => `${r.unfiled_count} · ${formatMoney(r.unfiled_amount)}` },
+  { key: 'rejected', label: 'Rejected', align: 'right', format: (r) => String(r.failed_count) },
 ]
 
 export function taxTotals(t: PeriodSummary): Record<string, ReactNode> {

@@ -27,6 +27,9 @@ import {
   subMethodLabel,
 } from '@/lib/print/format'
 
+import { fbrBlockHtml } from '@/lib/print/fbrBlock'
+import type { ReceiptExtras } from '@/lib/print/receipt'
+
 /** What the invoice payload does not carry. Every field is optional. */
 export interface A4BuyerDetails {
   address?: string | null
@@ -34,13 +37,15 @@ export interface A4BuyerDetails {
   buyer_registration_type?: BuyerRegistrationType | null
 }
 
-export function buildInvoiceA4Html(invoice: Invoice, settings: AppSettings, buyer: A4BuyerDetails = {}): string {
+export function buildInvoiceA4Html(invoice: Invoice, settings: AppSettings, buyer: A4BuyerDetails = {}, extras: ReceiptExtras = {}): string {
+  const fbr = fbrBlockHtml(invoice, extras.qrDataUrl ?? null)
   const body = [
     sellerHeader(invoice, settings),
     partyBlocks(invoice, settings, buyer),
     lineTable(invoice.lines ?? []),
     totalsTable(invoice),
     tenderBlock(invoice),
+    fbr ? '<div class="fbr-a4">' + fbr + '</div>' : '',
     footerBlock(settings),
     invoice.status === 'voided' ? '<div class="void-stamp">VOID</div>' : '',
   ].join('\n')
@@ -49,7 +54,7 @@ export function buildInvoiceA4Html(invoice: Invoice, settings: AppSettings, buye
     '<!DOCTYPE html>',
     '<html lang="en"><head><meta charset="utf-8" />',
     '<title>' + esc('Tax invoice ' + invoice.invoice_number) + '</title>',
-    '<style>' + A4_CSS + '</style>',
+    '<style>' + A4_CSS + '.fbr-a4{margin:12px 0;display:flex;gap:16px;align-items:center}.fbr-label{font-weight:700}.fbr-qr{width:96px;height:96px}</style>',
     '</head><body><div class="page">',
     body,
     '</div></body></html>',

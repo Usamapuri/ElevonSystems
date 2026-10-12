@@ -827,6 +827,29 @@ export interface TaxBand {
   taxable: number
   tax: number
   further_tax: number
+  /** Where the band stands with FBR: filed = synced + covered, unfiled =
+   * unfiled + failed, failed = the rejected subset. */
+  filed_count: number
+  filed_amount: number
+  unfiled_count: number
+  unfiled_amount: number
+  failed_count: number
+}
+
+/** One fiscal_outbound_jobs row, labelled for a person. */
+export interface FiscalJob {
+  id: string
+  invoice_id: string | null
+  batch_id: string | null
+  kind: 'sale' | 'debit_note' | 'batch'
+  status: 'pending' | 'processing' | 'succeeded' | 'dead'
+  attempt_count: number
+  max_attempts: number
+  next_run_at: string
+  last_error: string | null
+  last_error_code: string | null
+  created_at: string
+  document: string
 }
 
 /** One cashier's window, biggest gross first. `cashier_id` is null when the
