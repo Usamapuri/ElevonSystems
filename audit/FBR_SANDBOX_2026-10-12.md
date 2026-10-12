@@ -48,3 +48,9 @@ Local dev stack (`docker-compose.dev.yml`, `GIN_MODE=debug`), driven first-hand 
 | Invoice drawer, `-003` | "FBR: Filed (combined) · 6110…174886 (combined invoice)". **Void** with admin PIN → voided; `fiscal_status` stays `covered`, `fiscal_void_status` `unfiled`; the batch's count and total unchanged; no job, no debit note. |
 
 Not exercised here: a registered buyer's Charge + FBR and its Debit Note on void (needs a real registered NTN in the sandbox — covered by the handler tests against a fake FBR), and the queue path (the sandbox answered every call; covered by `queue_db_test.go`).
+
+## Scenario sign-off (evening)
+
+The sandbox profile for seller UNITY EXPLORATION (PRIVATE) LIMITED (NTN 3792106) listed nine scenarios: SN002, SN001, SN005, SN006, SN007, SN014, SN016, SN017, SN024. SN002 was already Successful from the app's own filings. The other eight were posted once each from `docs/fbr/elevon-fbr-di-scenarios.postman_collection.json` (values from PRAL's reference lists, all validated 00 first; registered buyer MUHAMMAD SANGEEN KHAN, NTN 8951943). **The owner reports all nine Successful on 2026-10-12.** The profile is ready for the production token request.
+
+Findings worth keeping: the bearer token is bound to the seller NTN (401 otherwise); SN017 accepts only petroleum HS codes and computes tax as 18 % of `fixedNotifiedValueOrRetailPrice` + Rs 80/litre; the SRO 297 sale-type string contains a vertical bar.
