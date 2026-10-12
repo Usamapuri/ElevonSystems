@@ -25,6 +25,14 @@ http {
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "no-referrer-when-downgrade" always;
 
+        # Self-destructing worker for browsers that still hold the previous
+        # app's /sw.js (see public/sw.js). Never immutable: the browser must
+        # be able to pick it up on its next update check.
+        location = /sw.js {
+            add_header Cache-Control "no-cache" always;
+            try_files $uri =404;
+        }
+
         location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
             expires 1y;
             add_header Cache-Control "public, immutable";
