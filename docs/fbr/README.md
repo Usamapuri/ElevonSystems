@@ -53,6 +53,25 @@ Copy the Console output for each case into `audit/FBR_SANDBOX_<YYYY-MM-DD>.md` (
 
 Those four answers close the open questions in spec §7.3 and §7.6 and let Phase 7 start.
 
+## Scenario sign-off collection (2026-10-12)
+
+`elevon-fbr-di-scenarios.postman_collection.json` has one Validate and one Post request for each scenario IRIS assigned to the sandbox profile beyond SN002: **SN001, SN005, SN006, SN007, SN014, SN016, SN017, SN024**. Posting each once turns it from Pending to Successful, which is what IRIS wants before it issues the production token. The app itself only ever files SN002 and SN001; the rest are sign-off exercises, not features.
+
+Every sale type, rate description and SRO schedule/item was read from PRAL's reference lists that day, and all eight bodies validated `00` against the sandbox:
+
+| Scenario | saleType | rate | sroScheduleNo / sroItemSerialNo | Notes |
+|---|---|---|---|---|
+| SN001 | Goods at standard rate (default) | 18% | — | Buyer must be a registered NTN other than the seller's (seller's own → 0058, made-up → 0205). |
+| SN005 | Goods at Reduced Rate | 1% | EIGHTH SCHEDULE Table 1 / 82 | transTypeId 24, rate id 413, schedule 372. |
+| SN006 | Exempt goods | Exempt | 6th Schd Table I / 100 | transTypeId 81, rate id 133, schedule 383. salesTaxApplicable 0. |
+| SN007 | Goods at zero-rate | 0% | FIFTH SCHEDULE / 1(i) | transTypeId 80, rate id 131, schedule 386. |
+| SN014 | Gas to CNG stations | 18% | — | transTypeId 77. |
+| SN016 | Processing/Conversion of Goods | 18% | — | transTypeId 25. |
+| SN017 | Goods (FED in ST Mode) | 18% and Rs. 80 per Liter | — | transTypeId 21, rate id 1043. PRAL accepts only petroleum HS codes for this type (`2710.1240`, `2710.1250`, `2710.1942`; others → 0052) and computes tax as 18 % of `fixedNotifiedValueOrRetailPrice` + Rs 80 × litres, so that field must be set and differ from the value: 10 L, value 1,000, notified 2,000 → tax 1,160. |
+| SN024 | Goods as per SRO.297(\|)/2023 | 25% | 297(I)/2023-Table-I / 12 | transTypeId 139, rate id 742, schedule 448. The sale-type string really contains a vertical bar. |
+
+**Token ↔ seller binding.** The sandbox answers HTTP 401 when `sellerNTNCNIC` is not the NTN the bearer token was issued to. Use the seller's own sandbox token in the Postman environment, and keep Settings → FBR's seller NTN equal to that registration.
+
 ## What is deliberately not here
 
 - No production URLs. The collection cannot file a real invoice.

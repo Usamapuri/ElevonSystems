@@ -1,0 +1,784 @@
+{
+  "info": {
+    "_postman_id": "a5c44fbf-d1de-4dc0-a73b-d16903195a0c",
+    "name": "Elevon POS - FBR DI sandbox scenarios (production-token sign-off)",
+    "description": "One request per scenario FBR assigned to the store's sandbox profile, so each can be posted once to turn 'Pending' into 'Successful' before IRIS issues the production token. Sale types, rate descriptions and SRO schedule/item values were read from PRAL's reference lists (transtypecode, SaleTypeToRate, SroSchedule, SROItem) on 2026-10-12 and every body except SN001 validated 00 that day. Set token, seller_* and buyer_* in a Postman ENVIRONMENT (template in this folder), never in this file. Run folder 1 (validate) first, then folder 2 (post). Sandbox-only: every URL ends in _sb. SN002 is already Successful on the profile and lives in the main collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Invoice date pinned to Asia/Karachi.",
+          "pm.collectionVariables.set('invoice_date', new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' }));",
+          "if (!pm.environment.get('token') && !pm.collectionVariables.get('token')) { console.warn('No token set: create a Postman environment with token = your IRIS sandbox bearer token.'); }"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base",
+      "value": "https://gw.fbr.gov.pk"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "description": "Override in an environment. IRIS sandbox bearer token."
+    },
+    {
+      "key": "seller_ntn",
+      "value": "3792106",
+      "description": "NTN digits only, without the check digit (3792106-1 → 3792106)"
+    },
+    {
+      "key": "seller_name",
+      "value": "UNITY EXPLORATION (PRIVATE) LIMITED"
+    },
+    {
+      "key": "seller_province",
+      "value": "PUNJAB"
+    },
+    {
+      "key": "seller_address",
+      "value": "Lahore"
+    },
+    {
+      "key": "buyer_ntn",
+      "value": "8951943",
+      "description": "SN001 only: a sales-tax-registered NTN other than the seller's (8951943-3 → 8951943). The seller's own NTN is refused with 0058, a made-up one with 0205."
+    },
+    {
+      "key": "buyer_name",
+      "value": "MUHAMMAD SANGEEN KHAN"
+    },
+    {
+      "key": "buyer_province",
+      "value": "PUNJAB"
+    },
+    {
+      "key": "buyer_address",
+      "value": "Lahore"
+    },
+    {
+      "key": "invoice_date",
+      "value": ""
+    },
+    {
+      "key": "last_invoice_number",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Validate (checks only, files nothing)",
+      "item": [
+        {
+          "name": "SN001. Goods at standard rate to a REGISTERED buyer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "buyer_ntn must be a sales-tax-registered NTN other than the seller's (0058 for the seller's own, 0205 for a made-up one). Validated 00 on 2026-10-12 with the buyer in the collection variables.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"{{buyer_ntn}}\",\n  \"buyerBusinessName\": \"{{buyer_name}}\",\n  \"buyerProvince\": \"{{buyer_province}}\",\n  \"buyerAddress\": \"{{buyer_address}}\",\n  \"buyerRegistrationType\": \"Registered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN001\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"LPG 12.500 kg\",\n      \"rate\": \"18%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Goods at standard rate (default)\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN005. Reduced rate sale (1%, Eighth Schedule Table 1 item 82)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "Rate and SRO values from SaleTypeToRate (transTypeId 24 → rate 413 '1%'), SroSchedule (372) and SROItem. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN005\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"LPG 12.500 kg\",\n      \"rate\": \"1%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3345.63,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 33.13,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"EIGHTH SCHEDULE Table 1\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Goods at Reduced Rate\",\n      \"sroItemSerialNo\": \"82\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN006. Exempt goods sale (6th Schedule Table I item 100)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "transTypeId 81 → rate 133 'Exempt'; SroSchedule 383. salesTaxApplicable 0. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN006\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"LPG 12.500 kg\",\n      \"rate\": \"Exempt\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3312.5,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 0.0,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"6th Schd Table I\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Exempt goods\",\n      \"sroItemSerialNo\": \"100\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN007. Zero-rated sale (Fifth Schedule item 1(i))",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "transTypeId 80 → rate 131 '0%'; SroSchedule 386. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN007\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"LPG 12.500 kg\",\n      \"rate\": \"0%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3312.5,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 0.0,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"FIFTH SCHEDULE\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Goods at zero-rate\",\n      \"sroItemSerialNo\": \"1(i)\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN014. Sale of gas to CNG stations (18%)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "transTypeId 77 → rate 728 '18%'. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN014\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"Gas to CNG station 12.500 kg\",\n      \"rate\": \"18%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Gas to CNG stations\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN016. Processing / conversion of goods (18%)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "transTypeId 25 → rate 728 '18%'. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN016\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"Processing of LPG 12.500 kg\",\n      \"rate\": \"18%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Processing/Conversion of Goods\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN017. Goods with FED charged in sales-tax mode (petroleum, 18% + Rs 80/L)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "transTypeId 21 → rate 1043 '18% and Rs. 80 per Liter'. PRAL accepts only an HS code it maps to this sale type (2710.1240 / 2710.1250 / 2710.1942; anything else is 0052) and computes the tax as 18% of fixedNotifiedValueOrRetailPrice plus Rs 80 per litre, so that field must be set: 10 L, value 1,000, notified 2,000 → tax 360 + 800 = 1,160. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN017\",\n  \"items\": [\n    {\n      \"hsCode\": \"2710.1240\",\n      \"productDescription\": \"Motor spirit 10.000 L\",\n      \"rate\": \"18% and Rs. 80 per Liter\",\n      \"uoM\": \"Liter\",\n      \"quantity\": 10.0,\n      \"totalValues\": 2160.0,\n      \"valueSalesExcludingST\": 1000.0,\n      \"fixedNotifiedValueOrRetailPrice\": 2000.0,\n      \"salesTaxApplicable\": 1160.0,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0,\n      \"saleType\": \"Goods (FED in ST Mode)\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN024. Goods listed in SRO 297(I)/2023 (25%, Table I item 12)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/validateinvoicedata_sb"
+            },
+            "description": "transTypeId 139 → rate 742 '25%'; SroSchedule 448. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN024\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"LPG 12.500 kg\",\n      \"rate\": \"25%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 4140.63,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 828.13,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"297(I)/2023-Table-I\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Goods as per SRO.297(|)/2023\",\n      \"sroItemSerialNo\": \"12\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Post (sandbox _sb — files one test invoice per scenario)",
+      "item": [
+        {
+          "name": "SN001. Goods at standard rate to a REGISTERED buyer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "buyer_ntn must be a sales-tax-registered NTN other than the seller's (0058 for the seller's own, 0205 for a made-up one). Validated 00 on 2026-10-12 with the buyer in the collection variables.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"{{buyer_ntn}}\",\n  \"buyerBusinessName\": \"{{buyer_name}}\",\n  \"buyerProvince\": \"{{buyer_province}}\",\n  \"buyerAddress\": \"{{buyer_address}}\",\n  \"buyerRegistrationType\": \"Registered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN001\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"LPG 12.500 kg\",\n      \"rate\": \"18%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Goods at standard rate (default)\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN005. Reduced rate sale (1%, Eighth Schedule Table 1 item 82)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "Rate and SRO values from SaleTypeToRate (transTypeId 24 → rate 413 '1%'), SroSchedule (372) and SROItem. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN005\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"LPG 12.500 kg\",\n      \"rate\": \"1%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3345.63,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 33.13,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"EIGHTH SCHEDULE Table 1\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Goods at Reduced Rate\",\n      \"sroItemSerialNo\": \"82\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN006. Exempt goods sale (6th Schedule Table I item 100)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "transTypeId 81 → rate 133 'Exempt'; SroSchedule 383. salesTaxApplicable 0. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN006\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"LPG 12.500 kg\",\n      \"rate\": \"Exempt\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3312.5,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 0.0,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"6th Schd Table I\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Exempt goods\",\n      \"sroItemSerialNo\": \"100\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN007. Zero-rated sale (Fifth Schedule item 1(i))",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "transTypeId 80 → rate 131 '0%'; SroSchedule 386. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN007\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"LPG 12.500 kg\",\n      \"rate\": \"0%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3312.5,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 0.0,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"FIFTH SCHEDULE\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Goods at zero-rate\",\n      \"sroItemSerialNo\": \"1(i)\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN014. Sale of gas to CNG stations (18%)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "transTypeId 77 → rate 728 '18%'. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN014\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"Gas to CNG station 12.500 kg\",\n      \"rate\": \"18%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Gas to CNG stations\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN016. Processing / conversion of goods (18%)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "transTypeId 25 → rate 728 '18%'. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN016\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"Processing of LPG 12.500 kg\",\n      \"rate\": \"18%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 3908.75,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 596.25,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Processing/Conversion of Goods\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN017. Goods with FED charged in sales-tax mode (petroleum, 18% + Rs 80/L)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "transTypeId 21 → rate 1043 '18% and Rs. 80 per Liter'. PRAL accepts only an HS code it maps to this sale type (2710.1240 / 2710.1250 / 2710.1942; anything else is 0052) and computes the tax as 18% of fixedNotifiedValueOrRetailPrice plus Rs 80 per litre, so that field must be set: 10 L, value 1,000, notified 2,000 → tax 360 + 800 = 1,160. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN017\",\n  \"items\": [\n    {\n      \"hsCode\": \"2710.1240\",\n      \"productDescription\": \"Motor spirit 10.000 L\",\n      \"rate\": \"18% and Rs. 80 per Liter\",\n      \"uoM\": \"Liter\",\n      \"quantity\": 10.0,\n      \"totalValues\": 2160.0,\n      \"valueSalesExcludingST\": 1000.0,\n      \"fixedNotifiedValueOrRetailPrice\": 2000.0,\n      \"salesTaxApplicable\": 1160.0,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"\",\n      \"fedPayable\": 0,\n      \"discount\": 0,\n      \"saleType\": \"Goods (FED in ST Mode)\",\n      \"sroItemSerialNo\": \"\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SN024. Goods listed in SRO 297(I)/2023 (25%, Table I item 12)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/di_data/v1/di/postinvoicedata_sb"
+            },
+            "description": "transTypeId 139 → rate 742 '25%'; SroSchedule 448. Validated 00 on 2026-10-12.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceType\": \"Sale Invoice\",\n  \"invoiceDate\": \"{{invoice_date}}\",\n  \"sellerNTNCNIC\": \"{{seller_ntn}}\",\n  \"sellerBusinessName\": \"{{seller_name}}\",\n  \"sellerProvince\": \"{{seller_province}}\",\n  \"sellerAddress\": \"{{seller_address}}\",\n  \"buyerNTNCNIC\": \"\",\n  \"buyerBusinessName\": \"Walk-in Customer\",\n  \"buyerProvince\": \"{{seller_province}}\",\n  \"buyerAddress\": \"N/A\",\n  \"buyerRegistrationType\": \"Unregistered\",\n  \"invoiceRefNo\": \"\",\n  \"scenarioId\": \"SN024\",\n  \"items\": [\n    {\n      \"hsCode\": \"2711.1910\",\n      \"productDescription\": \"LPG 12.500 kg\",\n      \"rate\": \"25%\",\n      \"uoM\": \"KG\",\n      \"quantity\": 12.5,\n      \"totalValues\": 4140.63,\n      \"valueSalesExcludingST\": 3312.5,\n      \"fixedNotifiedValueOrRetailPrice\": 0,\n      \"salesTaxApplicable\": 828.13,\n      \"salesTaxWithheldAtSource\": 0,\n      \"extraTax\": \"\",\n      \"furtherTax\": 0,\n      \"sroScheduleNo\": \"297(I)/2023-Table-I\",\n      \"fedPayable\": 0.0,\n      \"discount\": 0,\n      \"saleType\": \"Goods as per SRO.297(|)/2023\",\n      \"sroItemSerialNo\": \"12\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "let body = {};",
+                  "try { body = pm.response.json(); } catch (e) { pm.test('response is JSON', () => { throw new Error(pm.response.text()); }); }",
+                  "const vr = body.validationResponse || {};",
+                  "console.log('statusCode', vr.statusCode, 'errorCode', vr.errorCode, 'error', vr.error);",
+                  "(vr.invoiceStatuses || []).forEach((s, i) => console.log('line', i + 1, s.statusCode, s.errorCode || '', s.error || ''));",
+                  "pm.test('validationResponse.statusCode is 00 (valid)', () => pm.expect(vr.statusCode).to.eql('00'));",
+                  "if (body.invoiceNumber) { pm.collectionVariables.set('last_invoice_number', body.invoiceNumber); console.log('FBR invoice number', body.invoiceNumber); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
