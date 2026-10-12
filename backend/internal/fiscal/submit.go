@@ -442,6 +442,11 @@ func failureDetail(cause error) (code, message string) {
 	if errors.As(cause, &rejected) {
 		return rejected.Code, truncate(rejected.Message, maxFailureMessage)
 	}
+	// A dead job's reason (queue.go codedError) carries its own code.
+	var coded interface{ Code() string }
+	if errors.As(cause, &coded) {
+		return coded.Code(), truncate(cause.Error(), maxFailureMessage)
+	}
 	return ErrorCode(cause), truncate(cause.Error(), maxFailureMessage)
 }
 

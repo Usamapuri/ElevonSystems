@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"elevon-backend/internal/dayops"
+	"elevon-backend/internal/fiscal"
 	"elevon-backend/internal/invoice"
 	"elevon-backend/internal/ledger"
 	"elevon-backend/internal/middleware"
@@ -33,10 +35,25 @@ import (
 // deal rate that is band-checked or PIN-approved here and stored beside the
 // list rate — and the submitted quantities. A client can submit what
 // quantities it likes and never a line total, tax or payable.
-type InvoicesHandler struct{ db *sql.DB }
+type InvoicesHandler struct {
+	db *sql.DB
+	// fiscal is how a sale asked to be filed reaches FBR. A zero Deps (no
+	// WithFiscal) behaves as fiscal disabled.
+	fiscal fiscal.Deps
+}
 
 // NewInvoicesHandler builds an InvoicesHandler.
 func NewInvoicesHandler(db *sql.DB) *InvoicesHandler { return &InvoicesHandler{db: db} }
+
+// WithFiscal wires the FBR client the create and void hooks use.
+func (h *InvoicesHandler) WithFiscal(d fiscal.Deps) *InvoicesHandler {
+	h.fiscal = d
+	return h
+}
+
+// fiscalCallTimeout bounds the inline filing at the till: past it the sale is
+// handed to the queue and the cashier gets their receipt.
+const fiscalCallTimeout = 8 * time.Second
 
 // runner is satisfied by *sql.DB and *sql.Tx, so the same read helpers serve
 // a plain GET and the inside of the create/void transactions.
@@ -121,6 +138,7 @@ type parsedInvoice struct {
 	reference       *string
 	notes           *string
 	pin             string
+	fileFBR         bool
 }
 
 // validPaymentMethod matches the invoices_payment_method_check constraint.
@@ -272,6 +290,7 @@ func parseCreateInvoice(req models.CreateInvoiceRequest) (parsedInvoice, *apiErr
 		p.notes = &notes
 	}
 	p.pin = strings.TrimSpace(req.Pin)
+	p.fileFBR = req.FileFBR
 	return p, nil
 }
 
@@ -537,6 +556,25 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 	furtherTaxRate := settingNumber(all, "further_tax_rate")
 	creditLimitEnforced := settingBool(all, "credit_limit_enforced")
 
+	// Filing is the cashier's choice (spec 2026-10-12 §2.2): with fiscal on,
+	// a sale is 'unfiled' unless the till asked for it, and never filed at
+	// all with fiscal off.
+	fiscalStatus := "off"
+	if h.fiscal.DB != nil {
+		fiscalCfg, err := fiscal.LoadConfig(h.db)
+		if err != nil {
+			log.Printf("invoice create: fiscal config: %v", err)
+			c.JSON(http.StatusInternalServerError, models.Fail("Could not record the sale", "internal_error"))
+			return
+		}
+		switch {
+		case fiscalCfg.Enabled && p.fileFBR:
+			fiscalStatus = "pending"
+		case fiscalCfg.Enabled:
+			fiscalStatus = "unfiled"
+		}
+	}
+
 	// 3 — number, outside the transaction.
 	number, err := invoice.AllocateInvoiceNumber(h.db, util.BusinessDate(now))
 	if err != nil {
@@ -755,13 +793,13 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 			$5, $6, $7, $8, $9, $10, $11,
 			$12, $13, $14, $15, $16, $17,
 			$18, $19, $20, $21, $22, $23,
-			$24, 'off')
+			$24, $25)
 		RETURNING `+invoiceColumns,
 		number, p.clientOpID, day.ID, day.BusinessDate.Format(dayops.DateLayout),
 		actorOrNil(actor.ID), cashier, customerID, customerNameSnapshot, customerPhone, customerNTN, customerCNIC,
 		totals.Subtotal, totals.DiscountAmount, p.discountPercent, totals.TaxRate, totals.TaxAmount, totals.FurtherTaxAmount,
 		totals.TotalAmount, totals.RoundingAdjustment, totals.TotalPayable, p.method, p.reference, p.subMethod,
-		notes))
+		notes, fiscalStatus))
 	if err != nil {
 		// Two tills retrying the same sale at the same moment: the loser of
 		// the unique index gets the winner's invoice, not an error.
@@ -839,7 +877,44 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.Fail("Could not record the sale", "internal_error"))
 		return
 	}
+
+	// 13 — file with FBR when asked, after the sale is safely committed:
+	// whatever FBR says, the sale stands.
+	if fiscalStatus == "pending" {
+		h.fileInline(c, &inv, fiscal.KindSale, actor)
+	}
 	c.JSON(http.StatusCreated, models.OK("Invoice recorded", inv))
+}
+
+// fileInline runs one filing with a short deadline and writes the outcome
+// onto inv for the response: synced with its number, failed with a code, or
+// still pending with a job queued because FBR could not be reached.
+func (h *InvoicesHandler) fileInline(c *gin.Context, inv *models.Invoice, kind fiscal.Kind, actor dayops.Actor) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), fiscalCallTimeout)
+	defer cancel()
+	number, ferr := fiscal.Submit(ctx, h.fiscal, inv.ID, kind, actorOrNil(actor.ID))
+	switch {
+	case ferr == nil:
+		if kind == fiscal.KindDebitNote {
+			inv.FiscalVoidStatus, inv.FiscalDebitNoteNumber = "synced", &number
+		} else {
+			inv.FiscalStatus, inv.FiscalInvoiceNumber = "synced", &number
+		}
+	case errors.Is(ferr, fiscal.ErrUnreachable) || errors.Is(ferr, context.DeadlineExceeded):
+		if err := fiscal.Enqueue(h.db, fiscal.JobRef{InvoiceID: &inv.ID}, kind, time.Now()); err != nil {
+			log.Printf("invoice %s: enqueue fiscal: %v", kind, err)
+		}
+	default:
+		if err := fiscal.MarkFailed(h.db, inv.ID, kind, ferr); err != nil {
+			log.Printf("invoice %s: mark fiscal failed: %v", kind, err)
+		}
+		if kind == fiscal.KindDebitNote {
+			inv.FiscalVoidStatus = "failed"
+		} else {
+			inv.FiscalStatus = "failed"
+		}
+		inv.FiscalErrorCode = fiscal.ErrorCode(ferr)
+	}
 }
 
 // findByClientOp returns the invoice already written for this idempotency
@@ -1090,10 +1165,14 @@ func (h *InvoicesHandler) Void(c *gin.Context) {
 		paymentMethod string
 		totalPayable  int64
 		customerID    *uuid.UUID
+		fiscalStatus  string
+		buyerType     string
 	)
-	err = tx.QueryRow(`SELECT invoice_number, status, payment_method, total_payable::bigint, customer_id
-		FROM invoices WHERE id = $1 FOR UPDATE`, id).Scan(
-		&invoiceNumber, &status, &paymentMethod, &totalPayable, &customerID)
+	err = tx.QueryRow(`SELECT i.invoice_number, i.status, i.payment_method, i.total_payable::bigint, i.customer_id,
+			i.fiscal_status, COALESCE(c.buyer_registration_type, '')
+		FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+		WHERE i.id = $1 FOR UPDATE OF i`, id).Scan(
+		&invoiceNumber, &status, &paymentMethod, &totalPayable, &customerID, &fiscalStatus, &buyerType)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.JSON(http.StatusNotFound, models.Fail("Invoice not found", "invoice_not_found"))
 		return
@@ -1107,6 +1186,16 @@ func (h *InvoicesHandler) Void(c *gin.Context) {
 		c.JSON(http.StatusConflict, models.Fail("That invoice is already voided", "invoice_already_voided"))
 		return
 	}
+	// Spec 2026-10-12 §2.5: a sale whose filing is in flight cannot be voided
+	// until FBR has answered, or the void and the filing would race.
+	if fiscalStatus == "pending" {
+		c.JSON(http.StatusConflict, models.Fail("This invoice is being filed with FBR — try again in a moment", "fiscal_filing_in_flight"))
+		return
+	}
+	// A filed sale to a registered buyer is reversed with a Debit Note; a
+	// walk-in's cannot be (FBR 0106) and a covered sale belongs to its
+	// combined invoice, so those void locally and stay 'unfiled'.
+	debitNote := fiscalStatus == "synced" && strings.EqualFold(buyerType, "Registered") && h.fiscal.DB != nil
 
 	identity, err := staffpin.Identify(tx, pin, staffpin.AdminOnly)
 	if errors.Is(err, staffpin.ErrNoMatch) {
@@ -1143,6 +1232,13 @@ func (h *InvoicesHandler) Void(c *gin.Context) {
 		log.Printf("invoice void: void_log: %v", err)
 		c.JSON(http.StatusInternalServerError, models.Fail("Could not void the invoice", "internal_error"))
 		return
+	}
+	if debitNote {
+		if _, err := tx.Exec(`UPDATE invoices SET fiscal_void_status = 'pending' WHERE id = $1`, id); err != nil {
+			log.Printf("invoice void: fiscal void status: %v", err)
+			c.JSON(http.StatusInternalServerError, models.Fail("Could not void the invoice", "internal_error"))
+			return
+		}
 	}
 
 	// A voided credit sale is money no longer owed. The mirror entry is a new
@@ -1187,5 +1283,8 @@ func (h *InvoicesHandler) Void(c *gin.Context) {
 		return
 	}
 	inv.CustomerBalanceAfter = balanceAfter
+	if debitNote {
+		h.fileInline(c, &inv, fiscal.KindDebitNote, actor)
+	}
 	c.JSON(http.StatusOK, models.OK("Invoice voided", inv))
 }

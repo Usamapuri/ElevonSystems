@@ -98,6 +98,10 @@ type Invoice struct {
 	// progresses. FiscalVoidStatus is 'unfiled' until a void is filed.
 	FiscalVoidStatus      string  `json:"fiscal_void_status"`
 	FiscalDebitNoteNumber *string `json:"fiscal_debit_note_number"`
+	// FiscalBatchID points at the combined invoice that covers this sale.
+	FiscalBatchID *uuid.UUID `json:"fiscal_batch_id"`
+	// FiscalErrorCode is response-only: why an inline filing just failed.
+	FiscalErrorCode string `json:"fiscal_error_code,omitempty"`
 
 	CreatedAt  time.Time  `json:"created_at"`
 	VoidedAt   *time.Time `json:"voided_at"`
@@ -150,6 +154,9 @@ type CreateInvoiceRequest struct {
 	PaymentReference string               `json:"payment_reference"`
 	Notes            string               `json:"notes"`
 	Pin              string               `json:"pin"`
+	// FileFBR asks for this one sale to be filed with FBR right away (spec
+	// 2026-10-12 §2.2). Nothing is filed unless asked.
+	FileFBR bool `json:"file_fbr"`
 }
 
 // VoidInvoiceRequest voids a whole invoice (spec §6.4). The PIN is the

@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"elevon-backend/internal/api"
 	"elevon-backend/internal/database"
+	"elevon-backend/internal/fiscal"
 	"elevon-backend/internal/middleware"
 	"elevon-backend/internal/settings"
 
@@ -33,6 +36,11 @@ func main() {
 	database.EnsureInitialAdmin(db)
 	settings.LoadDayBoundaryHour(db)
 
+	// The FBR outbound worker retries filings the till could not complete
+	// inline. It runs for the life of the process.
+	fiscal.StartWorker(context.Background(), fiscal.Deps{DB: db, Timeout: 60 * time.Second}, 5*time.Second)
+	warnFiscalSecretsKey(db)
+
 	gin.SetMode(getEnv("GIN_MODE", "release"))
 	router := gin.New()
 	// Default-deny proxy headers so c.ClientIP() is the TCP peer and IP-keyed
@@ -53,6 +61,18 @@ func main() {
 	log.Printf("listening on :%s", port)
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("server: %v", err)
+	}
+}
+
+// warnFiscalSecretsKey says so at boot when filing is switched on in release
+// mode without the key that decrypts the stored token: every filing would
+// refuse with fiscal_secrets_key_missing until it is set.
+func warnFiscalSecretsKey(db *sql.DB) {
+	if getEnv("GIN_MODE", "release") != "release" || os.Getenv(fiscal.EnvSecretsKey) != "" {
+		return
+	}
+	if cfg, err := fiscal.LoadConfig(db); err == nil && cfg.Enabled {
+		log.Printf("WARNING: fiscal filing is enabled but %s is not set — every filing will refuse", fiscal.EnvSecretsKey)
 	}
 }
 

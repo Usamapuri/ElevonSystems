@@ -31,7 +31,7 @@ const Columns = `id, invoice_number, client_op_id, business_day_id, business_dat
 	subtotal::float8, discount_amount::float8, discount_percent::float8, tax_rate::float8,
 	tax_amount::float8, further_tax_amount::float8, total_amount::float8, rounding_adjustment::float8,
 	total_payable::bigint, payment_method, payment_reference, payment_sub_method, notes,
-	fiscal_status, fiscal_invoice_number, fiscal_void_status, fiscal_debit_note_number,
+	fiscal_status, fiscal_invoice_number, fiscal_void_status, fiscal_debit_note_number, fiscal_batch_id,
 	created_at, voided_at, voided_by, void_reason`
 
 // LineColumns is the invoice_lines projection, on the same rule as Columns.
@@ -48,7 +48,7 @@ func ScanInvoice(row RowScanner) (models.Invoice, error) {
 		&inv.Subtotal, &inv.DiscountAmount, &inv.DiscountPercent, &inv.TaxRate,
 		&inv.TaxAmount, &inv.FurtherTaxAmount, &inv.TotalAmount, &inv.RoundingAdjustment,
 		&inv.TotalPayable, &inv.PaymentMethod, &inv.PaymentReference, &inv.PaymentSubMethod, &inv.Notes,
-		&inv.FiscalStatus, &inv.FiscalInvoiceNumber, &inv.FiscalVoidStatus, &inv.FiscalDebitNoteNumber,
+		&inv.FiscalStatus, &inv.FiscalInvoiceNumber, &inv.FiscalVoidStatus, &inv.FiscalDebitNoteNumber, &inv.FiscalBatchID,
 		&inv.CreatedAt, &inv.VoidedAt, &inv.VoidedBy, &inv.VoidReason)
 	return inv, err
 }

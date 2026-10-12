@@ -8,6 +8,7 @@ import (
 	"database/sql"
 
 	"elevon-backend/internal/email"
+	"elevon-backend/internal/fiscal"
 	"elevon-backend/internal/handlers"
 	"elevon-backend/internal/middleware"
 	"elevon-backend/internal/util"
@@ -84,7 +85,7 @@ func SetupRoutes(r *gin.RouterGroup, db *sql.DB, auth gin.HandlerFunc) {
 
 	// The money core. Voids are on staff for the same reason: the PIN in the
 	// body identifies the admin who authorised it (spec §6.4).
-	invoicesH := handlers.NewInvoicesHandler(db)
+	invoicesH := handlers.NewInvoicesHandler(db).WithFiscal(fiscal.Deps{DB: db})
 	staff.POST("/invoices", invoicesH.Create)
 	staff.GET("/invoices", invoicesH.List)
 	staff.GET("/invoices/recent", invoicesH.Recent)
