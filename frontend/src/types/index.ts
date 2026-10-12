@@ -131,6 +131,52 @@ export interface FiscalTestStep {
   raw_response: unknown
 }
 
+export interface PendingSummary {
+  count: number
+  kg: number
+  total_payable: number
+}
+
+/** GET /fiscal/pending — information only, never a gate. */
+export interface FiscalPending {
+  enabled: boolean
+  today: PendingSummary
+  all: PendingSummary
+}
+
+/** GET /admin/fiscal/eligible — one unfiled sale on the File with FBR screen. */
+export interface EligibleInvoice {
+  id: string
+  invoice_number: string
+  status: string
+  created_at: string
+  customer_name: string | null
+  total_kg: number
+  total_amount: number
+  total_payable: number
+  fiscal_status: string
+  eligible: boolean
+  reason: '' | 'registered_buyer' | 'tax_rate_mismatch'
+}
+
+/** One combined FBR invoice (fiscal_batches). */
+export interface FiscalBatch {
+  id: string
+  business_date: string
+  status: 'pending' | 'synced' | 'failed'
+  fbr_invoice_number: string | null
+  invoice_count: number
+  total_kg: number
+  value_excl_tax: number
+  tax_amount: number
+  further_tax_amount: number
+  total_amount: number
+  last_error_code: string | null
+  last_error: string | null
+  created_at: string
+  settled_at: string | null
+}
+
 /** POST /admin/fiscal/test — always 200; `ok` says whether it passed. */
 export interface FiscalTestResult {
   ok: boolean
@@ -544,6 +590,10 @@ export interface Invoice {
   /** The debit note that reverses this sale with FBR: unfiled until one is filed. */
   fiscal_void_status: string
   fiscal_debit_note_number: string | null
+  /** The combined invoice that covers this sale, when fiscal_status is covered. */
+  fiscal_batch_id: string | null
+  /** Response-only: why an inline filing just failed. */
+  fiscal_error_code?: string
   created_at: string
   voided_at: string | null
   voided_by: string | null
@@ -580,6 +630,8 @@ export interface CreateInvoiceRequest {
   payment_reference?: string
   notes?: string
   pin?: string
+  /** File this one sale with FBR right away (Charge + FBR). */
+  file_fbr?: boolean
 }
 
 export interface VoidInvoiceRequest {

@@ -1,4 +1,4 @@
-import { BarChart3, BookUser, CalendarCheck, FileText, LayoutDashboard, Scale, Settings, ShoppingCart } from 'lucide-react'
+import { BarChart3, BookUser, CalendarCheck, FileCheck2, FileText, LayoutDashboard, Scale, Settings, ShoppingCart } from 'lucide-react'
 
 /** Mirrors backend/internal/util/roles.go and the users_role_check constraint. */
 export const ROLES = ['admin', 'counter'] as const
@@ -32,6 +32,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'customers', label: 'Customers', to: '/customers', icon: BookUser, roles: ['admin', 'counter'] },
   { id: 'invoices', label: 'Invoices', to: '/invoices', icon: FileText, roles: ['admin', 'counter'] },
   { id: 'reports', label: 'Reports', to: '/reports', icon: BarChart3, roles: ['admin'] },
+  { id: 'fbr', label: 'File with FBR', to: '/fbr', icon: FileCheck2, roles: ['admin'] },
   { id: 'rates', label: 'Rates', to: '/rates', icon: Scale, roles: ['admin'] },
   { id: 'settings', label: 'Settings', to: '/settings', icon: Settings, roles: ['admin'] },
 ]

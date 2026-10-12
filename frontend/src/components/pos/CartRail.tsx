@@ -36,6 +36,11 @@ interface Props {
   /** Opens the deal-rate field for the line. */
   onRateLine: (line: CartLine) => void
   onCharge: () => void
+  /** Present only when FBR filing is switched on: the second button files
+   * this one sale with FBR as part of the charge. */
+  onChargeFbr?: () => void
+  /** One quiet line under the totals: how much is unfiled. Never a warning. */
+  pendingText?: string | null
   chargeDisabled: boolean
   /** Shown under the Charge button when it is off. */
   chargeHint: string | null
@@ -62,6 +67,8 @@ export function CartRail({
   onEditLine,
   onRateLine,
   onCharge,
+  onChargeFbr,
+  pendingText,
   chargeDisabled,
   chargeHint,
   className,
@@ -198,6 +205,7 @@ export function CartRail({
             <Row label="Rounding" value={totals.rounding_adjustment} className="text-muted-foreground" />
           )}
         </dl>
+        {pendingText && <p className="tabular text-xs text-muted-foreground">{pendingText}</p>}
       </div>
 
       {/*
@@ -214,13 +222,25 @@ export function CartRail({
             {formatMoney(totals?.total_payable ?? 0)}
           </span>
         </div>
-        <Button
-          className="mt-3 h-14 w-full text-base focus-visible:ring-primary focus-visible:ring-offset-rail disabled:bg-white/10 disabled:text-rail-muted"
-          disabled={chargeDisabled}
-          onClick={onCharge}
-        >
-          Charge {totals ? formatMoney(totals.total_payable) : ''}
-        </Button>
+        <div className={cn('mt-3 grid gap-2', onChargeFbr && 'grid-cols-2')}>
+          <Button
+            className="h-14 w-full text-base focus-visible:ring-primary focus-visible:ring-offset-rail disabled:bg-white/10 disabled:text-rail-muted"
+            disabled={chargeDisabled}
+            onClick={onCharge}
+          >
+            Charge {totals ? formatMoney(totals.total_payable) : ''}
+          </Button>
+          {onChargeFbr && (
+            <Button
+              variant="outline"
+              className="h-14 w-full border-white/30 bg-transparent text-base text-rail-foreground hover:bg-white/10 hover:text-rail-foreground focus-visible:ring-primary focus-visible:ring-offset-rail disabled:border-white/10 disabled:text-rail-muted"
+              disabled={chargeDisabled}
+              onClick={onChargeFbr}
+            >
+              Charge + FBR
+            </Button>
+          )}
+        </div>
         {chargeHint && <p className="mt-2 text-center text-xs font-medium text-rail-muted">{chargeHint}</p>}
       </div>
     </div>

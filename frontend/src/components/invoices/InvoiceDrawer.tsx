@@ -17,7 +17,7 @@
  */
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Ban, Loader2, Printer } from 'lucide-react'
+import { Ban, FileCheck2, Loader2, Printer } from 'lucide-react'
 import apiClient, { ApiClientError } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,7 @@ import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTit
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PinEntryModal } from '@/components/shared/PinEntryModal'
 import { toast } from '@/hooks/use-toast'
+import { fiscalStatusLabel } from '@/lib/fiscal'
 import { formatKgGrouped, formatMoney } from '@/lib/money'
 import {
   formatBusinessDate,
@@ -94,6 +95,21 @@ export function InvoiceDrawer({ invoiceId, onOpenChange }: Props) {
       setPrinting(false)
     }
   }
+
+  const isAdmin = apiClient.getStoredUser()?.role === 'admin'
+  const fileMutation = useMutation({
+    mutationFn: () => apiClient.submitInvoiceToFbr(invoiceId as string),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['invoices'] })
+      qc.invalidateQueries({ queryKey: ['invoice', invoiceId] })
+      qc.invalidateQueries({ queryKey: ['fiscal'] })
+      const inv = res.data
+      if (inv?.fiscal_status === 'synced') toast({ title: `Filed with FBR · ${inv.fiscal_invoice_number ?? ''}`, variant: 'success' })
+      else if (inv?.fiscal_status === 'failed') toast({ title: `FBR rejected it (${inv.fiscal_error_code ?? 'rejected'})`, variant: 'destructive' })
+      else toast({ title: 'FBR is not answering — it will file automatically' })
+    },
+    onError: (err: unknown) => toast({ title: 'Could not file with FBR', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' }),
+  })
 
   const voidMutation = useMutation({
     mutationFn: ({ pin, reason }: { pin: string; reason: string }) =>
@@ -168,8 +184,30 @@ export function InvoiceDrawer({ invoiceId, onOpenChange }: Props) {
                     <Ban className="mr-2 h-4 w-4" /> Void
                   </Button>
                 )}
+                {isAdmin && !voided && (invoice.fiscal_status === 'unfiled' || invoice.fiscal_status === 'failed') && (
+                  <Button variant="outline" size="sm" disabled={fileMutation.isPending} onClick={() => fileMutation.mutate()}>
+                    {fileMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />} File with FBR
+                  </Button>
+                )}
                 {printing && <Loader2 className="mt-2 h-4 w-4 animate-spin text-muted-foreground" />}
               </div>
+
+              {invoice.fiscal_status !== 'off' && (
+                <p className="text-sm">
+                  <span className="text-muted-foreground">FBR: </span>
+                  {fiscalStatusLabel(invoice.fiscal_status)}
+                  {invoice.fiscal_invoice_number && (
+                    <>
+                      {' · '}
+                      <span className="tabular">{invoice.fiscal_invoice_number}</span>
+                      {invoice.fiscal_status === 'covered' && <span className="text-muted-foreground"> (combined invoice)</span>}
+                    </>
+                  )}
+                  {invoice.fiscal_debit_note_number && (
+                    <span className="text-muted-foreground"> · debit note {invoice.fiscal_debit_note_number}</span>
+                  )}
+                </p>
+              )}
 
               {voided && (
                 <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">

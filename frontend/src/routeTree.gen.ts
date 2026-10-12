@@ -17,6 +17,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AppCustomersRouteImport } from './routes/_app/customers'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppDayCloseRouteImport } from './routes/_app/day-close'
+import { Route as AppFbrRouteImport } from './routes/_app/fbr'
 import { Route as AppInvoicesRouteImport } from './routes/_app/invoices'
 import { Route as AppPosRouteImport } from './routes/_app/pos'
 import { Route as AppRatesRouteImport } from './routes/_app/rates'
@@ -62,6 +63,11 @@ const AppDayCloseRoute = AppDayCloseRouteImport.update({
   path: '/day-close',
   getParentRoute: () => AppRoute,
 } as any)
+const AppFbrRoute = AppFbrRouteImport.update({
+  id: '/fbr',
+  path: '/fbr',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppInvoicesRoute = AppInvoicesRouteImport.update({
   id: '/invoices',
   path: '/invoices',
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/customers': typeof AppCustomersRoute
   '/dashboard': typeof AppDashboardRoute
   '/day-close': typeof AppDayCloseRoute
+  '/fbr': typeof AppFbrRoute
   '/invoices': typeof AppInvoicesRoute
   '/pos': typeof AppPosRoute
   '/rates': typeof AppRatesRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/customers': typeof AppCustomersRoute
   '/dashboard': typeof AppDashboardRoute
   '/day-close': typeof AppDayCloseRoute
+  '/fbr': typeof AppFbrRoute
   '/invoices': typeof AppInvoicesRoute
   '/pos': typeof AppPosRoute
   '/rates': typeof AppRatesRoute
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/_app/customers': typeof AppCustomersRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/day-close': typeof AppDayCloseRoute
+  '/_app/fbr': typeof AppFbrRoute
   '/_app/invoices': typeof AppInvoicesRoute
   '/_app/pos': typeof AppPosRoute
   '/_app/rates': typeof AppRatesRoute
@@ -142,6 +151,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/dashboard'
     | '/day-close'
+    | '/fbr'
     | '/invoices'
     | '/pos'
     | '/rates'
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/dashboard'
     | '/day-close'
+    | '/fbr'
     | '/invoices'
     | '/pos'
     | '/rates'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/_app/customers'
     | '/_app/dashboard'
     | '/_app/day-close'
+    | '/_app/fbr'
     | '/_app/invoices'
     | '/_app/pos'
     | '/_app/rates'
@@ -244,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDayCloseRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/fbr': {
+      id: '/_app/fbr'
+      path: '/fbr'
+      fullPath: '/fbr'
+      preLoaderRoute: typeof AppFbrRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/invoices': {
       id: '/_app/invoices'
       path: '/invoices'
@@ -286,6 +305,7 @@ interface AppRouteChildren {
   AppCustomersRoute: typeof AppCustomersRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDayCloseRoute: typeof AppDayCloseRoute
+  AppFbrRoute: typeof AppFbrRoute
   AppInvoicesRoute: typeof AppInvoicesRoute
   AppPosRoute: typeof AppPosRoute
   AppRatesRoute: typeof AppRatesRoute
@@ -297,6 +317,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCustomersRoute: AppCustomersRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDayCloseRoute: AppDayCloseRoute,
+  AppFbrRoute: AppFbrRoute,
   AppInvoicesRoute: AppInvoicesRoute,
   AppPosRoute: AppPosRoute,
   AppRatesRoute: AppRatesRoute,

@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type {
+  EligibleInvoice, FiscalBatch, FiscalPending,
   FiscalEnvironment, FiscalReference, FiscalStatus, FiscalTestResult, FiscalTokenState,
   APIResponse, AppSettings, BusinessDay, CashMovement, CashMovementRequest, CloseDayRequest, CreateCustomerRequest,
   CreateInvoiceRequest, CreateProductRequest, CreateReceiptRequest, CreateUserRequest, Customer, CustomerAgeing,
@@ -325,6 +326,25 @@ class APIClient {
   }
   refreshFiscalReference() {
     return this.request<FiscalReference>({ method: 'POST', url: '/admin/fiscal/reference/refresh', timeout: 45000 })
+  }
+  getFiscalPending() {
+    return this.request<FiscalPending>({ method: 'GET', url: '/fiscal/pending' })
+  }
+  getFiscalEligible(business_date: string) {
+    return this.request<EligibleInvoice[]>({ method: 'GET', url: '/admin/fiscal/eligible', params: { business_date } })
+  }
+  /** 201 synced or failed (batch in `data`), 202 queued, 409 fiscal_batch_ineligible. */
+  createFiscalBatch(business_date: string, invoice_ids: string[]) {
+    return this.request<FiscalBatch>({ method: 'POST', url: '/admin/fiscal/batches', data: { business_date, invoice_ids }, timeout: 45000 })
+  }
+  listFiscalBatches(from: string, to: string) {
+    return this.request<FiscalBatch[]>({ method: 'GET', url: '/admin/fiscal/batches', params: { from, to } })
+  }
+  getFiscalBatch(id: string) {
+    return this.request<{ batch: FiscalBatch; invoices: EligibleInvoice[] }>({ method: 'GET', url: `/admin/fiscal/batches/${id}` })
+  }
+  submitInvoiceToFbr(id: string) {
+    return this.request<Invoice>({ method: 'POST', url: `/admin/fiscal/invoices/${id}/submit`, timeout: 45000 })
   }
 
   // ── Dashboard (admin-only) ──────────────────────────────────────────────

@@ -38,6 +38,8 @@ import { toast } from '@/hooks/use-toast'
 import { computeTotals, taxRateFor, type Totals } from '@/lib/pricing'
 import { printInvoice } from '@/lib/print/printInvoice'
 import { cartDiscount, cartReducer, emptyCart, pricingLines, requestLines, type CartLine } from '@/components/pos/cart'
+import { pendingLine } from '@/lib/fiscal'
+import type { FiscalPending } from '@/types'
 import { evaluateDayGate, gateBlocks, gateFromErrorCode, type DayGate } from '@/components/pos/dayGate'
 import { dialogIsOpen, shouldOpenTender } from '@/components/pos/chargeGuard'
 import type { CreateInvoiceRequest, Customer, PaymentMethod, PrintDocument, Product } from '@/types'
@@ -87,6 +89,16 @@ function PosPage() {
   /** Minted on the first Charge press of an attempt; kept across the PIN
    * retry; cleared once the sale lands or the cashier walks away. */
   const clientOpId = useRef<string | null>(null)
+  /** Charge + FBR sets this for the attempt; it rides every retry of it. */
+  const fileFbr = useRef(false)
+  const fiscalPending = useQuery({
+    queryKey: ['fiscal', 'pending'],
+    queryFn: async (): Promise<FiscalPending> => {
+      const res = await apiClient.getFiscalPending()
+      if (!res.success || !res.data) throw new Error(res.message || 'Could not load')
+      return res.data
+    },
+  })
   /** What the tender dialog last submitted, so the PIN retry can repeat it. */
   const lastDetails = useRef<TenderDetails | null>(null)
 
@@ -177,6 +189,7 @@ function PosPage() {
         notes: details.notes,
         pin,
       }
+      if (fileFbr.current) body.file_fbr = true
       return apiClient.createInvoice(body)
     },
     onSuccess: async (res) => {
@@ -197,8 +210,26 @@ function PosPage() {
       setTender('cash')
       qc.invalidateQueries({ queryKey: RECENT_INVOICES_KEY })
       qc.invalidateQueries({ queryKey: DAY_CURRENT_KEY })
+      qc.invalidateQueries({ queryKey: ['fiscal', 'pending'] })
       if (invoice.customer_id) qc.invalidateQueries({ queryKey: ['customers'] })
-      toast({ title: `Invoice ${invoice.invoice_number}`, variant: 'success' })
+      if (fileFbr.current) {
+        fileFbr.current = false
+        switch (invoice.fiscal_status) {
+          case 'synced':
+            toast({ title: `Invoice ${invoice.invoice_number}`, description: `Filed with FBR · ${invoice.fiscal_invoice_number ?? ''}`, variant: 'success' })
+            break
+          case 'pending':
+            toast({ title: `Invoice ${invoice.invoice_number}`, description: 'Sale recorded. FBR is not answering — it will file automatically.' })
+            break
+          case 'failed':
+            toast({ title: `Invoice ${invoice.invoice_number}`, description: `Sale recorded. FBR rejected it (${invoice.fiscal_error_code ?? 'rejected'}).`, variant: 'destructive' })
+            break
+          default:
+            toast({ title: `Invoice ${invoice.invoice_number}`, variant: 'success' })
+        }
+      } else {
+        toast({ title: `Invoice ${invoice.invoice_number}`, variant: 'success' })
+      }
       searchRef.current?.focus()
       await printInvoice(invoice, document)
     },
@@ -276,8 +307,9 @@ function PosPage() {
    * up, or while the POST is in flight has to be a no-op: re-keying a live
    * attempt is what turns a lost response into a double-charge.
    */
-  const openTender = () => {
+  const openTender = (withFbr = false) => {
     if (!shouldOpenTender({ tenderOpen, pinOpen, pending: charge.isPending, chargeDisabled })) return
+    fileFbr.current = withFbr
     clientOpId.current = null
     setChargeError(null)
     setPinError(null)
@@ -348,7 +380,9 @@ function PosPage() {
           taxRate={taxRate}
           onEditLine={openPadForLine}
           onRateLine={setRateLine}
-          onCharge={openTender}
+          onCharge={() => openTender(false)}
+          onChargeFbr={fiscalPending.data?.enabled ? () => openTender(true) : undefined}
+          pendingText={fiscalPending.data ? pendingLine(fiscalPending.data) : null}
           // Also off while a POST is in flight: the button is the other way
           // into openTender, and a second press must not re-key a live
           // attempt.

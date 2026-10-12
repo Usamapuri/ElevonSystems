@@ -15,6 +15,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import apiClient from '@/api/client'
+import { FiscalPendingCard } from '@/components/dashboard/FiscalPendingCard'
 import { KpiRow } from '@/components/dashboard/KpiRow'
 import { RecentInvoices } from '@/components/dashboard/RecentInvoices'
 import { TopProducts } from '@/components/dashboard/TopProducts'
@@ -75,6 +76,7 @@ function DashboardPage() {
           <Suspense fallback={<div className="h-72 w-full animate-pulse rounded-lg border bg-muted/40" />}>
             <TrendChart series7d={data.series_7d} series30d={data.series_30d} />
           </Suspense>
+          <FiscalPendingCard />
           <div className="grid gap-4 xl:grid-cols-2">
             <TopProducts products={data.top_products} />
             <RecentInvoices invoices={data.recent_invoices} />

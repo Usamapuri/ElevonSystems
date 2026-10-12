@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Search } from 'lucide-react'
 import apiClient from '@/api/client'
 import { Badge } from '@/components/ui/badge'
+import { fiscalStatusLabel } from '@/lib/fiscal'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -55,15 +56,18 @@ const ANY = 'all'
 /** `off` is the resting state until FBR Digital Invoicing is configured
  * (Phase 7) — it means "not fiscalised", not "failed". */
 function fiscalBadge(status: string): { label: string; variant: 'secondary' | 'success' | 'warning' | 'destructive' } {
+  const label = fiscalStatusLabel(status)
   switch (status) {
     case 'synced':
-      return { label: 'Synced', variant: 'success' }
+    case 'covered':
+      return { label, variant: 'success' }
     case 'pending':
-      return { label: 'Pending', variant: 'warning' }
+    case 'unfiled':
+      return { label, variant: 'warning' }
     case 'failed':
-      return { label: 'Failed', variant: 'destructive' }
+      return { label, variant: 'destructive' }
     default:
-      return { label: 'Off', variant: 'secondary' }
+      return { label, variant: 'secondary' }
   }
 }
 

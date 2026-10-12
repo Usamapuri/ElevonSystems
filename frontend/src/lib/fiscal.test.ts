@@ -52,3 +52,54 @@ describe('prettyJson', () => {
     expect(prettyJson(null)).toBe('null')
   })
 })
+
+import { fiscalStatusLabel, ineligibleReason, pendingLine, selectionTotals } from './fiscal'
+import type { EligibleInvoice, FiscalPending } from '@/types'
+
+describe('fiscalStatusLabel', () => {
+  it('names every status in a cashier’s words', () => {
+    expect(fiscalStatusLabel('off')).toBe('Not filed')
+    expect(fiscalStatusLabel('unfiled')).toBe('Unfiled')
+    expect(fiscalStatusLabel('pending')).toBe('Filing…')
+    expect(fiscalStatusLabel('synced')).toBe('Filed')
+    expect(fiscalStatusLabel('covered')).toBe('Filed (combined)')
+    expect(fiscalStatusLabel('failed')).toBe('Rejected')
+    expect(fiscalStatusLabel('weird')).toBe('weird')
+  })
+})
+
+describe('pendingLine', () => {
+  const p: FiscalPending = {
+    enabled: true,
+    today: { count: 14, kg: 3240.5, total_payable: 812340 },
+    all: { count: 14, kg: 3240.5, total_payable: 812340 },
+  }
+  it('summarises today, and the backlog when it is bigger', () => {
+    expect(pendingLine(p)).toBe('Unfiled today: 14 invoices · 3,240.500 kg · Rs 812,340')
+    expect(pendingLine({ ...p, all: { ...p.all, count: 31 } })).toBe('Unfiled today: 14 invoices · 3,240.500 kg · Rs 812,340 · 31 in all')
+    expect(pendingLine({ ...p, today: { count: 1, kg: 12.5, total_payable: 3909 }, all: { count: 1, kg: 12.5, total_payable: 3909 } })).toBe(
+      'Unfiled today: 1 invoice · 12.500 kg · Rs 3,909',
+    )
+  })
+  it('is silent when fiscal is off or nothing is unfiled', () => {
+    expect(pendingLine({ ...p, enabled: false })).toBeNull()
+    expect(pendingLine({ enabled: true, today: { count: 0, kg: 0, total_payable: 0 }, all: { count: 0, kg: 0, total_payable: 0 } })).toBeNull()
+  })
+})
+
+describe('selectionTotals / ineligibleReason', () => {
+  const row = (id: string, eligible: boolean, kg: number, amount: number, payable: number): EligibleInvoice => ({
+    id, invoice_number: id, status: 'completed', created_at: '', customer_name: null,
+    total_kg: kg, total_amount: amount, total_payable: payable, fiscal_status: 'unfiled', eligible, reason: eligible ? '' : 'registered_buyer',
+  })
+  it('sums only rows that are both selected and eligible', () => {
+    const rows = [row('a', true, 10, 100, 100), row('b', true, 20, 200, 200), row('c', false, 30, 300, 300)]
+    expect(selectionTotals(rows, new Set(['a', 'c']))).toEqual({ count: 1, kg: 10, total_payable: 100 })
+    expect(selectionTotals(rows, new Set(['a', 'b']))).toEqual({ count: 2, kg: 30, total_payable: 300 })
+  })
+  it('explains why a row cannot join', () => {
+    expect(ineligibleReason('registered_buyer')).toBe('Registered buyer — file this one on its own')
+    expect(ineligibleReason('tax_rate_mismatch')).toBe('Tax rate differs from the FBR rate')
+    expect(ineligibleReason('')).toBe('')
+  })
+})

@@ -3,7 +3,8 @@
  * FBR screen (spec 2026-10-12 §2). Pure: no DOM, no React, so the node
  * vitest suite covers every branch.
  */
-import type { FiscalTestResult } from '@/types'
+import { formatKgGrouped, formatMoney } from '@/lib/money'
+import type { EligibleInvoice, FiscalPending, FiscalTestResult, PendingSummary } from '@/types'
 
 export interface TestHeadline {
   passed: boolean
@@ -41,4 +42,58 @@ export function testHeadline(r: FiscalTestResult): TestHeadline {
 /** Stable two-space JSON for the dialog's <pre> blocks and the download. */
 export function prettyJson(v: unknown): string {
   return JSON.stringify(v, null, 2)
+}
+
+/** invoices.fiscal_status in a cashier's words. Unknown values pass through. */
+export function fiscalStatusLabel(status: string): string {
+  switch (status) {
+    case 'off':
+      return 'Not filed'
+    case 'unfiled':
+      return 'Unfiled'
+    case 'pending':
+      return 'Filing…'
+    case 'synced':
+      return 'Filed'
+    case 'covered':
+      return 'Filed (combined)'
+    case 'failed':
+      return 'Rejected'
+    default:
+      return status
+  }
+}
+
+/** The one quiet line under the till's totals. null = say nothing. */
+export function pendingLine(p: FiscalPending): string | null {
+  if (!p.enabled || (p.today.count === 0 && p.all.count === 0)) return null
+  const t = p.today
+  let line = `Unfiled today: ${t.count} ${t.count === 1 ? 'invoice' : 'invoices'} · ${formatKgGrouped(t.kg)} · ${formatMoney(t.total_payable)}`
+  if (p.all.count > t.count) line += ` · ${p.all.count} in all`
+  return line
+}
+
+/** What the ticked, eligible rows come to. */
+export function selectionTotals(rows: EligibleInvoice[], selected: Set<string>): PendingSummary {
+  let count = 0
+  let kg = 0
+  let total_payable = 0
+  for (const r of rows) {
+    if (!r.eligible || !selected.has(r.id)) continue
+    count += 1
+    kg += r.total_kg
+    total_payable += r.total_payable
+  }
+  return { count, kg: Math.round(kg * 1000) / 1000, total_payable }
+}
+
+export function ineligibleReason(reason: EligibleInvoice['reason']): string {
+  switch (reason) {
+    case 'registered_buyer':
+      return 'Registered buyer — file this one on its own'
+    case 'tax_rate_mismatch':
+      return 'Tax rate differs from the FBR rate'
+    default:
+      return ''
+  }
 }

@@ -19,6 +19,8 @@ describe('roles', () => {
     expect(canAccess('counter', '/settings')).toBe(false)
     expect(canAccess('counter', '/rates')).toBe(false)
     expect(canAccess('counter', '/dashboard')).toBe(false)
+    expect(canAccess('counter', '/fbr')).toBe(false)
+    expect(canAccess('admin', '/fbr')).toBe(true)
   })
   it('lands admin on dashboard and counter on the till', () => {
     expect(defaultPath('admin')).toBe('/dashboard')
