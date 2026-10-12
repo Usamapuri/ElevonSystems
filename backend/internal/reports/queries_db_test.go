@@ -629,3 +629,39 @@ func TestProductsDealVariance(t *testing.T) {
 	eq(t, "bulk deal variance", byName["LPG bulk"].DealVariance, -500)
 	eq(t, "cylinder deal variance", byName["LPG cylinder"].DealVariance, 0)
 }
+
+// Spec 2026-10-12 §2.6: the tax report says how much of each band is filed
+// (synced + covered), unfiled (unfiled + failed) and rejected (failed).
+func TestTaxBandsFiscalColumns(t *testing.T) {
+	db := testdb.Fresh(t)
+	f := seedPeriod(t, db)
+	set := func(number, status string) {
+		if _, err := db.Exec(`UPDATE invoices SET fiscal_status = $2 WHERE invoice_number = $1`, number, status); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = f
+	set("INV-0001", "synced")
+	set("INV-0004", "covered")
+	set("INV-0002", "unfiled")
+	set("INV-0006", "failed")
+	set("INV-0003", "unfiled") // voided: never counted anywhere
+
+	bands, err := TaxBands(ctx(), db, testRange())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b18 TaxBand
+	for _, b := range bands {
+		if b.Rate == 0.18 {
+			b18 = b
+		}
+	}
+	eqInt(t, "filed count", b18.FiledCount, 2)
+	eq(t, "filed amount", b18.FiledAmount, 1180+2360)
+	eqInt(t, "unfiled count", b18.UnfiledCount, 2)
+	eqInt(t, "failed count", b18.FailedCount, 1)
+	if b18.FiledCount+b18.UnfiledCount != b18.Invoices {
+		t.Fatalf("filed + unfiled = invoices in the band: %+v", b18)
+	}
+}

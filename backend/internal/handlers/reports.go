@@ -333,7 +333,7 @@ func (h *ReportsHandler) taxView(ctx context.Context, r reports.Range) (*reportV
 		rows:    rows,
 		totals:  &totals,
 		sheet:   reportSheets["tax"],
-		headers: []string{"Rate %", "Invoices", "Taxable", "Tax", "Further Tax"},
+		headers: []string{"Rate %", "Invoices", "Taxable", "Tax", "Further Tax", "Filed", "Filed Amount", "Unfiled", "Unfiled Amount", "Rejected"},
 	}
 	for _, row := range rows {
 		// TaxBand.Rate is a fraction (0.18) everywhere in the API, matching
@@ -342,8 +342,10 @@ func (h *ReportsHandler) taxView(ctx context.Context, r reports.Range) (*reportV
 		percent := pricing.Round2(row.Rate * 100)
 		v.csvRows = append(v.csvRows, []string{
 			money2(percent), strconv.Itoa(row.Invoices), money2(row.Taxable), money2(row.Tax), money2(row.FurtherTax),
+			strconv.Itoa(row.FiledCount), money2(row.FiledAmount), strconv.Itoa(row.UnfiledCount), money2(row.UnfiledAmount), strconv.Itoa(row.FailedCount),
 		})
-		v.xlsRows = append(v.xlsRows, []any{percent, row.Invoices, row.Taxable, row.Tax, row.FurtherTax})
+		v.xlsRows = append(v.xlsRows, []any{percent, row.Invoices, row.Taxable, row.Tax, row.FurtherTax,
+			row.FiledCount, row.FiledAmount, row.UnfiledCount, row.UnfiledAmount, row.FailedCount})
 	}
 	return v, nil
 }

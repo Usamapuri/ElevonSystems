@@ -97,6 +97,9 @@ type Config struct {
 
 	ValidateURLOverride string `json:"validate_url"`
 	PostURLOverride     string `json:"post_url"`
+	// ReferenceBaseOverride replaces https://gw.fbr.gov.pk for the
+	// reference lists (tests); blank in every real deployment.
+	ReferenceBaseOverride string `json:"reference_base,omitempty"`
 }
 
 // PublicConfig is what the admin API hands the browser: the config plus the
@@ -169,6 +172,9 @@ func ParseConfig(raw json.RawMessage) (Config, error) {
 // reference lists — live in settings.CheckConsistency, which sees every key.
 func (c Config) Validate() error {
 	if err := checkOverrideURL(c.ValidateURLOverride); err != nil {
+		return err
+	}
+	if err := checkOverrideURL(c.ReferenceBaseOverride); err != nil {
 		return err
 	}
 	if err := checkOverrideURL(c.PostURLOverride); err != nil {

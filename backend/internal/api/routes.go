@@ -91,4 +91,22 @@ func SetupRoutes(r *gin.RouterGroup, db *sql.DB, auth gin.HandlerFunc) {
 	staff.GET("/invoices/recent", invoicesH.Recent)
 	staff.GET("/invoices/:id", invoicesH.Get)
 	staff.POST("/invoices/:id/void", invoicesH.Void)
+
+	// FBR filing (spec 2026-10-12). The pending summary is a line on the till,
+	// so any signed-in user may read it; everything that files, configures or
+	// retries is the owner's.
+	fiscalH := handlers.NewFiscalHandler(db, fiscal.Deps{DB: db})
+	staff.GET("/fiscal/pending", fiscalH.Pending)
+	admin.GET("/fiscal/status", fiscalH.Status)
+	admin.PUT("/fiscal/token", fiscalH.SaveToken)
+	admin.DELETE("/fiscal/token", fiscalH.DeleteToken)
+	admin.POST("/fiscal/test", fiscalH.Test)
+	admin.POST("/fiscal/reference/refresh", fiscalH.RefreshReference)
+	admin.GET("/fiscal/eligible", fiscalH.Eligible)
+	admin.POST("/fiscal/batches", fiscalH.CreateBatch)
+	admin.GET("/fiscal/batches", fiscalH.ListBatches)
+	admin.GET("/fiscal/batches/:id", fiscalH.GetBatch)
+	admin.GET("/fiscal/jobs", fiscalH.ListJobs)
+	admin.POST("/fiscal/jobs/:id/retry", fiscalH.RetryJob)
+	admin.POST("/fiscal/invoices/:id/submit", fiscalH.SubmitInvoice)
 }

@@ -90,7 +90,9 @@ func ratesEqual(a, b float64) bool {
 
 const productColumns = `id, name, sku, sell_by, unit_label, rate::float8, hs_code, fbr_uom, sort_order, is_active, created_at, updated_at`
 
-func scanProduct(row interface{ Scan(dest ...interface{}) error }) (models.Product, error) {
+func scanProduct(row interface {
+	Scan(dest ...interface{}) error
+}) (models.Product, error) {
 	var p models.Product
 	err := row.Scan(&p.ID, &p.Name, &p.SKU, &p.SellBy, &p.UnitLabel, &p.Rate, &p.HSCode, &p.FBRUoM, &p.SortOrder, &p.IsActive, &p.CreatedAt, &p.UpdatedAt)
 	return p, err

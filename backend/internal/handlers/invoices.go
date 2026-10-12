@@ -890,9 +890,15 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 // onto inv for the response: synced with its number, failed with a code, or
 // still pending with a job queued because FBR could not be reached.
 func (h *InvoicesHandler) fileInline(c *gin.Context, inv *models.Invoice, kind fiscal.Kind, actor dayops.Actor) {
+	runInlineFiling(c, h.db, h.fiscal, inv, kind, actorOrNil(actor.ID))
+}
+
+// runInlineFiling is fileInline's body, shared with the admin "file this
+// invoice now" route.
+func runInlineFiling(c *gin.Context, db *sql.DB, deps fiscal.Deps, inv *models.Invoice, kind fiscal.Kind, actor *uuid.UUID) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), fiscalCallTimeout)
 	defer cancel()
-	number, ferr := fiscal.Submit(ctx, h.fiscal, inv.ID, kind, actorOrNil(actor.ID))
+	number, ferr := fiscal.Submit(ctx, deps, inv.ID, kind, actor)
 	switch {
 	case ferr == nil:
 		if kind == fiscal.KindDebitNote {
@@ -901,11 +907,11 @@ func (h *InvoicesHandler) fileInline(c *gin.Context, inv *models.Invoice, kind f
 			inv.FiscalStatus, inv.FiscalInvoiceNumber = "synced", &number
 		}
 	case errors.Is(ferr, fiscal.ErrUnreachable) || errors.Is(ferr, context.DeadlineExceeded):
-		if err := fiscal.Enqueue(h.db, fiscal.JobRef{InvoiceID: &inv.ID}, kind, time.Now()); err != nil {
+		if err := fiscal.Enqueue(db, fiscal.JobRef{InvoiceID: &inv.ID}, kind, time.Now()); err != nil {
 			log.Printf("invoice %s: enqueue fiscal: %v", kind, err)
 		}
 	default:
-		if err := fiscal.MarkFailed(h.db, inv.ID, kind, ferr); err != nil {
+		if err := fiscal.MarkFailed(db, inv.ID, kind, ferr); err != nil {
 			log.Printf("invoice %s: mark fiscal failed: %v", kind, err)
 		}
 		if kind == fiscal.KindDebitNote {

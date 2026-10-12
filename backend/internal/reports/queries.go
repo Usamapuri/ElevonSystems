@@ -107,6 +107,14 @@ type TaxBand struct {
 	Taxable    float64 `json:"taxable"`
 	Tax        float64 `json:"tax"`
 	FurtherTax float64 `json:"further_tax"`
+	// Where the band stands with FBR (spec 2026-10-12 §2.6): filed is synced
+	// + covered, unfiled is unfiled + failed, and failed is the rejected
+	// subset of unfiled. Amounts are total_amount.
+	FiledCount    int     `json:"filed_count"`
+	FiledAmount   float64 `json:"filed_amount"`
+	UnfiledCount  int     `json:"unfiled_count"`
+	UnfiledAmount float64 `json:"unfiled_amount"`
+	FailedCount   int     `json:"failed_count"`
 }
 
 // TaxBands groups the window's completed invoices by their snapshot tax
@@ -121,7 +129,12 @@ func TaxBands(ctx context.Context, db Querier, r Range) ([]TaxBand, error) {
 		       COUNT(*)                                               AS invoices,
 		       COALESCE(SUM(subtotal - discount_amount), 0)::float8    AS taxable,
 		       COALESCE(SUM(tax_amount), 0)::float8                    AS tax,
-		       COALESCE(SUM(further_tax_amount), 0)::float8            AS further_tax
+		       COALESCE(SUM(further_tax_amount), 0)::float8            AS further_tax,
+		       COUNT(*) FILTER (WHERE fiscal_status IN ('synced','covered'))                          AS filed_count,
+		       COALESCE(SUM(total_amount) FILTER (WHERE fiscal_status IN ('synced','covered')), 0)::float8 AS filed_amount,
+		       COUNT(*) FILTER (WHERE fiscal_status IN ('unfiled','failed'))                          AS unfiled_count,
+		       COALESCE(SUM(total_amount) FILTER (WHERE fiscal_status IN ('unfiled','failed')), 0)::float8 AS unfiled_amount,
+		       COUNT(*) FILTER (WHERE fiscal_status = 'failed')                                       AS failed_count
 		FROM invoices
 		WHERE status = 'completed'
 		  AND business_date BETWEEN $1::date AND $2::date
@@ -135,7 +148,8 @@ func TaxBands(ctx context.Context, db Querier, r Range) ([]TaxBand, error) {
 	out := []TaxBand{}
 	for rows.Next() {
 		var b TaxBand
-		if err := rows.Scan(&b.Rate, &b.Invoices, &b.Taxable, &b.Tax, &b.FurtherTax); err != nil {
+		if err := rows.Scan(&b.Rate, &b.Invoices, &b.Taxable, &b.Tax, &b.FurtherTax,
+			&b.FiledCount, &b.FiledAmount, &b.UnfiledCount, &b.UnfiledAmount, &b.FailedCount); err != nil {
 			return nil, err
 		}
 		out = append(out, b)

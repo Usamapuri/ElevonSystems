@@ -423,7 +423,7 @@ func ErrorCode(err error) string {
 		ErrDisabled, ErrTokenMissing, ErrInvoiceNotFound, ErrNotSynced,
 		ErrBuyerUnregistered, ErrVoidReasonMissing, ErrNoInvoiceNumber, ErrUnknownKind,
 		ErrSandboxInRelease, ErrSecretsKeyMissing, ErrSecretsKeyInvalid, ErrCiphertextInvalid,
-		ErrHSCodeMissing, ErrBatchEmpty, ErrBatchNotFound,
+		ErrHSCodeMissing, ErrBatchEmpty, ErrBatchNotFound, ErrReferenceUnreadable,
 	} {
 		if errors.Is(err, known) {
 			return known.Error()

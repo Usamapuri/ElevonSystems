@@ -68,7 +68,9 @@ func NewAuthHandler(db *sql.DB, mailer ResetMailer) *AuthHandler {
 const userColumns = `id, username, email, first_name, last_name, role, is_active,
 	(pin_hash IS NOT NULL) AS has_pin, last_login_at, created_at, updated_at`
 
-func scanUser(row interface{ Scan(dest ...interface{}) error }) (models.User, error) {
+func scanUser(row interface {
+	Scan(dest ...interface{}) error
+}) (models.User, error) {
 	var u models.User
 	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.FirstName, &u.LastName, &u.Role, &u.IsActive,
 		&u.HasPin, &u.LastLoginAt, &u.CreatedAt, &u.UpdatedAt)
