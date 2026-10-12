@@ -42,14 +42,35 @@ Printing: the till prints after every sale; in a browser that is
 was stubbed in the test tab. Not a defect — the desktop bridge handles it in
 production.
 
-## Not verified (blocked on environment)
+## FBR filing on the deployment (later the same day)
 
-- Saving a token, Run test, Refresh from FBR, Charge + FBR, File with FBR
-  and the FBR block on receipts need `FISCAL_SECRETS_KEY` and
-  `FISCAL_ALLOW_SANDBOX=true` on the backend service. The Railway CLI
-  session on the dev machine had expired, so neither variable could be set
-  or even read from here.
+`FISCAL_SECRETS_KEY` (32 bytes; a first 24-byte value was rejected as
+invalid and showed the "no key" banner) and `FISCAL_ALLOW_SANDBOX=true` were
+set on the backend service. The owner pasted the sandbox token and ran the
+test. Then, first-hand:
+
+| Step | Result |
+|---|---|
+| Settings → FBR seller details | NTN 8951943, "Elevon Test Seller", PUNJAB, Lahore, KG saved. Cash sales tax set to 18% (owner's instruction) so sales match the "18%" rate description. HS code 2711.1910. |
+| Refresh from FBR | Reference lists refreshed; province and UoM fields became FBR-sourced dropdowns. |
+| Filing switched on | Persisted after reload. Charge + FBR appeared on the till. |
+| Charge + FBR | Sale `20261012-006` (12.5 kg, Rs 4,425) filed inline: FBR `6110180871403DI4XTOK7865745`, badge "Filed", drawer shows the number. |
+| File with FBR | Sale `20261012-007` (10 kg, Rs 3,540, rung with plain Charge) listed as unfiled with the kg/Rs summary; confirm dialog; filed as combined invoice `6110180871403DI4XWVKD027757`; list shows "Nothing unfiled", batch row Filed. |
+
+Sales `-004` and `-005` were rung while filing was off, so they are `off`,
+not `unfiled`, and the File with FBR screen does not list them. That is the
+spec's rule (a sale rung with filing off is never filed later). The badge
+for them reads "Not filed", the same text as an unfiled sale, which is
+ambiguous — worth a distinct label.
+
+Printing: a Charge + FBR sale's receipt opened Chrome's print preview and
+froze the till tab even with `window.print` stubbed (the QR path renders
+differently). Two tabs were closed that way; nothing was lost server-side.
+
+## Not verified
+
 - Registered-buyer (SN001) filing still needs a real registered NTN.
+- Production token slot: validate-only test, no token available.
 
 ## Observation
 

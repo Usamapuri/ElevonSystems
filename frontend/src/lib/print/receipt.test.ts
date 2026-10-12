@@ -288,8 +288,9 @@ describe('buildReceiptHtml — fiscal block (§7.7, 2026-10-12 §2.6)', () => {
     const html = buildReceiptHtml(inv, settings, { qrDataUrl: 'data:image/png;base64,AAAA' })
     expect(html).toContain('FBR Invoice No.')
     expect(html).toContain('7000007DI1747119701593')
-    expect(html).toContain('<img src="data:image/png')
-    expect(buildReceiptHtml(inv, settings)).not.toContain('<img src="data:image/png')
+    expect(html).toContain('class="fbr-qr"')
+    expect(html).toContain('class="fbr-logo"')
+    expect(buildReceiptHtml(inv, settings)).not.toContain('class="fbr-qr"')
   })
 
   it('prints no FBR block on a sale covered by a combined invoice', () => {

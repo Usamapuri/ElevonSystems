@@ -54,7 +54,7 @@ export function buildInvoiceA4Html(invoice: Invoice, settings: AppSettings, buye
     '<!DOCTYPE html>',
     '<html lang="en"><head><meta charset="utf-8" />',
     '<title>' + esc('Tax invoice ' + invoice.invoice_number) + '</title>',
-    '<style>' + A4_CSS + '.fbr-a4{margin:12px 0;display:flex;gap:16px;align-items:center}.fbr-label{font-weight:700}.fbr-qr{width:96px;height:96px}</style>',
+    '<style>' + A4_CSS + '.fbr-a4{margin:12px 0}.fbr{display:flex;gap:16px;align-items:center}.fbr-logo{width:72px;height:72px}.fbr-label{font-weight:700}.fbr-qr{width:96px;height:96px}</style>',
     '</head><body><div class="page">',
     body,
     '</div></body></html>',

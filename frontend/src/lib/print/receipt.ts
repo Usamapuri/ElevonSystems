@@ -39,7 +39,7 @@ export function buildReceiptHtml(invoice: Invoice, settings: AppSettings, extras
   const printableAreaMm = settings.receipt_printable_area_mm ?? paperWidthMm - 8
   const css =
     thermalPrintBaseCss({ paperWidthMm, printableAreaMm, fontScale: fontScaleFor(paperWidthMm) }) +
-    '.fbr{margin-top:2mm}.fbr-label{font-weight:700}.fbr-number{word-break:break-all}.fbr-qr{display:block;margin:2mm auto 0;width:28mm;height:28mm}'
+    '.fbr{margin-top:2mm}.fbr-logo{display:block;margin:0 auto 1mm;width:18mm;height:18mm}.fbr-label{font-weight:700}.fbr-number{word-break:break-all}.fbr-qr{display:block;margin:2mm auto 0;width:28mm;height:28mm}'
 
   const body = [
     header(settings),

@@ -8,6 +8,7 @@
  * Pure and DOM-free so receipt.test.ts can run it in node.
  */
 import { esc } from '@/lib/print/format'
+import { FBR_DI_LOGO_DATA_URL } from '@/lib/print/fbrLogo'
 
 export interface FbrBlockSource {
   fiscal_status: string
@@ -18,6 +19,7 @@ export function fbrBlockHtml(inv: FbrBlockSource, qrDataUrl: string | null): str
   if (inv.fiscal_status !== 'synced' || !inv.fiscal_invoice_number) return ''
   const parts = [
     '<div class="fbr">',
+    '<img src="' + FBR_DI_LOGO_DATA_URL + '" alt="FBR Digital Invoicing System" class="fbr-logo" />',
     '<div class="fbr-label">FBR Invoice No.</div>',
     '<div class="fbr-number">' + esc(inv.fiscal_invoice_number) + '</div>',
   ]
