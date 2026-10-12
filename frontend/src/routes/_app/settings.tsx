@@ -7,6 +7,7 @@ import { CreditForm } from '@/components/settings/CreditForm'
 import { DayCloseForm } from '@/components/settings/DayCloseForm'
 import { ReceiptForm } from '@/components/settings/ReceiptForm'
 import { TaxForm } from '@/components/settings/TaxForm'
+import { FiscalForm } from '@/components/settings/FiscalForm'
 import { UsersPanel } from '@/components/settings/UsersPanel'
 import { useSettings } from '@/components/settings/useSettings'
 
@@ -18,6 +19,7 @@ const TABS = [
   { value: 'receipt', label: 'Receipt' },
   { value: 'day-close', label: 'Day close' },
   { value: 'credit', label: 'Credit' },
+  { value: 'fbr', label: 'FBR' },
   { value: 'users', label: 'Users' },
 ] as const
 
@@ -46,6 +48,9 @@ function SettingsPage() {
             <TabsContent value="credit"><CreditForm settings={settings} /></TabsContent>
           </>
         )}
+        <TabsContent value="fbr">
+          <FiscalForm />
+        </TabsContent>
         <TabsContent value="users">
           <UsersPanel />
         </TabsContent>

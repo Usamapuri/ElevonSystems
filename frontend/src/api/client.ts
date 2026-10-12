@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type {
+  FiscalEnvironment, FiscalReference, FiscalStatus, FiscalTestResult, FiscalTokenState,
   APIResponse, AppSettings, BusinessDay, CashMovement, CashMovementRequest, CloseDayRequest, CreateCustomerRequest,
   CreateInvoiceRequest, CreateProductRequest, CreateReceiptRequest, CreateUserRequest, Customer, CustomerAgeing,
   CustomerListParams, DashboardResponse, DayCurrent, DayHistoryParams, ForceCloseDayRequest, Invoice,
@@ -306,6 +307,24 @@ class APIClient {
   }
   voidInvoice(id: string, req: VoidInvoiceRequest) {
     return this.request<Invoice>({ method: 'POST', url: `/invoices/${id}/void`, data: req })
+  }
+
+  // ── FBR filing (spec 2026-10-12) ────────────────────────────────────────
+  getFiscalStatus() {
+    return this.request<FiscalStatus>({ method: 'GET', url: '/admin/fiscal/status' })
+  }
+  saveFiscalToken(environment: FiscalEnvironment, api_key: string) {
+    return this.request<FiscalTokenState>({ method: 'PUT', url: '/admin/fiscal/token', data: { environment, api_key } })
+  }
+  deleteFiscalToken(environment: FiscalEnvironment) {
+    return this.request<FiscalTokenState>({ method: 'DELETE', url: '/admin/fiscal/token', data: { environment } })
+  }
+  /** Sandbox: validate then post. Production: validate only. Always 200. */
+  runFiscalTest(environment: FiscalEnvironment) {
+    return this.request<FiscalTestResult>({ method: 'POST', url: '/admin/fiscal/test', data: { environment }, timeout: 45000 })
+  }
+  refreshFiscalReference() {
+    return this.request<FiscalReference>({ method: 'POST', url: '/admin/fiscal/reference/refresh', timeout: 45000 })
   }
 
   // ── Dashboard (admin-only) ──────────────────────────────────────────────

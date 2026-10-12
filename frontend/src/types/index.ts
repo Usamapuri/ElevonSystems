@@ -65,9 +65,81 @@ export interface AppSettings {
   receipt_default_document: 'thermal' | 'a4'
   day_close_variance_threshold: number
   credit_limit_enforced: boolean
+  /** Phase 7 keys. Optional on the type because print fixtures and the
+   * fallback settings predate them; the server always returns them. */
+  fiscal_config?: FiscalConfig
+  fiscal_reference?: FiscalReference
 }
 
 export type SettingsPatch = Partial<AppSettings>
+
+// ── FBR Digital Invoicing (spec §7, 2026-10-12 §2) ──────────────────────
+
+export type FiscalEnvironment = 'sandbox' | 'production'
+
+/** settings.fiscal_config — the wire names are the backend's Config. */
+export interface FiscalConfig {
+  enabled: boolean
+  is_sandbox: boolean
+  seller_ntn_cnic: string
+  seller_business_name: string
+  seller_province: string
+  seller_address: string
+  scenario_registered: string
+  scenario_unregistered: string
+  rate_desc: string
+  sale_type: string
+  trans_type_id: number
+  default_uom: string
+  buyer_registration_default: string
+  validate_url: string
+  post_url: string
+}
+
+export interface FiscalReference {
+  provinces?: string[]
+  uoms?: { id: number; description: string }[]
+  hs_uom?: Record<string, string[]>
+  rates?: { id: number; desc: string; value: number }[]
+  refreshed_at?: string
+}
+
+export interface FiscalTokenState {
+  set: boolean
+  masked: string
+}
+
+/** GET /admin/fiscal/status. */
+export interface FiscalStatus extends FiscalConfig {
+  api_key_set: boolean
+  api_key_masked: string
+  sandbox_allowed: boolean
+  tokens: Record<FiscalEnvironment, FiscalTokenState>
+  queue: { pending: number; dead: number; last_success_at: string | null }
+  secrets_key_set: boolean
+  reference: FiscalReference
+}
+
+export interface FiscalTestStep {
+  phase: 'validate' | 'post' | string
+  url: string
+  http_status: number
+  status_code: string
+  error_code: string
+  error: string
+  line: number
+  raw_response: unknown
+}
+
+/** POST /admin/fiscal/test — always 200; `ok` says whether it passed. */
+export interface FiscalTestResult {
+  ok: boolean
+  environment: FiscalEnvironment
+  steps: FiscalTestStep[]
+  request_body: unknown
+  invoice_number: string
+  error_code: string
+}
 
 export interface UserListParams {
   page?: number
