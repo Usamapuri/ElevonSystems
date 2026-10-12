@@ -79,3 +79,19 @@ attempts (no PIN, wrong PIN, and one cancelled tender) each consumed a daily
 number. Numbering has accepted gaps since D6 and FBR does not see local
 numbers, so this is by design, but a cashier who retries a PIN will see
 gaps.
+
+## Products with their own HS codes, and back-dated invoices (17:10–17:45)
+
+Driven first-hand in Chrome against `fbrpos.up.railway.app` after `ab1bbae` (dev) deployed.
+
+| Step | Result |
+|---|---|
+| Rates → Add product `L4`, HS `2711.1400`, Rs 280/kg (placeholder copied from LPG) | Created. LPG edited to carry HS `2711.1910` itself. Both rows show their code in the table. |
+| Settings → FBR → Refresh from FBR | Reference lists refreshed 17:13; `hs_uom` now covers both codes. |
+| FBR queue (before the change) | `-014` **failed 0104**: rung at 0 % (card/online rate is 0) but Charge + FBR filed it under `18%` — the till does not refuse a tax-rate mismatch the way the combined screen does (open item). `-015` failed 0099 once, later filed in a combined invoice. `-012` (customer "Test", NTN 12345678, registered) retrying on `fiscal_unreachable: response is not a digital invoicing envelope`, 17/20 — the known placeholder-NTN limitation. |
+| Till as admin: **Sale date** calendar beside the cart; set 09 Oct 2026 | Amber line "Back-dated to 09 Oct 2026 — recorded on today's business day", `Today` reset shown. |
+| L4 10 kg, plain Charge (cash) | `20261012-024`, Rs 3,304, `invoice_date 2026-10-09`, `business_date 2026-10-12`, today's number; invoice list chip `dated 09 Oct 2026`. Print preview froze the tab again (window.print stub does not reach the print frame). |
+| File with FBR, date picker → 09 Oct 2026 | `-024` listed and ticked; today's list no longer shows it. |
+| File now | **Filed.** Combined invoice `3792106DI58KA8O693460` dated 09 Oct 2026, 1 sale, 10.000 kg, Rs 3,304 — FBR accepted the back-dated date and HS `2711.1400`. |
+
+Not exercised: a counter login's refusal (`invoice_date_requires_admin`) and the 31-day refusal — both pinned by `invoices_backdate_db_test.go`.
