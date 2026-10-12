@@ -19,10 +19,12 @@
  * screen that fixes it is one tap away in the rail.
  */
 import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import apiClient from '@/api/client'
 import { useSettings } from '@/components/settings/useSettings'
+import { useBrand } from '@/components/shell/useBrand'
 import { evaluateDayGate } from '@/components/pos/dayGate'
+import { documentTitle } from '@/lib/brand'
 import { formatBusinessDate } from '@/lib/print/format'
 import { cn } from '@/lib/utils'
 
@@ -47,6 +49,12 @@ const TONE_CLASS: Record<PillTone, string> = {
 
 export function PageHeader({ title, description, actions }: Props) {
   const { data: settings } = useSettings()
+  // The browser tab reads "<store> · <page>", so several stores' tabs can
+  // be told apart at a glance.
+  const brand = useBrand()
+  useEffect(() => {
+    document.title = documentTitle(title, brand)
+  }, [title, brand])
 
   const day = useQuery({
     queryKey: DAY_CURRENT_KEY,

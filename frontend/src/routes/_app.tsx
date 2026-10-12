@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { PanelLeft } from 'lucide-react'
 import apiClient from '@/api/client'
 import { Button } from '@/components/ui/button'
-import { BrandMark } from '@/components/shell/BrandMark'
+import { BrandLogo } from '@/components/shell/BrandLogo'
 import { Sidebar } from '@/components/shell/Sidebar'
+import { useBrand } from '@/components/shell/useBrand'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { canAccess, defaultPath, isRole } from '@/lib/roles'
 
@@ -30,6 +31,7 @@ function AppLayout() {
   const { pathname } = useLocation()
   const isNarrow = useMediaQuery('(max-width: 767px)')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const brand = useBrand()
 
   useEffect(() => setDrawerOpen(false), [pathname])
 
@@ -54,8 +56,8 @@ function AppLayout() {
           {/* The brand, not the page name: every screen prints its own title
               in the PageHeader immediately below, and saying it twice on a
               390px screen wastes the one row the identity can live in. */}
-          <BrandMark className="h-8 w-8 rounded-sm" />
-          <span className="truncate text-base font-extrabold tracking-tight">Elevon POS</span>
+          <BrandLogo logo={brand.logo} className="h-8 w-8 rounded-sm" />
+          <span className="truncate text-base font-extrabold tracking-tight">{brand.name}</span>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <Outlet />

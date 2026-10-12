@@ -1,8 +1,9 @@
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Eye, EyeOff, Loader2, Lock, Scale, User as UserIcon, FileCheck2, BookUser } from 'lucide-react'
-import { BrandMark } from '@/components/shell/BrandMark'
+import { BrandLogo } from '@/components/shell/BrandLogo'
+import { browserStorage, documentTitle, recallBrand } from '@/lib/brand'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,6 +34,11 @@ function LoginPage() {
   const [form, setForm] = useState<LoginRequest>({ username: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  // What this browser last saw for the store: there is no API before sign-in.
+  const [brand] = useState(() => recallBrand(browserStorage()))
+  useEffect(() => {
+    document.title = documentTitle('Sign in', brand)
+  }, [brand])
 
   const login = useMutation({
     mutationFn: (req: LoginRequest) => apiClient.login(req),
@@ -55,7 +61,7 @@ function LoginPage() {
     <div className="grid min-h-screen lg:grid-cols-[3fr_2fr]">
       <section className="hidden flex-col justify-between bg-rail p-10 text-rail-foreground lg:flex">
         <div className="flex items-center gap-3 text-lg font-extrabold tracking-tight">
-          <BrandMark /> Elevon POS
+          <BrandLogo logo={brand.logo} /> {brand.name}
         </div>
         <div className="max-w-md space-y-6">
           <h1 className="text-[2.75rem] font-extrabold leading-[1.05] tracking-tight">
@@ -85,7 +91,7 @@ function LoginPage() {
           {/* On a phone the navy panel is not rendered, so the mark comes
               here instead — otherwise sign-in is a blank white page. */}
           <div className="flex items-center gap-3 text-lg font-extrabold tracking-tight lg:hidden">
-            <BrandMark /> Elevon POS
+            <BrandLogo logo={brand.logo} /> {brand.name}
           </div>
           <div className="space-y-1">
             <h2 className="text-2xl font-bold tracking-tight">Sign in</h2>

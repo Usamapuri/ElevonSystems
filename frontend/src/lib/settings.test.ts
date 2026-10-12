@@ -47,7 +47,7 @@ describe('receipt lines', () => {
     expect(linesToText(['a', 'b'])).toBe('a\nb')
   })
   it('caps at six lines of 64 characters and keeps printable within paper', () => {
-    const base = { receipt_paper_width_mm: 80 as const, receipt_printable_area_mm: 72, receipt_logo_url: '', receipt_header_lines: '', receipt_footer_lines: '', receipt_default_document: 'thermal' as const }
+    const base = { receipt_paper_width_mm: 80 as const, receipt_printable_area_mm: 72, receipt_header_lines: '', receipt_footer_lines: '', receipt_default_document: 'thermal' as const }
     expect(receiptSchema.safeParse(base).success).toBe(true)
     expect(receiptSchema.safeParse({ ...base, receipt_header_lines: 'a\nb\nc\nd\ne\nf\ng' }).success).toBe(false)
     expect(receiptSchema.safeParse({ ...base, receipt_footer_lines: 'x'.repeat(65) }).success).toBe(false)
@@ -58,10 +58,13 @@ describe('receipt lines', () => {
 
 describe('other sections', () => {
   it('business needs a name and a 0–12 boundary hour', () => {
-    const ok = { business_name: 'Gas House', business_address: '', business_phone: '', business_ntn: '', business_strn: '', business_province: '', day_boundary_hour: 0 }
+    const ok = { business_name: 'Gas House', business_address: '', business_phone: '', business_ntn: '', business_strn: '', business_province: '', day_boundary_hour: 0, receipt_logo_url: '' }
     expect(businessSchema.safeParse(ok).success).toBe(true)
     expect(businessSchema.safeParse({ ...ok, business_name: ' ' }).success).toBe(false)
     expect(businessSchema.safeParse({ ...ok, day_boundary_hour: 13 }).success).toBe(false)
+    // The logo lives with the business details now (the app chrome wears it too).
+    expect(businessSchema.safeParse({ ...ok, receipt_logo_url: 'data:image/png;base64,AAAA' }).success).toBe(true)
+    expect(businessSchema.safeParse({ ...ok, receipt_logo_url: 'x'.repeat(400_001) }).success).toBe(false)
   })
   it('day close threshold is non-negative; credit flag is boolean', () => {
     expect(dayCloseSchema.safeParse({ day_close_variance_threshold: -1 }).success).toBe(false)

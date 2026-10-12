@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
@@ -9,37 +9,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Field } from '@/components/settings/Field'
 import { useSaveSettings } from '@/components/settings/useSettings'
-import { toast } from '@/hooks/use-toast'
 import { MAX_RECEIPT_LINES, receiptFromSettings, receiptSchema, receiptToPatch, type ReceiptFormValues } from '@/lib/settings'
 import type { AppSettings } from '@/types'
 
-const MAX_LOGO_BYTES = 300_000
-
 export function ReceiptForm({ settings }: { settings: AppSettings }) {
   const save = useSaveSettings('Receipt layout')
-  const fileRef = useRef<HTMLInputElement>(null)
   const form = useForm<ReceiptFormValues>({ resolver: zodResolver(receiptSchema), defaultValues: receiptFromSettings(settings) })
   useEffect(() => form.reset(receiptFromSettings(settings)), [settings, form])
   const { errors, isDirty } = form.formState
-  const logo = form.watch('receipt_logo_url')
-
-  const onPickLogo = (file: File | undefined) => {
-    if (!file) return
-    if (file.size > MAX_LOGO_BYTES) {
-      toast({ title: 'Image too large', description: 'Use a file under 300 KB.', variant: 'destructive' })
-      if (fileRef.current) fileRef.current.value = ''
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => form.setValue('receipt_logo_url', String(reader.result ?? ''), { shouldDirty: true, shouldValidate: true })
-    reader.readAsDataURL(file)
-  }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Receipt</CardTitle>
-        <CardDescription>Thermal paper size, logo and the lines printed above and below every invoice.</CardDescription>
+        <CardDescription>Thermal paper size and the lines printed above and below every invoice. The logo is set under Business.</CardDescription>
       </CardHeader>
       <CardContent>
         <form className="grid gap-4 md:grid-cols-2" onSubmit={form.handleSubmit((v) => save.mutate(receiptToPatch(v)))}>
@@ -79,32 +62,6 @@ export function ReceiptForm({ settings }: { settings: AppSettings }) {
                 </Select>
               )}
             />
-          </Field>
-          <Field label="Logo" htmlFor="receipt_logo_file" error={errors.receipt_logo_url?.message} hint="PNG or JPG under 300 KB; printed in black and white">
-            <div className="flex items-center gap-3">
-              {logo && <img src={logo} alt="Receipt logo" className="h-12 w-12 rounded border object-contain" />}
-              <input
-                id="receipt_logo_file"
-                ref={fileRef}
-                type="file"
-                accept="image/png,image/jpeg"
-                className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border file:bg-background file:px-3 file:py-1.5 file:text-sm"
-                onChange={(e) => onPickLogo(e.target.files?.[0])}
-              />
-              {logo && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    form.setValue('receipt_logo_url', '', { shouldDirty: true })
-                    if (fileRef.current) fileRef.current.value = ''
-                  }}
-                >
-                  Remove
-                </Button>
-              )}
-            </div>
           </Field>
           <Field label="Header lines" htmlFor="receipt_header_lines" error={errors.receipt_header_lines?.message} hint={`One per line, up to ${MAX_RECEIPT_LINES}`}>
             <Textarea id="receipt_header_lines" rows={3} {...form.register('receipt_header_lines')} />

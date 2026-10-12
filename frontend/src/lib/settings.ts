@@ -32,6 +32,9 @@ export const businessSchema = z.object({
   business_strn: z.string().trim().max(30),
   business_province: z.string().trim().max(40),
   day_boundary_hour: z.number({ invalid_type_error: 'Enter an hour' }).int().min(0).max(12),
+  // The one logo: the app chrome and every printed document wear it. Kept
+  // under the setting key receipts have always read.
+  receipt_logo_url: z.string().max(400_000, 'Image is too large; use one under 300 KB'),
 })
 export type BusinessFormValues = z.infer<typeof businessSchema>
 
@@ -44,6 +47,7 @@ export function businessFromSettings(s: AppSettings): BusinessFormValues {
     business_strn: s.business_strn,
     business_province: s.business_province,
     day_boundary_hour: s.day_boundary_hour,
+    receipt_logo_url: s.receipt_logo_url,
   }
 }
 
@@ -111,7 +115,6 @@ export const receiptSchema = z
   .object({
     receipt_paper_width_mm: z.union([z.literal(58), z.literal(80)]),
     receipt_printable_area_mm: z.number({ invalid_type_error: 'Enter a width in mm' }).int().min(40).max(80),
-    receipt_logo_url: z.string().max(400_000, 'Image is too large; use one under 300 KB'),
     receipt_header_lines: linesText,
     receipt_footer_lines: linesText,
     receipt_default_document: z.enum(['thermal', 'a4']),
@@ -126,7 +129,6 @@ export function receiptFromSettings(s: AppSettings): ReceiptFormValues {
   return {
     receipt_paper_width_mm: s.receipt_paper_width_mm,
     receipt_printable_area_mm: s.receipt_printable_area_mm,
-    receipt_logo_url: s.receipt_logo_url,
     receipt_header_lines: linesToText(s.receipt_header_lines),
     receipt_footer_lines: linesToText(s.receipt_footer_lines),
     receipt_default_document: s.receipt_default_document,
@@ -137,7 +139,6 @@ export function receiptToPatch(v: ReceiptFormValues): SettingsPatch {
   return {
     receipt_paper_width_mm: v.receipt_paper_width_mm,
     receipt_printable_area_mm: v.receipt_printable_area_mm,
-    receipt_logo_url: v.receipt_logo_url,
     receipt_header_lines: textToLines(v.receipt_header_lines),
     receipt_footer_lines: textToLines(v.receipt_footer_lines),
     receipt_default_document: v.receipt_default_document,

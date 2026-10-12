@@ -13,8 +13,9 @@
 import { Link, useLocation } from '@tanstack/react-router'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { BrandMark } from '@/components/shell/BrandMark'
+import { BrandLogo } from '@/components/shell/BrandLogo'
 import { UserMenu } from '@/components/shell/UserMenu'
+import { useBrand } from '@/components/shell/useBrand'
 import { NAV_ITEMS } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import type { User } from '@/types'
@@ -28,6 +29,7 @@ interface SidebarProps {
 
 export function Sidebar({ user, isNarrowViewport, drawerOpen, onDrawerOpenChange }: SidebarProps) {
   const { pathname } = useLocation()
+  const brand = useBrand()
   const items = NAV_ITEMS.filter((i) => i.roles.includes(user.role))
 
   const nav = (collapsed: boolean) => (
@@ -71,16 +73,18 @@ export function Sidebar({ user, isNarrowViewport, drawerOpen, onDrawerOpenChange
     </nav>
   )
 
-  const brand = (
+  const brandRow = (
     <div className="flex items-center gap-3 px-4 py-4">
-      <BrandMark />
-      <span className="text-base font-extrabold tracking-tight text-rail-foreground">Elevon POS</span>
+      <BrandLogo logo={brand.logo} />
+      <span className="line-clamp-2 text-base font-extrabold leading-tight tracking-tight text-rail-foreground" title={brand.name}>
+        {brand.name}
+      </span>
     </div>
   )
 
   const body = (
     <>
-      {brand}
+      {brandRow}
       {nav(false)}
       <div className="border-t border-white/10 p-2">
         <UserMenu user={user} />
