@@ -73,6 +73,7 @@ describe('pendingLine', () => {
     enabled: true,
     today: { count: 14, kg: 3240.5, total_payable: 812340 },
     all: { count: 14, kg: 3240.5, total_payable: 812340 },
+    business_date: '2026-10-12',
   }
   it('summarises today, and the backlog when it is bigger', () => {
     expect(pendingLine(p)).toBe('Unfiled today: 14 invoices · 3,240.500 kg · Rs 812,340')
@@ -83,7 +84,7 @@ describe('pendingLine', () => {
   })
   it('is silent when fiscal is off or nothing is unfiled', () => {
     expect(pendingLine({ ...p, enabled: false })).toBeNull()
-    expect(pendingLine({ enabled: true, today: { count: 0, kg: 0, total_payable: 0 }, all: { count: 0, kg: 0, total_payable: 0 } })).toBeNull()
+    expect(pendingLine({ enabled: true, today: { count: 0, kg: 0, total_payable: 0 }, all: { count: 0, kg: 0, total_payable: 0 }, business_date: '2026-10-12' })).toBeNull()
   })
 })
 

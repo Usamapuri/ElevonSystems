@@ -41,6 +41,11 @@ type Job struct {
 
 const codeMaxAttempts = "fiscal_max_attempts"
 
+// ProcessingLease is how long a claimed job stays another process's: past
+// it, a job still 'processing' belonged to a process that died mid-filing
+// and ClaimNext hands it out again (the ledger check keeps that safe).
+const ProcessingLease = 2 * time.Minute
+
 const jobColumns = `id, invoice_id, batch_id, kind, status, attempt_count, max_attempts, next_run_at, last_error, last_error_code, created_at`
 
 func scanJob(row interface{ Scan(...any) error }) (*Job, error) {
@@ -78,10 +83,11 @@ func ClaimNext(db *sql.DB, now time.Time) (*Job, error) {
 		SET status = 'processing', started_at = $1, updated_at = $1
 		WHERE id = (
 			SELECT id FROM fiscal_outbound_jobs
-			WHERE status = 'pending' AND next_run_at <= $1
+			WHERE (status = 'pending' AND next_run_at <= $1)
+			   OR (status = 'processing' AND started_at <= $2)
 			ORDER BY next_run_at, created_at
 			LIMIT 1 FOR UPDATE SKIP LOCKED)
-		RETURNING `+jobColumns, now))
+		RETURNING `+jobColumns, now, now.Add(-ProcessingLease)))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -147,7 +153,7 @@ func ProcessOnce(ctx context.Context, d Deps) (bool, error) {
 	switch {
 	case submitErr == nil:
 		return true, succeed(d.DB, j.ID, d.now())
-	case errors.Is(submitErr, ErrUnreachable) || errors.Is(submitErr, context.DeadlineExceeded):
+	case IsRetryable(submitErr):
 		if j.AttemptCount+1 >= j.MaxAttempts {
 			cause := &codedError{code: codeMaxAttempts, message: "FBR could not be reached after " + itoa(j.MaxAttempts) + " attempts"}
 			return true, giveUp(d.DB, j, cause, d.now())
@@ -165,6 +171,11 @@ func giveUp(db *sql.DB, j *Job, cause error, now time.Time) error {
 	code, message := failureDetail(cause)
 	if err := dead(db, j, code, message, now); err != nil {
 		return err
+	}
+	// The document moved on without this job (covered, voided, synced):
+	// the job dies, the document is left exactly as it is.
+	if errors.Is(cause, ErrNotPending) {
+		return nil
 	}
 	switch {
 	case j.Ref.BatchID != nil:
@@ -215,6 +226,81 @@ func drain(ctx context.Context, d Deps) {
 			return
 		}
 	}
+}
+
+// SettleInline closes the job the inline attempt was racing: success marks
+// it succeeded, a refusal or rejection kills it, and a retryable failure
+// leaves it pending for the worker (it is already due after the inline
+// window). ref/kind name the active job, as Enqueue created it.
+func SettleInline(db *sql.DB, ref JobRef, kind Kind, submitErr error, now time.Time) error {
+	var jobID uuid.UUID
+	err := db.QueryRow(`SELECT id FROM fiscal_outbound_jobs
+		WHERE kind = $1 AND status IN ('pending','processing')
+		  AND invoice_id IS NOT DISTINCT FROM $2::uuid AND batch_id IS NOT DISTINCT FROM $3::uuid`,
+		string(kind), ref.InvoiceID, ref.BatchID).Scan(&jobID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	switch {
+	case submitErr == nil:
+		return succeed(db, jobID, now)
+	case IsRetryable(submitErr):
+		return nil
+	default:
+		code, message := failureDetail(submitErr)
+		_, err := db.Exec(`UPDATE fiscal_outbound_jobs
+			SET status = 'dead', attempt_count = attempt_count + 1, updated_at = $2, last_error = $3, last_error_code = $4
+			WHERE id = $1`, jobID, now, truncate(message, maxFailureMessage), truncate(code, maxErrorCode))
+		return err
+	}
+}
+
+// RetryJob puts a dead job back to pending, due now — but only after
+// re-claiming its document atomically, the same way the till or the batch
+// screen claimed it the first time. A document that moved on (covered,
+// voided, already filed) cannot be re-claimed and the retry is refused. A
+// batch job is never retried: a failed batch released its invoices, so the
+// operator files them again from the screen.
+func RetryJob(db *sql.DB, jobID uuid.UUID, now time.Time) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	j, err := scanJob(tx.QueryRow(`SELECT `+jobColumns+` FROM fiscal_outbound_jobs WHERE id = $1 AND status = 'dead' FOR UPDATE`, jobID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrJobNotFound
+	}
+	if err != nil {
+		return err
+	}
+	var res sql.Result
+	switch {
+	case j.Ref.InvoiceID != nil && j.Kind == KindSale:
+		res, err = tx.Exec(`UPDATE invoices SET fiscal_status = 'pending'
+			WHERE id = $1 AND status = 'completed' AND fiscal_status IN ('unfiled','failed') AND fiscal_batch_id IS NULL
+			  AND NOT EXISTS (SELECT 1 FROM fiscal_invoices f WHERE f.invoice_id = invoices.id AND f.kind = 'sale')`, *j.Ref.InvoiceID)
+	case j.Ref.InvoiceID != nil && j.Kind == KindDebitNote:
+		res, err = tx.Exec(`UPDATE invoices SET fiscal_void_status = 'pending'
+			WHERE id = $1 AND status = 'voided' AND fiscal_void_status = 'failed'`, *j.Ref.InvoiceID)
+	default:
+		return ErrNotRetryable
+	}
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotRetryable
+	}
+	if _, err := tx.Exec(`UPDATE fiscal_outbound_jobs
+		SET status = 'pending', next_run_at = $2, attempt_count = 0, updated_at = $2, last_error = NULL, last_error_code = NULL
+		WHERE id = $1`, jobID, now); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Counts summarises the queue for the status screen.

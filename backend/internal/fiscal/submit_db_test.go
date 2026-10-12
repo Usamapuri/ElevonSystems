@@ -201,7 +201,7 @@ func seedSale(t *testing.T, db *sql.DB, customerID *uuid.UUID) uuid.UUID {
 // append-only void_log row a debit note reads its reason from.
 func voidInvoice(t *testing.T, db *sql.DB, invoiceID uuid.UUID, reason string) {
 	t.Helper()
-	if _, err := db.Exec(`UPDATE invoices SET status = 'voided', voided_at = now(), void_reason = $2
+	if _, err := db.Exec(`UPDATE invoices SET status = 'voided', voided_at = now(), void_reason = $2, fiscal_void_status = 'pending'
 		WHERE id = $1`, invoiceID, reason); err != nil {
 		t.Fatalf("void invoice: %v", err)
 	}
@@ -624,9 +624,12 @@ func TestSubmit_DebitNoteNeedsARegisteredBuyer(t *testing.T) {
 		t.Fatal("an unfilable void must not touch FBR")
 	}
 
+	// Submit refused before any HTTP, so nothing was filed; which status the
+	// void is left in is the caller's call (the till never sets 'pending'
+	// for a walk-in in the first place).
 	state := readFiscalState(t, db, invoiceID)
-	if state.voidStatus != "unfiled" || state.debitNote.Valid {
-		t.Fatalf("the void stays unfiled: %s / %q", state.voidStatus, state.debitNote.String)
+	if state.voidStatus == "synced" || state.debitNote.Valid {
+		t.Fatalf("nothing filed for the void: %s / %q", state.voidStatus, state.debitNote.String)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -66,7 +67,55 @@ var (
 	ErrNoInvoiceNumber = errors.New("fiscal_no_invoice_number")
 	// ErrUnknownKind: a Kind other than the two above.
 	ErrUnknownKind = errors.New("fiscal_unknown_kind")
+	// ErrNotPending: the document is not in the state that asked to be
+	// filed (voided, covered by a batch, already synced, or never claimed).
+	// A retry that finds this must stop: posting would file it twice.
+	ErrNotPending = errors.New("fiscal_not_pending")
+	// ErrRetryLater: FBR accepted the document but this app could not
+	// finish recording it. The next attempt recovers from the ledger; the
+	// document must not be failed or released.
+	ErrRetryLater = errors.New("fiscal_retry_later")
+	// ErrNotRetryable: a dead job's document can no longer be re-claimed.
+	ErrNotRetryable = errors.New("fiscal_not_retryable")
+	// ErrJobNotFound: no dead job with that id.
+	ErrJobNotFound = errors.New("fiscal_job_not_found")
 )
+
+// IsRetryable says whether a Submit/SubmitBatch error means "try again
+// later" rather than "this filing is refused": the gateway was unreachable,
+// the deadline passed, or FBR accepted and only the bookkeeping failed.
+func IsRetryable(err error) bool {
+	return errors.Is(err, ErrUnreachable) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrRetryLater)
+}
+
+// checkPending refuses a document that is not in the state that asked to be
+// filed. It runs before the ledger check so a stale job can never resurrect
+// a covered or voided sale, and it costs no HTTP.
+func checkPending(q Querier, invoiceID uuid.UUID, kind Kind) error {
+	var status, fiscalStatus, voidStatus string
+	var batchID *uuid.UUID
+	err := q.QueryRow(`SELECT status, fiscal_status, fiscal_void_status, fiscal_batch_id FROM invoices WHERE id = $1`, invoiceID).
+		Scan(&status, &fiscalStatus, &voidStatus, &batchID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrInvoiceNotFound
+	}
+	if err != nil {
+		return err
+	}
+	switch kind {
+	case KindSale:
+		if status != "completed" || fiscalStatus != "pending" || batchID != nil {
+			return ErrNotPending
+		}
+	case KindDebitNote:
+		if status != "voided" || voidStatus != "pending" {
+			return ErrNotPending
+		}
+	default:
+		return ErrUnknownKind
+	}
+	return nil
+}
 
 // codeLedgerWriteFailed and codeApplyFailed mark the rare audit row where
 // FBR accepted the document but this app could not write its own record of
@@ -132,6 +181,11 @@ func (d Deps) client(cfg Config, token string) Client {
 // Submit never changes what a customer pays (CLAUDE.md invariant 8): it
 // reports the numbers pricing.ComputeTotals already stored.
 func Submit(ctx context.Context, d Deps, invoiceID uuid.UUID, kind Kind, actor *uuid.UUID) (string, error) {
+	// 0. The document must still be the one that asked to be filed.
+	if err := checkPending(d.DB, invoiceID, kind); err != nil {
+		return "", err
+	}
+
 	// 1. The ledger, before anything else.
 	number, filed, err := FindSynced(d.DB, invoiceID, string(kind))
 	if err != nil {
@@ -223,14 +277,15 @@ func Submit(ctx context.Context, d Deps, invoiceID uuid.UUID, kind Kind, actor *
 	if err := RecordSynced(d.DB, invoiceID, string(kind), number, posted.Raw); err != nil {
 		postEvent.ErrorCode = codeLedgerWriteFailed
 		Record(d.DB, postEvent)
-		return "", err
+		return "", fmt.Errorf("%w: ledger: %v", ErrRetryLater, err)
 	}
 
-	// 6. Apply to the invoice.
+	// 6. Apply to the invoice. FBR holds the number from here on, so a
+	// failure is "finish later", never "failed".
 	if err := apply(d.DB, invoiceID, kind, number, saleDetails(kind, cfg, payload, posted, d.now())); err != nil {
 		postEvent.ErrorCode = codeApplyFailed
 		Record(d.DB, postEvent)
-		return "", err
+		return "", fmt.Errorf("%w: apply: %v", ErrRetryLater, err)
 	}
 	Record(d.DB, postEvent)
 	return number, nil
@@ -376,6 +431,11 @@ func apply(db *sql.DB, invoiceID uuid.UUID, kind Kind, number string, details []
 // part of the invoice projection any API returns. It can never contain the
 // FBR token: no error in this package is built from it.
 func MarkFailed(db *sql.DB, invoiceID uuid.UUID, kind Kind, cause error) error {
+	// Once the ledger holds a number the filing happened; the next attempt
+	// recovers it, and marking it failed would invite a second filing.
+	if _, filed, err := FindSynced(db, invoiceID, string(kind)); err != nil || filed {
+		return err
+	}
 	code, message := failureDetail(cause)
 	details, err := json.Marshal(struct {
 		ErrorCode string `json:"error_code"`
@@ -424,6 +484,7 @@ func ErrorCode(err error) string {
 		ErrBuyerUnregistered, ErrVoidReasonMissing, ErrNoInvoiceNumber, ErrUnknownKind,
 		ErrSandboxInRelease, ErrSecretsKeyMissing, ErrSecretsKeyInvalid, ErrCiphertextInvalid,
 		ErrHSCodeMissing, ErrBatchEmpty, ErrBatchNotFound, ErrReferenceUnreadable,
+		ErrNotPending, ErrRetryLater, ErrNotRetryable, ErrJobNotFound,
 	} {
 		if errors.Is(err, known) {
 			return known.Error()

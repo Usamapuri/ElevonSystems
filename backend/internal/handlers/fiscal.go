@@ -214,7 +214,7 @@ func (h *FiscalHandler) Test(c *gin.Context) {
 	var hsCode string
 	_ = json.Unmarshal(all["default_hs_code"], &hsCode)
 	sample := fiscal.TestSample{TaxRate: settingNumber(all, "tax_rate_cash"), DefaultHSCode: hsCode}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), batchCallTimeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), batchCallTimeout)
 	defer cancel()
 	actor := invoiceActor(c)
 	res := fiscal.RunTest(ctx, h.deps, env, sample, actorOrNil(actor.ID))
@@ -279,6 +279,9 @@ type pendingView struct {
 	Enabled bool                  `json:"enabled"`
 	Today   fiscal.PendingSummary `json:"today"`
 	All     fiscal.PendingSummary `json:"all"`
+	// BusinessDate is the server's current business date, so the File with
+	// FBR screen opens on the right day whatever the browser's clock says.
+	BusinessDate string `json:"business_date"`
 }
 
 // Pending is GET /fiscal/pending, readable by any signed-in user.
@@ -288,9 +291,10 @@ func (h *FiscalHandler) Pending(c *gin.Context) {
 		internalFail(c, "pending config", err)
 		return
 	}
-	v := pendingView{Enabled: cfg.Enabled}
+	today := util.BusinessDate(time.Now())
+	v := pendingView{Enabled: cfg.Enabled, BusinessDate: today.Format("2006-01-02")}
 	if cfg.Enabled {
-		v.Today, v.All, err = fiscal.Pending(h.db, util.BusinessDate(time.Now()))
+		v.Today, v.All, err = fiscal.Pending(h.db, today)
 		if err != nil {
 			internalFail(c, "pending", err)
 			return
@@ -390,16 +394,17 @@ func (h *FiscalHandler) CreateBatch(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), batchCallTimeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), batchCallTimeout)
 	defer cancel()
 	_, ferr := fiscal.SubmitBatch(ctx, h.deps, b.ID, actorOrNil(actor.ID))
+	if err := fiscal.SettleInline(h.db, fiscal.JobRef{BatchID: &b.ID}, fiscal.KindBatch, ferr, time.Now()); err != nil {
+		log.Printf("fiscal batch: settle job: %v", err)
+	}
 	status := http.StatusCreated
 	switch {
 	case ferr == nil:
-	case errors.Is(ferr, fiscal.ErrUnreachable) || errors.Is(ferr, context.DeadlineExceeded):
-		if err := fiscal.Enqueue(h.db, fiscal.JobRef{BatchID: &b.ID}, fiscal.KindBatch, time.Now()); err != nil {
-			log.Printf("fiscal batch: enqueue: %v", err)
-		}
+	case fiscal.IsRetryable(ferr):
+		// The job created with the claim is already due; the worker owns it.
 		status = http.StatusAccepted
 	default:
 		if err := fiscal.FailBatch(h.db, b.ID, ferr); err != nil {
@@ -526,18 +531,16 @@ func (h *FiscalHandler) RetryJob(c *gin.Context) {
 		c.JSON(http.StatusNotFound, models.Fail("Job not found", "fiscal_job_not_found"))
 		return
 	}
-	res, err := h.db.Exec(`UPDATE fiscal_outbound_jobs
-		SET status = 'pending', next_run_at = now(), attempt_count = 0, updated_at = now()
-		WHERE id = $1 AND status = 'dead'`, id)
-	if err != nil {
-		internalFail(c, "retry job", err)
-		return
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	switch err := fiscal.RetryJob(h.db, id, time.Now()); {
+	case errors.Is(err, fiscal.ErrJobNotFound):
 		c.JSON(http.StatusNotFound, models.Fail("No dead job with that id", "fiscal_job_not_found"))
-		return
+	case errors.Is(err, fiscal.ErrNotRetryable):
+		c.JSON(http.StatusConflict, models.Fail("This document can no longer be filed from here — it was voided, covered by a combined invoice, or already filed", "fiscal_not_retryable"))
+	case err != nil:
+		internalFail(c, "retry job", err)
+	default:
+		c.JSON(http.StatusOK, models.OK("Job queued", gin.H{"id": id}))
 	}
-	c.JSON(http.StatusOK, models.OK("Job queued", gin.H{"id": id}))
 }
 
 // SubmitInvoice is POST /admin/fiscal/invoices/:id/submit: file one unfiled
@@ -557,24 +560,39 @@ func (h *FiscalHandler) SubmitInvoice(c *gin.Context) {
 		c.JSON(http.StatusConflict, models.Fail("FBR filing is switched off", "fiscal_disabled"))
 		return
 	}
-	res, err := h.db.Exec(`UPDATE invoices SET fiscal_status = 'pending'
-		WHERE id = $1 AND status = 'completed' AND fiscal_status IN ('unfiled','failed')`, id)
+	// Claim and job in one transaction, as the till does.
+	tx, err := h.db.Begin()
+	if err != nil {
+		internalFail(c, "submit begin", err)
+		return
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(`UPDATE invoices SET fiscal_status = 'pending'
+		WHERE id = $1 AND status = 'completed' AND fiscal_status IN ('unfiled','failed') AND fiscal_batch_id IS NULL
+		  AND NOT EXISTS (SELECT 1 FROM fiscal_invoices f WHERE f.invoice_id = invoices.id AND f.kind = 'sale')`, id)
 	if err != nil {
 		internalFail(c, "submit claim", err)
 		return
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		inv, err := invoice.LoadWithLines(h.db, id)
-		if errors.Is(err, sql.ErrNoRows) {
-			c.JSON(http.StatusNotFound, models.Fail("Invoice not found", "invoice_not_found"))
-			return
-		}
-		if err != nil {
+		var exists bool
+		if err := h.db.QueryRow(`SELECT EXISTS (SELECT 1 FROM invoices WHERE id = $1)`, id).Scan(&exists); err != nil {
 			internalFail(c, "submit load", err)
 			return
 		}
-		_ = inv
+		if !exists {
+			c.JSON(http.StatusNotFound, models.Fail("Invoice not found", "invoice_not_found"))
+			return
+		}
 		c.JSON(http.StatusConflict, models.Fail("This invoice is already filed, being filed, or voided", "fiscal_filing_in_flight"))
+		return
+	}
+	if err := fiscal.Enqueue(tx, fiscal.JobRef{InvoiceID: &id}, fiscal.KindSale, time.Now().Add(fiscalCallTimeout)); err != nil {
+		internalFail(c, "submit enqueue", err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		internalFail(c, "submit commit", err)
 		return
 	}
 	inv, err := invoice.LoadWithLines(h.db, id)

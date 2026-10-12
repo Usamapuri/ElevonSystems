@@ -846,6 +846,17 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 		inv.Lines = append(inv.Lines, line)
 	}
 
+	// The filing's job is created with the sale, due once the inline attempt
+	// below has had its window: a crash in between leaves the worker
+	// something to pick up rather than a sale stuck 'pending'.
+	if fiscalStatus == "pending" {
+		if err := fiscal.Enqueue(tx, fiscal.JobRef{InvoiceID: &inv.ID}, fiscal.KindSale, now.Add(fiscalCallTimeout)); err != nil {
+			log.Printf("invoice create: enqueue fiscal: %v", err)
+			c.JSON(http.StatusInternalServerError, models.Fail("Could not record the sale", "internal_error"))
+			return
+		}
+	}
+
 	// A credit sale is money owed: the ledger debit is part of the same
 	// transaction as the invoice, so the two can never disagree.
 	if p.method == "credit" {
@@ -896,9 +907,14 @@ func (h *InvoicesHandler) fileInline(c *gin.Context, inv *models.Invoice, kind f
 // runInlineFiling is fileInline's body, shared with the admin "file this
 // invoice now" route.
 func runInlineFiling(c *gin.Context, db *sql.DB, deps fiscal.Deps, inv *models.Invoice, kind fiscal.Kind, actor *uuid.UUID) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), fiscalCallTimeout)
+	// Detached from the request: a tab closed mid-post must not turn a
+	// filing FBR has accepted into "unreachable" and a second filing.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), fiscalCallTimeout)
 	defer cancel()
 	number, ferr := fiscal.Submit(ctx, deps, inv.ID, kind, actor)
+	if err := fiscal.SettleInline(db, fiscal.JobRef{InvoiceID: &inv.ID}, kind, ferr, time.Now()); err != nil {
+		log.Printf("invoice %s: settle job: %v", kind, err)
+	}
 	switch {
 	case ferr == nil:
 		if kind == fiscal.KindDebitNote {
@@ -906,10 +922,8 @@ func runInlineFiling(c *gin.Context, db *sql.DB, deps fiscal.Deps, inv *models.I
 		} else {
 			inv.FiscalStatus, inv.FiscalInvoiceNumber = "synced", &number
 		}
-	case errors.Is(ferr, fiscal.ErrUnreachable) || errors.Is(ferr, context.DeadlineExceeded):
-		if err := fiscal.Enqueue(db, fiscal.JobRef{InvoiceID: &inv.ID}, kind, time.Now()); err != nil {
-			log.Printf("invoice %s: enqueue fiscal: %v", kind, err)
-		}
+	case fiscal.IsRetryable(ferr):
+		// The job created with the claim is already due; the worker owns it.
 	default:
 		if err := fiscal.MarkFailed(db, inv.ID, kind, ferr); err != nil {
 			log.Printf("invoice %s: mark fiscal failed: %v", kind, err)
@@ -1242,6 +1256,11 @@ func (h *InvoicesHandler) Void(c *gin.Context) {
 	if debitNote {
 		if _, err := tx.Exec(`UPDATE invoices SET fiscal_void_status = 'pending' WHERE id = $1`, id); err != nil {
 			log.Printf("invoice void: fiscal void status: %v", err)
+			c.JSON(http.StatusInternalServerError, models.Fail("Could not void the invoice", "internal_error"))
+			return
+		}
+		if err := fiscal.Enqueue(tx, fiscal.JobRef{InvoiceID: &id}, fiscal.KindDebitNote, time.Now().Add(fiscalCallTimeout)); err != nil {
+			log.Printf("invoice void: enqueue debit note: %v", err)
 			c.JSON(http.StatusInternalServerError, models.Fail("Could not void the invoice", "internal_error"))
 			return
 		}

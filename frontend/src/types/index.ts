@@ -142,6 +142,8 @@ export interface FiscalPending {
   enabled: boolean
   today: PendingSummary
   all: PendingSummary
+  /** The server's current business date, YYYY-MM-DD. */
+  business_date: string
 }
 
 /** GET /admin/fiscal/eligible — one unfiled sale on the File with FBR screen. */
@@ -156,7 +158,7 @@ export interface EligibleInvoice {
   total_payable: number
   fiscal_status: string
   eligible: boolean
-  reason: '' | 'registered_buyer' | 'tax_rate_mismatch'
+  reason: '' | 'registered_buyer' | 'tax_rate_mismatch' | 'already_filed'
 }
 
 /** One combined FBR invoice (fiscal_batches). */

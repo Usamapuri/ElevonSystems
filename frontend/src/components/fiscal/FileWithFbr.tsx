@@ -19,16 +19,10 @@ import { fiscalStatusLabel, ineligibleReason, selectionTotals } from '@/lib/fisc
 import { formatKgGrouped, formatMoney } from '@/lib/money'
 import { formatTimePK } from '@/lib/print/format'
 import { cn } from '@/lib/utils'
-import type { EligibleInvoice, FiscalBatch } from '@/types'
+import type { EligibleInvoice, FiscalBatch, FiscalPending } from '@/types'
 
 export const FISCAL_PENDING_KEY = ['fiscal', 'pending'] as const
 export const FISCAL_BATCHES_KEY = ['fiscal', 'batches'] as const
-
-/** Today's business date as the API spells it, from the server's own clock
- * when it has told us (the day banner), else the browser's. */
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 interface Props {
   onFiled: (batch: FiscalBatch) => void
@@ -36,12 +30,26 @@ interface Props {
 
 export function FileWithFbr({ onFiled }: Props) {
   const qc = useQueryClient()
-  const [date, setDate] = useState(todayISO())
+  // The business date comes from the server (GET /fiscal/pending), never
+  // the browser's clock: at 01:00 PKT the UTC date is still yesterday.
+  const [date, setDate] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirm, setConfirm] = useState(false)
+  const pending = useQuery({
+    queryKey: FISCAL_PENDING_KEY,
+    queryFn: async (): Promise<FiscalPending> => {
+      const res = await apiClient.getFiscalPending()
+      if (!res.success || !res.data) throw new Error(res.message || 'Could not load')
+      return res.data
+    },
+  })
+  useEffect(() => {
+    if (date === '' && pending.data?.business_date) setDate(pending.data.business_date)
+  }, [date, pending.data])
 
   const eligible = useQuery({
     queryKey: ['fiscal', 'eligible', date],
+    enabled: date !== '',
     queryFn: async (): Promise<EligibleInvoice[]> => {
       const res = await apiClient.getFiscalEligible(date)
       if (!res.success || !res.data) throw new Error(res.message || 'Could not load the unfiled sales')

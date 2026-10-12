@@ -398,3 +398,57 @@ func TestLoadBatch_ListsCoveredInvoicesIncludingLaterVoids(t *testing.T) {
 		t.Fatalf("unknown batch: %v", err)
 	}
 }
+
+// Review finding 1: a batch is filed only while pending.
+func TestSubmitBatch_RefusesANonPendingBatch(t *testing.T) {
+	sandboxEnv(t)
+	db := testdb.Fresh(t)
+	s := acceptingStub(t)
+	enableFiscal(t, db, s, true)
+	cfg, _ := fiscal.LoadConfig(db)
+	b, _ := fiscal.CreateBatch(db, batchDay(), []uuid.UUID{seedBatchSale(t, db, "20261012-001", seedOpt{})}, cfg, nil)
+	if err := fiscal.FailBatch(db, b.ID, &fiscal.RejectedError{Code: "0104"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fiscal.SubmitBatch(context.Background(), deps(db), b.ID, nil); !errors.Is(err, fiscal.ErrNotPending) {
+		t.Fatalf("failed batch: %v", err)
+	}
+	if s.hits() != 0 {
+		t.Fatal("no HTTP")
+	}
+}
+
+// Review finding 2: a failure after FBR accepted is retried, never failed.
+func TestSubmitBatch_ApplyFailureAfterPostIsRetryLater(t *testing.T) {
+	sandboxEnv(t)
+	db := testdb.Fresh(t)
+	s := acceptingStub(t)
+	enableFiscal(t, db, s, true)
+	cfg, _ := fiscal.LoadConfig(db)
+	ids := []uuid.UUID{seedBatchSale(t, db, "20261012-001", seedOpt{})}
+	b, _ := fiscal.CreateBatch(db, batchDay(), ids, cfg, nil)
+	// Break the stamp: a trigger that refuses the covered update once.
+	if _, err := db.Exec(`CREATE OR REPLACE FUNCTION test_block_cover() RETURNS trigger AS $$
+		BEGIN IF NEW.fiscal_status = 'covered' THEN RAISE EXCEPTION 'blocked'; END IF; RETURN NEW; END $$ LANGUAGE plpgsql;
+		CREATE TRIGGER test_block_cover BEFORE UPDATE ON invoices FOR EACH ROW EXECUTE FUNCTION test_block_cover();`); err != nil {
+		t.Fatal(err)
+	}
+	_, err := fiscal.SubmitBatch(context.Background(), deps(db), b.ID, nil)
+	if !errors.Is(err, fiscal.ErrRetryLater) {
+		t.Fatalf("apply failed after post: %v", err)
+	}
+	if n, filed, _ := fiscal.FindSyncedBatch(db, b.ID); !filed || n == "" {
+		t.Fatal("the ledger holds the number")
+	}
+	if _, err := db.Exec(`DROP TRIGGER test_block_cover ON invoices`); err != nil {
+		t.Fatal(err)
+	}
+	// The retry recovers from the ledger without posting again.
+	number, err := fiscal.SubmitBatch(context.Background(), deps(db), b.ID, nil)
+	if err != nil || s.postHits != 1 {
+		t.Fatalf("recovered: %q %v posts=%d", number, err, s.postHits)
+	}
+	if st, _, _ := invoiceFiscal(t, db, ids[0]); st != "covered" {
+		t.Fatalf("stamped on the retry: %s", st)
+	}
+}

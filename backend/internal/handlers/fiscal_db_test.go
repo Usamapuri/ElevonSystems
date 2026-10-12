@@ -409,3 +409,38 @@ func TestFiscalJobs_RetryDeadAndSubmitInvoice(t *testing.T) {
 		t.Fatalf("unknown job: %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestFiscalPending_CarriesTheBusinessDate(t *testing.T) {
+	db := testdb.Fresh(t)
+	adminID := seedUser(t, db, "owner", "admin", "owner-pass-1", nil)
+	r := fiscalAdminRouter(db, actor{id: adminID, username: "owner", role: "admin"})
+	w := doJSON(r, http.MethodGet, "/fiscal/pending", nil)
+	var p struct {
+		BusinessDate string `json:"business_date"`
+	}
+	dataAs(t, decodeEnvelope(t, w), &p)
+	if p.BusinessDate != businessToday().Format("2006-01-02") {
+		t.Fatalf("business_date = %q", p.BusinessDate)
+	}
+}
+
+func TestFiscalJobs_RetryRefusesACoveredSale(t *testing.T) {
+	db := testdb.Fresh(t)
+	adminID, productID := fiscalSetup(t, db)
+	enableFiscalAt(t, db, acceptingFBR(t))
+	till := fiscalRouter(db, actor{id: adminID, username: "owner", role: "admin"})
+	a := ringSale(t, till, productID, fiscalSale{})
+	if _, err := db.Exec(`UPDATE invoices SET fiscal_status = 'covered' WHERE id = $1`, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	var jobID uuid.UUID
+	if err := db.QueryRow(`INSERT INTO fiscal_outbound_jobs (invoice_id, kind, status, attempt_count, last_error_code)
+		VALUES ($1, 'sale', 'dead', 20, 'fiscal_max_attempts') RETURNING id`, a.ID).Scan(&jobID); err != nil {
+		t.Fatal(err)
+	}
+	r := fiscalAdminRouter(db, actor{id: adminID, username: "owner", role: "admin"})
+	w := doJSON(r, http.MethodPost, "/admin/fiscal/jobs/"+jobID.String()+"/retry", nil)
+	if w.Code != http.StatusConflict || errCode(decodeEnvelope(t, w)) != "fiscal_not_retryable" {
+		t.Fatalf("covered sale: %d %s", w.Code, w.Body.String())
+	}
+}

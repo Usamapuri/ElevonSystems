@@ -93,6 +93,8 @@ export function ineligibleReason(reason: EligibleInvoice['reason']): string {
       return 'Registered buyer — file this one on its own'
     case 'tax_rate_mismatch':
       return 'Tax rate differs from the FBR rate'
+    case 'already_filed':
+      return 'FBR already holds this sale'
     default:
       return ''
   }

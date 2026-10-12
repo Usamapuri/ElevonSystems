@@ -82,9 +82,12 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         nextKey: state.nextKey + 1,
       }
     case 'update':
+      // Re-weighing a line keeps the deal rate the cashier agreed: the pad
+      // knows nothing about it, so it is carried over here and an
+      // amount-mode quantity is re-derived at the rate actually charged.
       return {
         ...state,
-        lines: state.lines.map((l) => (l.key === action.key ? { ...action.line, key: l.key } : l)),
+        lines: state.lines.map((l) => (l.key === action.key ? withRate({ ...action.line, key: l.key }, l.rate_override ?? null) : l)),
       }
     case 'remove':
       return { ...state, lines: state.lines.filter((l) => l.key !== action.key) }

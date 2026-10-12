@@ -342,3 +342,17 @@ func TestVoid_UnfiledDropsOutOfPending(t *testing.T) {
 		t.Fatalf("pending to file: %d %v", n, err)
 	}
 }
+
+// Review finding 3: the job exists from the claim, closed by the inline
+// attempt; the worker owns anything the inline attempt could not finish.
+func TestCreate_ChargeWithFBRLeavesASettledJob(t *testing.T) {
+	db := testdb.Fresh(t)
+	adminID, productID := fiscalSetup(t, db)
+	enableFiscalAt(t, db, acceptingFBR(t))
+	r := fiscalRouter(db, actor{id: adminID, username: "owner", role: "admin"})
+	inv := ringSale(t, r, productID, fiscalSale{fileFBR: true})
+	var status string
+	if err := db.QueryRow(`SELECT status FROM fiscal_outbound_jobs WHERE invoice_id = $1 AND kind = 'sale'`, inv.ID).Scan(&status); err != nil || status != "succeeded" {
+		t.Fatalf("one succeeded job: %s %v", status, err)
+	}
+}

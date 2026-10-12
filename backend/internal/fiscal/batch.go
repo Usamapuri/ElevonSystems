@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -66,7 +67,14 @@ type EligibleRow struct {
 const (
 	ReasonRegisteredBuyer = "registered_buyer"
 	ReasonTaxRateMismatch = "tax_rate_mismatch"
+	// ReasonAlreadyFiled: fiscal_invoices holds a sale number for it, so FBR
+	// already has this sale on its own whatever fiscal_status says.
+	ReasonAlreadyFiled = "already_filed"
 )
+
+// BatchInlineWindow is how long the screen's inline attempt gets before
+// the worker may pick the batch's job up instead.
+const BatchInlineWindow = 30 * time.Second
 
 // IneligibleError names every invoice in a request that cannot be batched,
 // so the screen can refresh exactly those rows. Error() is the stable code.
@@ -98,7 +106,10 @@ func ratePct(cfg Config) (float64, bool) {
 // eligibilityReason is the one rule Eligible and CreateBatch share for a row
 // that has already passed the basic filter: a registered buyer files on
 // their own NTN, and FBR validates every item at cfg.RateDesc.
-func eligibilityReason(buyerType string, taxRate float64, cfg Config) string {
+func eligibilityReason(buyerType string, taxRate float64, cfg Config, alreadyFiled bool) string {
+	if alreadyFiled {
+		return ReasonAlreadyFiled
+	}
 	if strings.EqualFold(strings.TrimSpace(buyerType), "Registered") {
 		return ReasonRegisteredBuyer
 	}
@@ -117,7 +128,8 @@ func Eligible(q interface {
 	rows, err := q.Query(`
 		SELECT i.id, i.invoice_number, i.status, i.created_at, COALESCE(i.customer_name, c.name),
 		       COALESCE(k.kg, 0)::float8, i.total_amount::float8, i.total_payable::bigint, i.fiscal_status,
-		       i.tax_rate::float8, COALESCE(c.buyer_registration_type, '')
+		       i.tax_rate::float8, COALESCE(c.buyer_registration_type, ''),
+		       EXISTS (SELECT 1 FROM fiscal_invoices f WHERE f.invoice_id = i.id AND f.kind = 'sale')
 		FROM invoices i
 		LEFT JOIN customers c ON c.id = i.customer_id
 		LEFT JOIN LATERAL (SELECT sum(quantity) AS kg FROM invoice_lines WHERE invoice_id = i.id) k ON true
@@ -132,11 +144,12 @@ func Eligible(q interface {
 		var r EligibleRow
 		var taxRate float64
 		var buyerType string
+		var filed bool
 		if err := rows.Scan(&r.ID, &r.InvoiceNumber, &r.Status, &r.CreatedAt, &r.CustomerName,
-			&r.TotalKg, &r.TotalAmount, &r.TotalPayable, &r.FiscalStatus, &taxRate, &buyerType); err != nil {
+			&r.TotalKg, &r.TotalAmount, &r.TotalPayable, &r.FiscalStatus, &taxRate, &buyerType, &filed); err != nil {
 			return nil, err
 		}
-		r.Reason = eligibilityReason(buyerType, taxRate, cfg)
+		r.Reason = eligibilityReason(buyerType, taxRate, cfg, filed)
 		r.Eligible = r.Reason == ""
 		out = append(out, r)
 	}
@@ -160,7 +173,8 @@ func CreateBatch(db *sql.DB, businessDate time.Time, ids []uuid.UUID, cfg Config
 
 	rows, err := tx.Query(`
 		SELECT i.id, i.status, i.fiscal_status, i.business_date, i.tax_rate::float8,
-		       COALESCE(c.buyer_registration_type, '')
+		       COALESCE(c.buyer_registration_type, ''),
+		       EXISTS (SELECT 1 FROM fiscal_invoices f WHERE f.invoice_id = i.id AND f.kind = 'sale')
 		FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
 		WHERE i.id = ANY($1) ORDER BY i.id FOR UPDATE OF i`, pq.Array(ids))
 	if err != nil {
@@ -173,7 +187,8 @@ func CreateBatch(db *sql.DB, businessDate time.Time, ids []uuid.UUID, cfg Config
 		var status, fiscalStatus, buyerType string
 		var date time.Time
 		var taxRate float64
-		if err := rows.Scan(&id, &status, &fiscalStatus, &date, &taxRate, &buyerType); err != nil {
+		var filed bool
+		if err := rows.Scan(&id, &status, &fiscalStatus, &date, &taxRate, &buyerType, &filed); err != nil {
 			rows.Close()
 			return Batch{}, err
 		}
@@ -181,7 +196,7 @@ func CreateBatch(db *sql.DB, businessDate time.Time, ids []uuid.UUID, cfg Config
 		ok := status == "completed" &&
 			(fiscalStatus == "unfiled" || fiscalStatus == "failed") &&
 			date.Format("2006-01-02") == businessDate.Format("2006-01-02") &&
-			eligibilityReason(buyerType, taxRate, cfg) == ""
+			eligibilityReason(buyerType, taxRate, cfg, filed) == ""
 		if !ok {
 			bad = append(bad, id)
 		}
@@ -218,6 +233,11 @@ func CreateBatch(db *sql.DB, businessDate time.Time, ids []uuid.UUID, cfg Config
 		b.ID, pq.Array(ids)); err != nil {
 		return Batch{}, err
 	}
+	// The job exists from the claim: if the process dies before the inline
+	// attempt, the worker picks the batch up once the inline window passes.
+	if err := Enqueue(tx, JobRef{BatchID: &b.ID}, KindBatch, time.Now().Add(BatchInlineWindow)); err != nil {
+		return Batch{}, err
+	}
 	return b, tx.Commit()
 }
 
@@ -243,6 +263,15 @@ func dedupe(ids []uuid.UUID) []uuid.UUID {
 // to retry later. An unreachable gateway is always a retry.
 func SubmitBatch(ctx context.Context, d Deps, batchID uuid.UUID, actor *uuid.UUID) (string, error) {
 	ref := auditRef{BatchID: &batchID, Kind: KindBatch}
+
+	// 0. Only a pending batch is filed; a failed one released its invoices.
+	b, err := loadBatchRow(d.DB, batchID)
+	if err != nil {
+		return "", err
+	}
+	if b.Status != "pending" {
+		return "", ErrNotPending
+	}
 
 	// 1. The ledger, before anything else.
 	number, filed, err := FindSyncedBatch(d.DB, batchID)
@@ -281,11 +310,7 @@ func SubmitBatch(ctx context.Context, d Deps, batchID uuid.UUID, actor *uuid.UUI
 		return "", ErrTokenMissing
 	}
 
-	// 3. The batch and its invoices.
-	b, err := loadBatchRow(d.DB, batchID)
-	if err != nil {
-		return "", err
-	}
+	// 3. The batch's invoices.
 	invoices, err := loadBatchInvoices(d.DB, batchID)
 	if err != nil {
 		return "", err
@@ -314,12 +339,12 @@ func SubmitBatch(ctx context.Context, d Deps, batchID uuid.UUID, actor *uuid.UUI
 	if err := RecordSyncedBatch(d.DB, batchID, number, posted.Raw); err != nil {
 		postEvent.ErrorCode = codeLedgerWriteFailed
 		Record(d.DB, postEvent)
-		return "", err
+		return "", fmt.Errorf("%w: ledger: %v", ErrRetryLater, err)
 	}
 	if err := applyBatch(d.DB, batchID, number); err != nil {
 		postEvent.ErrorCode = codeApplyFailed
 		Record(d.DB, postEvent)
-		return "", err
+		return "", fmt.Errorf("%w: apply: %v", ErrRetryLater, err)
 	}
 	Record(d.DB, postEvent)
 	return number, nil
@@ -351,6 +376,10 @@ func applyBatch(db *sql.DB, batchID uuid.UUID, number string) error {
 // stays as history. Only invoices still pending on this batch are released;
 // a covered invoice is never un-covered here.
 func FailBatch(db *sql.DB, batchID uuid.UUID, cause error) error {
+	// FBR holds a number for a batch the ledger knows: never release it.
+	if _, filed, err := FindSyncedBatch(db, batchID); err != nil || filed {
+		return err
+	}
 	code, message := failureDetail(cause)
 	tx, err := db.Begin()
 	if err != nil {

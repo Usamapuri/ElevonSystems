@@ -187,3 +187,17 @@ describe('cartReducer — set_rate (deal rates, spec 2026-10-12 §3)', () => {
     expect('rate_override' in req[1]).toBe(false)
   })
 })
+
+describe('cartReducer — update keeps the deal rate (review finding 4)', () => {
+  it('re-weighing a line keeps its deal rate and re-derives an amount-mode quantity', () => {
+    const over = cartReducer(withLines(draft({ rate: 250, entered_as: 'amount', typed_amount: 50000, quantity: 200 })), {
+      type: 'set_rate', key: 'line-1', rate: 249.5,
+    })
+    const edited = cartReducer(over, { type: 'update', key: 'line-1', line: draft({ rate: 250, entered_as: 'kg', quantity: 300 }) })
+    expect(edited.lines[0].rate_override).toBe(249.5)
+    expect(edited.lines[0].quantity).toBe(300)
+    const amount = cartReducer(over, { type: 'update', key: 'line-1', line: draft({ rate: 250, entered_as: 'amount', typed_amount: 60000, quantity: 240 }) })
+    expect(amount.lines[0].rate_override).toBe(249.5)
+    expect(amount.lines[0].quantity).toBe(240.481)
+  })
+})
