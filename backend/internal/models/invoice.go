@@ -56,7 +56,11 @@ type Invoice struct {
 	ClientOpID    *uuid.UUID `json:"client_op_id"`
 	BusinessDayID uuid.UUID  `json:"business_day_id"`
 	BusinessDate  time.Time  `json:"business_date"`
-	Status        string     `json:"status"`
+	// InvoiceDate is the date on the document and the date FBR is told
+	// (spec 2026-10-12 §8). It equals BusinessDate unless an admin back-dated
+	// the sale; BusinessDate is always where the sale is booked and reported.
+	InvoiceDate time.Time `json:"invoice_date"`
+	Status      string    `json:"status"`
 
 	CashierID   *uuid.UUID `json:"cashier_id"`
 	CashierName string     `json:"cashier_name"`
@@ -157,6 +161,9 @@ type CreateInvoiceRequest struct {
 	// FileFBR asks for this one sale to be filed with FBR right away (spec
 	// 2026-10-12 §2.2). Nothing is filed unless asked.
 	FileFBR bool `json:"file_fbr"`
+	// InvoiceDate (YYYY-MM-DD, optional) back-dates the document (spec
+	// 2026-10-12 §8): admins only, at most 30 days before the business date.
+	InvoiceDate string `json:"invoice_date"`
 }
 
 // VoidInvoiceRequest voids a whole invoice (spec §6.4). The PIN is the

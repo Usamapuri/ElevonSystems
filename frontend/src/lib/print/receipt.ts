@@ -27,6 +27,7 @@ import {
   subMethodLabel,
 } from '@/lib/print/format'
 import { fbrBlockHtml } from '@/lib/print/fbrBlock'
+import { isBackDated } from '@/lib/invoiceDate'
 
 /** What the invoice payload does not carry: the QR for an FBR-filed sale,
  * rendered by printInvoice.ts because this module stays DOM-free. */
@@ -75,13 +76,24 @@ function header(s: AppSettings): string {
   return out.join('\n')
 }
 
+/**
+ * A back-dated sale (spec 2026-10-12 §8) leads with the date the document
+ * carries and says when it was actually recorded; a same-day sale prints
+ * the one date it has.
+ */
 function invoiceHead(inv: Invoice): string {
+  const rows = isBackDated(inv)
+    ? [
+        kv('Invoice date', formatBusinessDate(inv.invoice_date)),
+        kv('Recorded', formatDateTimePK(inv.created_at)),
+        kv('Business day', formatBusinessDate(inv.business_date)),
+      ]
+    : [kv('Date', formatDateTimePK(inv.created_at)), kv('Business day', formatBusinessDate(inv.business_date))]
   return [
     '<div class="title">INVOICE</div>',
     '<div class="center bold">' + esc(inv.invoice_number) + '</div>',
     '<table class="kv">',
-    kv('Date', formatDateTimePK(inv.created_at)),
-    kv('Business day', formatBusinessDate(inv.business_date)),
+    ...rows,
     kv('Cashier', inv.cashier_name),
     '</table>',
   ].join('\n')

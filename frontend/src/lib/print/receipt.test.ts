@@ -71,6 +71,7 @@ const cashInvoice: Invoice = {
   client_op_id: 'c1',
   business_day_id: 'd1',
   business_date: '2026-09-20',
+  invoice_date: '2026-09-20',
   status: 'completed',
   cashier_id: 'u1',
   cashier_name: 'Adeel Raza',
@@ -299,6 +300,34 @@ describe('buildReceiptHtml — fiscal block (§7.7, 2026-10-12 §2.6)', () => {
       settings,
     )
     expect(html).not.toContain('FBR')
+  })
+})
+
+describe('back-dated invoices (spec 2026-10-12 §8)', () => {
+  const backDated: Invoice = { ...cashInvoice, invoice_date: '2026-09-13' }
+
+  it('receipt leads with the invoice date and says when the sale was recorded', () => {
+    const html = buildReceiptHtml(backDated, settings)
+    expect(html).toContain('Invoice date')
+    expect(html).toContain('13 Sep 2026')
+    expect(html).toContain('Recorded')
+    expect(html).toContain('20 Sep 2026')
+    expect(html.indexOf('Invoice date')).toBeLessThan(html.indexOf('Recorded'))
+  })
+
+  it('A4 invoice does the same', () => {
+    const html = buildInvoiceA4Html(backDated, settings)
+    expect(html).toContain('Invoice date')
+    expect(html).toContain('13 Sep 2026')
+    expect(html).toContain('Recorded')
+  })
+
+  it('a same-day sale prints exactly as before — no Invoice date or Recorded row', () => {
+    for (const html of [buildReceiptHtml(cashInvoice, settings), buildInvoiceA4Html(cashInvoice, settings)]) {
+      expect(html).not.toContain('Invoice date')
+      expect(html).not.toContain('Recorded')
+      expect(html).toContain('>Date<')
+    }
   })
 })
 

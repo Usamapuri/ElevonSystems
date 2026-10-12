@@ -204,3 +204,42 @@ Rounding, tax base and further tax are untouched. The owner's approval of this f
 3. Settings → FBR tab, File with FBR screen, till button and pending line.
 4. Receipt block, reports.
 5. Sandbox checks in §5, then the smoke run through the app.
+
+---
+
+## 8. Back-dated invoices (approved 2026-10-12)
+
+**Why.** The owner has sales made before the system went live, and the odd sale rung on paper, that still have to reach FBR. The sandbox accepts an `invoiceDate` at least 7 days back (audit `FBR_SANDBOX_2026-10-12.md`), so the filing side needs only the right date. What needed deciding is how a past-dated sale sits in the store's own books.
+
+### 8.1 Behaviour
+
+- Every invoice carries an **invoice date** (`invoices.invoice_date DATE NOT NULL`), the date printed on the document and sent to FBR. It defaults to the business date and is only ever different when an admin back-dates the sale.
+- The sale is still **recorded on the current business day**: today's invoice number, today's drawer, today's day close and every report, which filter on `business_date` and nothing else (invariant 6). Closed days stay sealed; no day row is invented for a date before the system existed.
+- **Who:** an admin signed in at the till picks the date from a calendar beside the cart before charging. A counter login cannot back-date; the server refuses with `invoice_date_requires_admin` whatever the client sends. No PIN: the signed-in role is the authority, and the date is printed on the document.
+- **How far back:** at most 30 days before the current business date (`invoice_date_too_old`); never after it (`invoice_date_future`). An unparseable date is `invalid_request`.
+- **What the customer sees:** the receipt and the A4 invoice print `Invoice date 5 Oct 2026`, then `Recorded 12 Oct 2026, 5:40 pm` and the business day, whenever the two differ. A same-day sale prints exactly as before. The invoice drawer says `Invoice date 5 Oct 2026 (back-dated)` and the invoice list carries a `dated 5 Oct 2026` chip; the till shows an amber line under the calendar while a back-date is set, and the date resets to today after every sale.
+
+### 8.2 FBR
+
+- A single filing (Charge + FBR, the drawer's File with FBR, the queue) sends `invoiceDate = invoice_date`.
+- The File with FBR screen's date picker selects sales by **invoice date**, and a combined invoice is dated that date. A back-dated sale therefore rolls up with the other sales of its invoice date, never with today's. `fiscal_batches.business_date` keeps its name and now means "the date the combined invoice is dated"; the eligibility re-check in `CreateBatch` compares `invoice_date`.
+- "Pending to file today" on the till and the dashboard counts by invoice date, so it agrees with what the screen lists for today.
+- A Debit Note for a voided back-dated sale is dated like any other debit note (the day it is filed); only the sale invoice carries the past date.
+
+### 8.3 Data and API
+
+```
+invoices.invoice_date DATE NOT NULL   -- backfilled = business_date; a BEFORE INSERT trigger
+                                      -- defaults it to business_date when a writer omits it
+idx_invoices_fiscal_unfiled_invoice_date (invoice_date) WHERE fiscal_status IN ('unfiled','failed')
+```
+
+`POST /invoices` accepts an optional `invoice_date` (`YYYY-MM-DD`). `GET /invoices/:id` and every invoice projection return `invoice_date`. Error codes added: `invoice_date_requires_admin` (403), `invoice_date_future` (400), `invoice_date_too_old` (400).
+
+### 8.4 Testing
+
+- DB: admin back-dates within 30 days → 201, `invoice_date` as sent, `business_date` and the invoice number are today's; counter refused; a future date and a 31-day-old date refused; omitted → equals the business date.
+- Payload: a sale's `invoiceDate` is `invoice_date`, not `business_date`.
+- Batches: `Eligible` and `CreateBatch` select by `invoice_date`; a sale rung today and back-dated to yesterday is listed under yesterday and refused for today. The pending summary's "today" counts by invoice date.
+- Print: a back-dated invoice prints the `Invoice date` and `Recorded` rows; a same-day one prints neither.
+- Till: the date helper refuses a future date and one older than 30 days, and accepts today and 30 days ago.

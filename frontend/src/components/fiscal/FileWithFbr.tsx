@@ -1,6 +1,7 @@
 /**
- * File with FBR (spec 2026-10-12 §2.3): the business date's unfiled sales,
- * all ticked by default, filed together as one combined FBR invoice. Every
+ * File with FBR (spec 2026-10-12 §2.3): the unfiled sales dated a day — by
+ * invoice date, so a back-dated sale (§8) rolls up with the date it carries
+ * — all ticked by default, filed together as one combined FBR invoice. Every
  * figure shown or sent is a sum of recorded sales; there is no way to type
  * a quantity or an amount here.
  */
@@ -101,7 +102,7 @@ export function FileWithFbr({ onFiled }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <Label htmlFor="fbr-date">Business date</Label>
+          <Label htmlFor="fbr-date">Invoice date</Label>
           <Input id="fbr-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-[11rem]" />
         </div>
         {eligible.isFetching && <Loader2 className="mb-2 h-4 w-4 animate-spin text-muted-foreground" />}

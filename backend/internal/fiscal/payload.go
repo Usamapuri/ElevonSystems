@@ -237,9 +237,20 @@ func build(in BuildInput, cfg Config, invoiceType, refNumber, reason string) (DI
 	if err != nil {
 		return DIInvoice{}, err
 	}
-	out := header(in.Invoice.BusinessDate, in.Buyer, cfg, invoiceType, refNumber, reason)
+	out := header(documentDate(in.Invoice), in.Buyer, cfg, invoiceType, refNumber, reason)
 	out.Items = items
 	return out, nil
+}
+
+// documentDate is what FBR is told the invoice is dated: invoice_date, which
+// an admin may have set in the past (spec 2026-10-12 §8.2). Every row read
+// from the database carries one (NOT NULL); the fallback is for in-memory
+// invoices built without it, which only the golden tests do.
+func documentDate(inv models.Invoice) time.Time {
+	if inv.InvoiceDate.IsZero() {
+		return inv.BusinessDate
+	}
+	return inv.InvoiceDate
 }
 
 // header is everything on a DI document except its items: the seller from

@@ -39,8 +39,9 @@ import { computeTotals, taxRateFor, type Totals } from '@/lib/pricing'
 import { printInvoice } from '@/lib/print/printInvoice'
 import { cartDiscount, cartReducer, emptyCart, pricingLines, requestLines, type CartLine } from '@/components/pos/cart'
 import { pendingLine } from '@/lib/fiscal'
+import { checkInvoiceDate, invoiceDateBounds, invoiceDateMessage } from '@/lib/invoiceDate'
 import type { FiscalPending } from '@/types'
-import { evaluateDayGate, gateBlocks, gateFromErrorCode, type DayGate } from '@/components/pos/dayGate'
+import { businessDateKey, dayDateKey, evaluateDayGate, gateBlocks, gateFromErrorCode, type DayGate } from '@/components/pos/dayGate'
 import { dialogIsOpen, shouldOpenTender } from '@/components/pos/chargeGuard'
 import type { CreateInvoiceRequest, Customer, PaymentMethod, PrintDocument, Product } from '@/types'
 
@@ -84,6 +85,10 @@ function PosPage() {
   const [pinFor, setPinFor] = useState<'credit_limit' | 'rate_override'>('credit_limit')
   const [rateLine, setRateLine] = useState<CartLine | null>(null)
   const [gateOverride, setGateOverride] = useState<DayGate | null>(null)
+  /** Back-dating (spec 2026-10-12 §8): '' means today. Only an admin sees
+   * the calendar; the server refuses anyone else regardless. */
+  const [invoiceDate, setInvoiceDate] = useState('')
+  const isAdmin = apiClient.getStoredUser()?.role === 'admin'
 
   const searchRef = useRef<HTMLInputElement>(null)
   /** Minted on the first Charge press of an attempt; kept across the PIN
@@ -160,17 +165,26 @@ function PosPage() {
     }
   }, [cart, settings, tender, buyerRegistered, discount.valid, discount.discount_amount, discount.discount_percent])
 
+  // The server's business date, for the sale-date calendar: the open day's
+  // date when there is one, else the same boundary-hour arithmetic the gate
+  // uses — never the browser's calendar date on its own.
+  const todayKey = dayCurrent.data?.day ? dayDateKey(dayCurrent.data.day) : businessDateKey(new Date(), settings?.day_boundary_hour ?? 0)
+  const dateCheck = invoiceDate === '' ? 'ok' : checkInvoiceDate(invoiceDate, todayKey)
+  const backDating = invoiceDate !== '' && invoiceDate !== todayKey
+
   const blocked = gateBlocks(gate)
-  const chargeDisabled = blocked || cart.lines.length === 0 || !totals
+  const chargeDisabled = blocked || cart.lines.length === 0 || !totals || dateCheck !== 'ok'
   const chargeHint = blocked
     ? 'The business day has to be sorted out first.'
-    : cart.lines.length === 0
-      ? null
-      : !discount.valid
-        ? 'Check the discount.'
-        : !totals
-          ? 'One of these products has no usable rate.'
-          : null
+    : dateCheck !== 'ok'
+      ? invoiceDateMessage(dateCheck)
+      : cart.lines.length === 0
+        ? null
+        : !discount.valid
+          ? 'Check the discount.'
+          : !totals
+            ? 'One of these products has no usable rate.'
+            : null
 
   const charge = useMutation({
     mutationFn: (pin?: string) => {
@@ -190,6 +204,7 @@ function PosPage() {
         pin,
       }
       if (fileFbr.current) body.file_fbr = true
+      if (backDating) body.invoice_date = invoiceDate
       return apiClient.createInvoice(body)
     },
     onSuccess: async (res) => {
@@ -208,6 +223,9 @@ function PosPage() {
       dispatch({ type: 'clear' })
       setCustomer(null)
       setTender('cash')
+      // A back-date is for one sale; the next one is today's unless the
+      // admin picks a date again.
+      setInvoiceDate('')
       qc.invalidateQueries({ queryKey: RECENT_INVOICES_KEY })
       qc.invalidateQueries({ queryKey: DAY_CURRENT_KEY })
       qc.invalidateQueries({ queryKey: ['fiscal', 'pending'] })
@@ -388,6 +406,7 @@ function PosPage() {
           // attempt.
           chargeDisabled={chargeDisabled || charge.isPending}
           chargeHint={chargeHint}
+          backdate={isAdmin ? { value: invoiceDate, ...invoiceDateBounds(todayKey), todayKey, onChange: setInvoiceDate } : undefined}
         />
 
         <div className="min-w-0 lg:col-start-1 lg:row-start-2">

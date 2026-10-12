@@ -26,6 +26,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { PinEntryModal } from '@/components/shared/PinEntryModal'
 import { toast } from '@/hooks/use-toast'
 import { fiscalStatusLabel } from '@/lib/fiscal'
+import { isBackDated } from '@/lib/invoiceDate'
 import { formatKgGrouped, formatMoney } from '@/lib/money'
 import {
   formatBusinessDate,
@@ -153,7 +154,7 @@ export function InvoiceDrawer({ invoiceId, onOpenChange }: Props) {
           </SheetTitle>
           <SheetDescription>
             {invoice
-              ? `${formatBusinessDate(invoice.business_date)} · rung by ${invoice.cashier_name} at ${formatDateTimePK(invoice.created_at)}`
+              ? `${isBackDated(invoice) ? `Invoice date ${formatBusinessDate(invoice.invoice_date)} (back-dated) · recorded ` : ''}${formatBusinessDate(invoice.business_date)} · rung by ${invoice.cashier_name} at ${formatDateTimePK(invoice.created_at)}`
               : 'Loading…'}
           </SheetDescription>
         </SheetHeader>

@@ -139,7 +139,15 @@ type parsedInvoice struct {
 	notes           *string
 	pin             string
 	fileFBR         bool
+	// invoiceDate is the requested document date (spec 2026-10-12 §8), parsed
+	// but not yet judged: whether it is allowed depends on the business day
+	// and the caller's role, which Create knows and this parser does not.
+	invoiceDate *time.Time
 }
+
+// backdateLimitDays is how far before the business date an admin may date a
+// sale (spec 2026-10-12 §8.1). The till mirrors it in lib/invoiceDate.ts.
+const backdateLimitDays = 30
 
 // validPaymentMethod matches the invoices_payment_method_check constraint.
 func validPaymentMethod(s string) bool {
@@ -291,7 +299,42 @@ func parseCreateInvoice(req models.CreateInvoiceRequest) (parsedInvoice, *apiErr
 	}
 	p.pin = strings.TrimSpace(req.Pin)
 	p.fileFBR = req.FileFBR
+	if raw := strings.TrimSpace(req.InvoiceDate); raw != "" {
+		d, err := time.ParseInLocation(dayops.DateLayout, raw, util.BusinessLocation())
+		if err != nil {
+			return p, badRequest("invalid_request", "invoice_date must be YYYY-MM-DD")
+		}
+		p.invoiceDate = &d
+	}
 	return p, nil
+}
+
+// resolveInvoiceDate decides the document date for a sale on the open day
+// (spec 2026-10-12 §8.1): the business date unless the request named one,
+// and then only for an admin, never after the business date and at most
+// backdateLimitDays before it. Sending the business date itself is not a
+// back-date and is allowed for anyone — the till sends what it shows.
+func resolveInvoiceDate(requested *time.Time, businessDate time.Time, role string) (time.Time, *apiError) {
+	if requested == nil {
+		return businessDate, nil
+	}
+	want := requested.Format(dayops.DateLayout)
+	have := businessDate.Format(dayops.DateLayout)
+	if want == have {
+		return businessDate, nil
+	}
+	if role != util.RoleAdmin {
+		return time.Time{}, &apiError{status: http.StatusForbidden, code: "invoice_date_requires_admin",
+			message: "Only an admin can back-date a sale"}
+	}
+	if want > have {
+		return time.Time{}, badRequest("invoice_date_future", "An invoice cannot be dated after the current business day")
+	}
+	if want < businessDate.AddDate(0, 0, -backdateLimitDays).Format(dayops.DateLayout) {
+		return time.Time{}, badRequest("invoice_date_too_old",
+			fmt.Sprintf("An invoice can be back-dated at most %d days", backdateLimitDays))
+	}
+	return *requested, nil
 }
 
 // ── settings readers ─────────────────────────────────────────────────────
@@ -603,6 +646,14 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// 5b — the document date, judged against the day that just passed the
+	// gate: a back-date needs an admin and stays within the limit.
+	invoiceDate, bad := resolveInvoiceDate(p.invoiceDate, day.BusinessDate, actor.Role)
+	if bad != nil {
+		bad.send(c)
+		return
+	}
+
 	// 6 — products, locked.
 	products, err := lockProducts(tx, p.lines)
 	if err != nil {
@@ -788,18 +839,18 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 			cashier_id, cashier_name, customer_id, customer_name, customer_phone, customer_ntn, customer_cnic,
 			subtotal, discount_amount, discount_percent, tax_rate, tax_amount, further_tax_amount,
 			total_amount, rounding_adjustment, total_payable, payment_method, payment_reference, payment_sub_method,
-			notes, fiscal_status)
+			notes, fiscal_status, invoice_date)
 		VALUES ($1, $2, $3, $4::date, 'completed',
 			$5, $6, $7, $8, $9, $10, $11,
 			$12, $13, $14, $15, $16, $17,
 			$18, $19, $20, $21, $22, $23,
-			$24, $25)
+			$24, $25, $26::date)
 		RETURNING `+invoiceColumns,
 		number, p.clientOpID, day.ID, day.BusinessDate.Format(dayops.DateLayout),
 		actorOrNil(actor.ID), cashier, customerID, customerNameSnapshot, customerPhone, customerNTN, customerCNIC,
 		totals.Subtotal, totals.DiscountAmount, p.discountPercent, totals.TaxRate, totals.TaxAmount, totals.FurtherTaxAmount,
 		totals.TotalAmount, totals.RoundingAdjustment, totals.TotalPayable, p.method, p.reference, p.subMethod,
-		notes, fiscalStatus))
+		notes, fiscalStatus, invoiceDate.Format(dayops.DateLayout)))
 	if err != nil {
 		// Two tills retrying the same sale at the same moment: the loser of
 		// the unique index gets the winner's invoice, not an error.

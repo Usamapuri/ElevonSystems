@@ -120,8 +120,10 @@ func eligibilityReason(buyerType string, taxRate float64, cfg Config, alreadyFil
 	return ""
 }
 
-// Eligible lists the business date's unfiled and failed completed invoices,
-// each marked eligible or carrying the reason it is not.
+// Eligible lists the unfiled and failed completed invoices dated a day — by
+// invoice_date, the document date, so a back-dated sale rolls up with the
+// other sales of the date it carries (spec 2026-10-12 §8.2) — each marked
+// eligible or carrying the reason it is not.
 func Eligible(q interface {
 	Query(query string, args ...any) (*sql.Rows, error)
 }, businessDate time.Time, cfg Config) ([]EligibleRow, error) {
@@ -133,7 +135,7 @@ func Eligible(q interface {
 		FROM invoices i
 		LEFT JOIN customers c ON c.id = i.customer_id
 		LEFT JOIN LATERAL (SELECT sum(quantity) AS kg FROM invoice_lines WHERE invoice_id = i.id) k ON true
-		WHERE i.status = 'completed' AND i.fiscal_status IN ('unfiled','failed') AND i.business_date = $1::date
+		WHERE i.status = 'completed' AND i.fiscal_status IN ('unfiled','failed') AND i.invoice_date = $1::date
 		ORDER BY i.invoice_number`, businessDate.Format("2006-01-02"))
 	if err != nil {
 		return nil, err
@@ -172,7 +174,7 @@ func CreateBatch(db *sql.DB, businessDate time.Time, ids []uuid.UUID, cfg Config
 	defer tx.Rollback()
 
 	rows, err := tx.Query(`
-		SELECT i.id, i.status, i.fiscal_status, i.business_date, i.tax_rate::float8,
+		SELECT i.id, i.status, i.fiscal_status, i.invoice_date, i.tax_rate::float8,
 		       COALESCE(c.buyer_registration_type, ''),
 		       EXISTS (SELECT 1 FROM fiscal_invoices f WHERE f.invoice_id = i.id AND f.kind = 'sale')
 		FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id

@@ -325,6 +325,26 @@ func TestBuildSaleInvoice_RegisteredBuyerScenario(t *testing.T) {
 
 // --- HS code: line, then default, then refuse ------------------------------
 
+// Spec 2026-10-12 §8.2: the document is dated invoice_date, which an admin
+// may have set in the past; business_date is where the sale is booked, not
+// what FBR is told.
+func TestBuildSaleInvoice_DatedByInvoiceDate(t *testing.T) {
+	inv := models.Invoice{
+		BusinessDate: time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC),
+		InvoiceDate:  time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC),
+		Lines: []models.InvoiceLine{
+			{ProductName: "LPG bulk", Quantity: 12.5, LineTotal: 3312.5, LineTax: 596.25},
+		},
+	}
+	got, err := BuildSaleInvoice(BuildInput{Invoice: inv, DefaultHSCode: "2711.1910"}, sandboxCfg())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.InvoiceDate != "2026-10-05" {
+		t.Fatalf("invoiceDate: got %s want the invoice_date 2026-10-05", got.InvoiceDate)
+	}
+}
+
 func TestBuildSaleInvoice_HSCodeFromLineThenDefaultThenMissing(t *testing.T) {
 	base := models.Invoice{
 		BusinessDate: businessDate(),

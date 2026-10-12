@@ -27,6 +27,9 @@ type seedOpt struct {
 	date     string // YYYY-MM-DD
 	taxRate  float64
 	customer *uuid.UUID
+	// invoiceDate is the document date (spec §8); empty means the business
+	// date, which is what the insert trigger fills in.
+	invoiceDate string
 }
 
 // seedBatchSale inserts one 12.5 kg sale (3312.50 + 596.25 tax) on a day.
@@ -57,9 +60,9 @@ func seedBatchSale(t *testing.T, db *sql.DB, number string, o seedOpt) uuid.UUID
 	var id uuid.UUID
 	if err := db.QueryRow(`INSERT INTO invoices
 		(invoice_number, business_day_id, business_date, status, customer_id, subtotal, tax_rate, tax_amount,
-		 total_amount, total_payable, payment_method, fiscal_status, voided_at)
-		VALUES ($1, $2, $3::date, $4, $5, 3312.50, $6, 596.25, 3908.75, 3909, 'cash', $7, $8)
-		RETURNING id`, number, dayID, o.date, o.status, o.customer, o.taxRate, o.fiscal, voidedAt).Scan(&id); err != nil {
+		 total_amount, total_payable, payment_method, fiscal_status, voided_at, invoice_date)
+		VALUES ($1, $2, $3::date, $4, $5, 3312.50, $6, 596.25, 3908.75, 3909, 'cash', $7, $8, NULLIF($9, '')::date)
+		RETURNING id`, number, dayID, o.date, o.status, o.customer, o.taxRate, o.fiscal, voidedAt, o.invoiceDate).Scan(&id); err != nil {
 		t.Fatalf("seed invoice %s: %v", number, err)
 	}
 	if _, err := db.Exec(`INSERT INTO invoice_lines
@@ -107,6 +110,62 @@ func TestCreateBatch_ClaimsAndTotals(t *testing.T) {
 		if status != "pending" || !batch.Valid || batch.UUID != b.ID {
 			t.Fatalf("invoice %s claimed: %s %v", id, status, batch)
 		}
+	}
+}
+
+// Spec 2026-10-12 §8.2: a sale rung today but back-dated to yesterday belongs
+// to yesterday's combined invoice. Eligible, CreateBatch and the pending
+// summary's "today" all select by invoice_date.
+func TestBatch_SelectsByInvoiceDate(t *testing.T) {
+	sandboxEnv(t)
+	db := testdb.Fresh(t)
+	enableFiscal(t, db, nil, true)
+	cfg, _ := fiscal.LoadConfig(db)
+	todaySale := seedBatchSale(t, db, "20261012-001", seedOpt{})
+	backDated := seedBatchSale(t, db, "20261012-002", seedOpt{invoiceDate: "2026-10-11"})
+	yesterday := batchDay().AddDate(0, 0, -1)
+
+	ids := func(rows []fiscal.EligibleRow) map[uuid.UUID]bool {
+		out := map[uuid.UUID]bool{}
+		for _, r := range rows {
+			out[r.ID] = true
+		}
+		return out
+	}
+	today, err := fiscal.Eligible(db, batchDay(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(today); !got[todaySale] || got[backDated] {
+		t.Fatalf("today's list should hold only the same-day sale: %+v", today)
+	}
+	past, err := fiscal.Eligible(db, yesterday, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(past); got[todaySale] || !got[backDated] {
+		t.Fatalf("yesterday's list should hold only the back-dated sale: %+v", past)
+	}
+
+	if _, err := fiscal.CreateBatch(db, batchDay(), []uuid.UUID{backDated}, cfg, nil); err == nil {
+		t.Fatal("a back-dated sale must not join today's batch")
+	}
+	b, err := fiscal.CreateBatch(db, yesterday, []uuid.UUID{backDated}, cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.BusinessDate.Format("2006-01-02") != "2026-10-11" {
+		t.Fatalf("the combined invoice is dated the invoice date: %s", b.BusinessDate)
+	}
+
+	// Pending "today" counts the same-day sale only; "all" still sees both
+	// (the back-dated one is now pending in its batch, so only one is left).
+	todayP, allP, err := fiscal.Pending(db, batchDay())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if todayP.Count != 1 || allP.Count != 1 {
+		t.Fatalf("pending today %d all %d, want 1 and 1", todayP.Count, allP.Count)
 	}
 }
 

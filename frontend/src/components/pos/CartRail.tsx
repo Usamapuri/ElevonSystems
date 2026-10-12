@@ -7,12 +7,13 @@
  * is FBR-registered. They are a preview: the charge is recomputed
  * server-side from products.rate and that figure is what the customer pays.
  */
-import { Pencil, Trash2 } from 'lucide-react'
+import { CalendarDays, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Money } from '@/components/shared/Money'
 import { CustomerPicker } from '@/components/pos/CustomerPicker'
 import { formatMoney } from '@/lib/money'
+import { formatBusinessDate } from '@/lib/print/format'
 import { cn } from '@/lib/utils'
 import { formatKg } from '@/lib/weight'
 import type { Totals } from '@/lib/pricing'
@@ -44,6 +45,16 @@ interface Props {
   chargeDisabled: boolean
   /** Shown under the Charge button when it is off. */
   chargeHint: string | null
+  /** Present only for an admin: the sale-date calendar (spec 2026-10-12
+   * §8). `value` is '' for today; `min`/`max` bound the picker to the
+   * 30-day window; `todayKey` is the server's business date. */
+  backdate?: {
+    value: string
+    min: string
+    max: string
+    todayKey: string
+    onChange: (value: string) => void
+  }
   /** Grid placement from the page; the rail owns nothing about the layout. */
   className?: string
 }
@@ -71,9 +82,11 @@ export function CartRail({
   pendingText,
   chargeDisabled,
   chargeHint,
+  backdate,
   className,
 }: Props) {
   const empty = cart.lines.length === 0
+  const backDated = !!backdate && backdate.value !== '' && backdate.value !== backdate.todayKey
 
   return (
     <div className={cn('flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-lg', className)}>
@@ -89,6 +102,40 @@ export function CartRail({
           </button>
         )}
       </div>
+
+      {backdate && (
+        <div className="px-4 pb-2">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <label htmlFor="sale-date" className="text-xs font-semibold text-muted-foreground">
+              Sale date
+            </label>
+            <Input
+              id="sale-date"
+              type="date"
+              value={backdate.value === '' ? backdate.todayKey : backdate.value}
+              min={backdate.min}
+              max={backdate.max}
+              onChange={(e) => backdate.onChange(e.target.value)}
+              className="h-8 w-[10.5rem] text-xs"
+            />
+            {backDated && (
+              <button
+                type="button"
+                className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => backdate.onChange('')}
+              >
+                Today
+              </button>
+            )}
+          </div>
+          {backDated && (
+            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+              Back-dated to {formatBusinessDate(backdate.value)} — recorded on today’s business day.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="min-h-[80px] flex-1 overflow-y-auto px-4">
         {empty ? (

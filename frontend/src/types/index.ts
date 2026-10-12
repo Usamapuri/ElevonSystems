@@ -566,6 +566,9 @@ export interface Invoice {
   client_op_id: string | null
   business_day_id: string
   business_date: string
+  /** The date on the document and the date FBR is told (spec 2026-10-12
+   * §8); equals business_date unless an admin back-dated the sale. */
+  invoice_date: string
   status: InvoiceStatus
   cashier_id: string | null
   cashier_name: string
@@ -634,6 +637,8 @@ export interface CreateInvoiceRequest {
   pin?: string
   /** File this one sale with FBR right away (Charge + FBR). */
   file_fbr?: boolean
+  /** Back-date the document (admins only, at most 30 days), `YYYY-MM-DD`. */
+  invoice_date?: string
 }
 
 export interface VoidInvoiceRequest {

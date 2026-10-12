@@ -12,6 +12,7 @@
  * that and the address rather than printing a field it guessed at.
  */
 import type { AppSettings, BuyerRegistrationType, Invoice, InvoiceLine } from '@/types'
+import { isBackDated } from '@/lib/invoiceDate'
 import { formatMoney } from '@/lib/money'
 import { formatKg } from '@/lib/weight'
 import {
@@ -76,7 +77,11 @@ function sellerHeader(inv: Invoice, s: AppSettings): string {
     '<div class="doctitle">TAX INVOICE</div>',
     '<table class="kv">',
     kv('Invoice no.', inv.invoice_number),
-    kv('Date', formatDateTimePK(inv.created_at)),
+    // A back-dated sale (spec 2026-10-12 §8) leads with the document's date
+    // and says when it was recorded; a same-day sale prints its one date.
+    ...(isBackDated(inv)
+      ? [kv('Invoice date', formatBusinessDate(inv.invoice_date)), kv('Recorded', formatDateTimePK(inv.created_at))]
+      : [kv('Date', formatDateTimePK(inv.created_at))]),
     kv('Business day', formatBusinessDate(inv.business_date)),
     kv('Cashier', inv.cashier_name),
     inv.status === 'voided' ? kv('Status', 'VOIDED') : '',

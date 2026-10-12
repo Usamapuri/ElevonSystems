@@ -11,12 +11,14 @@ type PendingSummary struct {
 	TotalPayable int64   `json:"total_payable"`
 }
 
-// Pending returns the summary for one business date and for every date.
+// Pending returns the summary for one date and for every date. "Today" is by
+// invoice_date, the document date, so it agrees with what the File with FBR
+// screen lists for that day (spec 2026-10-12 §8.2).
 func Pending(q Querier, businessDate time.Time) (today, all PendingSummary, err error) {
 	err = q.QueryRow(`
-		SELECT count(*) FILTER (WHERE i.business_date = $1::date),
-		       COALESCE(sum(k.kg) FILTER (WHERE i.business_date = $1::date), 0)::float8,
-		       COALESCE(sum(i.total_payable) FILTER (WHERE i.business_date = $1::date), 0)::bigint,
+		SELECT count(*) FILTER (WHERE i.invoice_date = $1::date),
+		       COALESCE(sum(k.kg) FILTER (WHERE i.invoice_date = $1::date), 0)::float8,
+		       COALESCE(sum(i.total_payable) FILTER (WHERE i.invoice_date = $1::date), 0)::bigint,
 		       count(*), COALESCE(sum(k.kg), 0)::float8, COALESCE(sum(i.total_payable), 0)::bigint
 		FROM invoices i
 		JOIN LATERAL (SELECT COALESCE(sum(quantity), 0) AS kg FROM invoice_lines WHERE invoice_id = i.id) k ON true

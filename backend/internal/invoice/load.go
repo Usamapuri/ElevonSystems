@@ -26,7 +26,7 @@ type RowScanner interface {
 // columns are cast to float8 on the way out so lib/pq hands back numbers
 // rather than NUMERIC strings; total_payable is cast to bigint because it is
 // whole rupees and scans into an int64.
-const Columns = `id, invoice_number, client_op_id, business_day_id, business_date, status,
+const Columns = `id, invoice_number, client_op_id, business_day_id, business_date, invoice_date, status,
 	cashier_id, cashier_name, customer_id, customer_name, customer_phone, customer_ntn, customer_cnic,
 	subtotal::float8, discount_amount::float8, discount_percent::float8, tax_rate::float8,
 	tax_amount::float8, further_tax_amount::float8, total_amount::float8, rounding_adjustment::float8,
@@ -43,7 +43,7 @@ const LineColumns = `id, invoice_id, product_id, product_name, hs_code, fbr_uom,
 // ScanInvoice reads one Columns row.
 func ScanInvoice(row RowScanner) (models.Invoice, error) {
 	var inv models.Invoice
-	err := row.Scan(&inv.ID, &inv.InvoiceNumber, &inv.ClientOpID, &inv.BusinessDayID, &inv.BusinessDate, &inv.Status,
+	err := row.Scan(&inv.ID, &inv.InvoiceNumber, &inv.ClientOpID, &inv.BusinessDayID, &inv.BusinessDate, &inv.InvoiceDate, &inv.Status,
 		&inv.CashierID, &inv.CashierName, &inv.CustomerID, &inv.CustomerName, &inv.CustomerPhone, &inv.CustomerNTN, &inv.CustomerCNIC,
 		&inv.Subtotal, &inv.DiscountAmount, &inv.DiscountPercent, &inv.TaxRate,
 		&inv.TaxAmount, &inv.FurtherTaxAmount, &inv.TotalAmount, &inv.RoundingAdjustment,

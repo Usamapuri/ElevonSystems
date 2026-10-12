@@ -29,6 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, tableInC
 import { InvoiceDrawer } from '@/components/invoices/InvoiceDrawer'
 import { useSettings } from '@/components/settings/useSettings'
 import { formatMoney } from '@/lib/money'
+import { isBackDated } from '@/lib/invoiceDate'
 import { formatBusinessDate, formatTimePK, paymentMethodLabel } from '@/lib/print/format'
 import { cn } from '@/lib/utils'
 import {
@@ -291,6 +292,11 @@ export function InvoiceTable() {
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {formatBusinessDate(invoice.business_date)}
                     <span className="ml-2 tabular">{formatTimePK(invoice.created_at)}</span>
+                    {isBackDated(invoice) && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                        dated {formatBusinessDate(invoice.invoice_date)}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="font-medium tabular">{invoice.invoice_number}</TableCell>
                   <TableCell>{invoice.customer_name ?? <span className="text-muted-foreground">Walk-in</span>}</TableCell>
