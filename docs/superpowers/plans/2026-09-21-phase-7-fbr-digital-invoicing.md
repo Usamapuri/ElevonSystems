@@ -230,6 +230,8 @@ Commit `fiscal(submit): E-07 — FBR client, ledger-first submit, audit trail`.
 
 ---
 
+> **Superseded 2026-10-12.** Tasks F4–F8 below were replaced by `docs/superpowers/plans/2026-10-12-fbr-on-demand-filing.md` (B1–B9): filing is on request, not on every sale; combined invoices; two token slots. F1–F3 above stand as implemented.
+
 ### Task F4 (E-07): Queue, worker, invoice hooks, admin endpoints
 
 **Files:** `internal/fiscal/{queue,reference}.go` (+ `queue_db_test.go`, `reference_test.go`), `internal/handlers/fiscal.go` (+ `fiscal_db_test.go`), `internal/handlers/invoices.go`, `internal/api/routes.go`, `main.go`.

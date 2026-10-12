@@ -1,0 +1,43 @@
+# FBR DI sandbox checks (spec 2026-10-12 §5). REST-client file: the token is
+# read from backend/.env.sandbox.local (gitignored) and never lives here.
+# Validate only — validate never files anything.
+@base = https://gw.fbr.gov.pk
+@token = {{$dotenv FBR_SANDBOX_TOKEN}}
+@today = 2026-10-12
+
+### 1. Units FBR allows for 2711.1400 (must be checked before any product uses it)
+GET {{base}}/pdi/v2/HS_UOM?hs_code=2711.1400&annexure_id=3
+Authorization: Bearer {{token}}
+
+### 1b. The known-good code, for comparison
+GET {{base}}/pdi/v2/HS_UOM?hs_code=2711.1910&annexure_id=3
+Authorization: Bearer {{token}}
+
+### 2. Rate in force today for goods at standard rate (transTypeId 75)
+GET {{base}}/pdi/v2/SaleTypeToRate?date=12-Oct-2026&transTypeId=75&originationSupplier=1
+Authorization: Bearer {{token}}
+
+### 3. One-line SN002 sale on 2711.1400 (repeat with each UoM from check 1)
+POST {{base}}/di_data/v1/di/validateinvoicedata_sb
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "invoiceType": "Sale Invoice", "invoiceDate": "{{today}}",
+  "sellerNTNCNIC": "8951943", "sellerBusinessName": "Elevon Test Seller", "sellerProvince": "PUNJAB", "sellerAddress": "Lahore",
+  "buyerNTNCNIC": "", "buyerBusinessName": "Walk-in Customer", "buyerProvince": "PUNJAB", "buyerAddress": "N/A",
+  "buyerRegistrationType": "Unregistered", "invoiceRefNo": "", "scenarioId": "SN002",
+  "items": [{
+    "hsCode": "2711.1400", "productDescription": "Propane 12.500 kg", "rate": "18%", "uoM": "KG", "quantity": 12.5,
+    "totalValues": 3908.75, "valueSalesExcludingST": 3312.5, "fixedNotifiedValueOrRetailPrice": 0,
+    "salesTaxApplicable": 596.25, "salesTaxWithheldAtSource": 0, "extraTax": "", "furtherTax": 0,
+    "sroScheduleNo": "", "fedPayable": 0, "discount": 0, "saleType": "Goods at Standard Rate (default)", "sroItemSerialNo": ""
+  }]
+}
+
+### 4. Combined invoice with many items (50, then 300 — generate the items; each is check 3's item
+###    on 2711.1910 with the description prefixed by the source invoice number)
+### 5. Combined invoice dated yesterday and 7 days back — check 3's body with an earlier invoiceDate
+
+# The runnable form of 4 and 5 is the session script that produced
+# audit/FBR_SANDBOX_2026-10-12.md; it builds the payloads programmatically.
