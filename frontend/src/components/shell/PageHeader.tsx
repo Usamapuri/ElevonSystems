@@ -66,7 +66,11 @@ export function PageHeader({ title, description, actions }: Props) {
     refetchOnWindowFocus: true,
   })
 
-  const pill = dayPill(day.data?.day ?? null, settings?.day_boundary_hour, day.isLoading || !settings, day.isError)
+  // With day close switched off there is no day state worth a pill: the
+  // server opens and seals days inside the sale and nobody acts on them.
+  const pill = settings?.day_close_enabled === false
+    ? null
+    : dayPill(day.data?.day ?? null, settings?.day_boundary_hour, day.isLoading || !settings, day.isError)
 
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">

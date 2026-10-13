@@ -16,7 +16,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { BrandLogo } from '@/components/shell/BrandLogo'
 import { UserMenu } from '@/components/shell/UserMenu'
 import { useBrand } from '@/components/shell/useBrand'
-import { NAV_ITEMS } from '@/lib/roles'
+import { useSettings } from '@/components/settings/useSettings'
+import { visibleNavItems } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import type { User } from '@/types'
 
@@ -30,7 +31,8 @@ interface SidebarProps {
 export function Sidebar({ user, isNarrowViewport, drawerOpen, onDrawerOpenChange }: SidebarProps) {
   const { pathname } = useLocation()
   const brand = useBrand()
-  const items = NAV_ITEMS.filter((i) => i.roles.includes(user.role))
+  const { data: settings } = useSettings()
+  const items = visibleNavItems(user.role, settings)
 
   const nav = (collapsed: boolean) => (
     <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2" aria-label="Main">

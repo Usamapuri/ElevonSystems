@@ -29,7 +29,7 @@ This repo is a **sibling** of Bhookly Retail (`ArtyReal/POS-System-General`, loc
 backend/main.go                     boot: env → DB → Migrate → EnsureInitialAdmin → router
 backend/migrations/NNN_*.sql        embedded, applied in order, each idempotent; cmd/migrate applies without booting
 backend/internal/api/routes.go      ALL route registration; every route inside RequireRoles
-backend/internal/settings/          the 26 setting keys, their rules, Load/LoadPublic/Save, Private, LoadDayBoundaryHour
+backend/internal/settings/          the 27 setting keys, their rules, Load/LoadPublic/Save, Private, LoadDayBoundaryHour
 backend/internal/staffpin/          admin PIN identify (bcrypt, iterates every candidate)
 backend/internal/middleware/auth.go JWT (24h, X-POS-JWT fallback), CheckTokenNotRevoked fails closed, RequireRoles
 backend/internal/util/roles.go      canonical roles ↔ frontend/src/lib/roles.ts
@@ -52,7 +52,7 @@ frontend/src/routes/                file-based routes; routeTree.gen.ts is gener
 3. `JWT_SECRET` is per store and mandatory in release mode; never hardcoded.
 4. Migrations are idempotent DDL (`migrations_idempotent_contract_test.go`) and `Migrate` runs before `EnsureInitialAdmin` (`boot_order_contract_test.go`).
 5. `SetTrustedProxies(nil)` stays (`boot_order_contract_test.go`).
-6. Invoice money is computed server-side from `products.rate`, or from a per-line deal rate that is band-checked (`rate_override_band`) or admin-PIN-approved server-side and stored beside the list rate (`invoice_lines.list_rate`); Go and TS pricing share one fixture; `void_log`, `customer_ledger_entries`, `day_close_audit_log`, `fiscal_audit_events` are append-only; reports filter on `business_date` only; every invoice has a `business_day_id` and there is no auto-open; every rate change writes a `product_rate_history` row in the same transaction.
+6. Invoice money is computed server-side from `products.rate`, or from a per-line deal rate that is band-checked (`rate_override_band`) or admin-PIN-approved server-side and stored beside the list rate (`invoice_lines.list_rate`); Go and TS pricing share one fixture; `void_log`, `customer_ledger_entries`, `day_close_audit_log`, `fiscal_audit_events` are append-only; reports filter on `business_date` only; every invoice has a `business_day_id` and there is no auto-open while `day_close_enabled` is true (with it off the gate opens and seals days itself, audited, through `insertDay`/`autoOpen`/`autoSeal` only — spec §6.7 addendum 2026-10-13); every rate change writes a `product_rate_history` row in the same transaction.
 7. (from Phase 7) no HS-code default in code; sandbox validate URL is `_sb`; sandbox config in release refuses; retries consult `fiscal_invoices` first, for single filings and batches (`submit_ledger_first_contract_test.go`); **nothing files without an operator action** (Charge + FBR, File with FBR, or the admin submit route) and a production test never posts; every figure in a combined invoice is copied from `invoice_lines`.
 8. FBR tokens are two private settings (`fiscal_api_key_sandbox_enc`, `fiscal_api_key_production_enc`) written only through `PUT /admin/fiscal/token`; the sandbox token for local testing lives in gitignored `backend/.env.sandbox.local`, never in the repo.
 9. Customer-visible money changes (rates, rounding, tax base, further tax) are stop-and-ask: compute before/after and put it to the owner first.

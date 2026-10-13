@@ -133,7 +133,7 @@ function PosPage() {
     gateOverride ??
     (dayCurrent.isLoading || !settings
       ? { kind: 'loading' }
-      : evaluateDayGate(dayCurrent.data?.day ?? null, settings.day_boundary_hour, new Date()))
+      : evaluateDayGate(dayCurrent.data?.day ?? null, settings.day_boundary_hour, new Date(), settings.day_close_enabled))
 
   // A successful refetch is the authority again: drop an override the
   // server's own 409 put there once the day query has been re-read.

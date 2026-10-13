@@ -52,6 +52,7 @@ const FALLBACK_SETTINGS: AppSettings = {
   receipt_default_document: 'thermal',
   day_close_variance_threshold: 0,
   credit_limit_enforced: false,
+  day_close_enabled: true,
 }
 
 /**

@@ -14,6 +14,15 @@
 // a human says what is physically in the drawer — software cannot make that
 // declaration, and inventing an opening float makes every cash figure for the
 // next 24 hours a fiction. no_auto_open_contract_test.go pins it.
+//
+// Since 2026-10-13 that rule is a switch (settings.day_close_enabled,
+// migration 007). A store whose owner has said the drawer is never counted
+// gains nothing from the rule and loses its till to it, so with the switch
+// off the first sale of a business date opens the day itself with a zero
+// float and seals a day left open from an earlier date, each with its own
+// audit row (auto_open, auto_close). The contract test now pins that the
+// invoice path inserts a day only through autoOpen, and autoOpen only runs
+// with the switch off.
 package dayops
 
 import (
@@ -545,22 +554,10 @@ func Open(db *sql.DB, actor Actor, openingCash float64, notes *string) (Day, err
 	}
 	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
-	var id uuid.UUID
-	err = tx.QueryRow(`
-		INSERT INTO business_days (business_date, status, opened_by, opening_cash, opening_notes)
-		VALUES ($1::date, 'open', $2, $3, $4)
-		RETURNING id`, todayKey, actorRef(actor), round2(openingCash), notes).Scan(&id)
-	switch {
-	// A second row in the open slot: another date was opened between the
-	// check above and this insert.
-	case util.IsUniqueViolation(err, "uniq_business_days_single_open"):
-		return Day{}, ErrPreviousDayOpen
-	case util.IsUniqueViolation(err, "business_days_business_date_key"):
-		return Day{}, ErrDayAlreadyOpen
-	case err != nil:
+	id, err := insertDay(tx, actor, todayKey, openingCash, notes)
+	if err != nil {
 		return Day{}, err
 	}
-
 	if err := writeAuditTx(tx, &id, todayKey, "open", actor,
 		fmt.Sprintf("Opened business day %s with a cash float of %.2f", todayKey, openingCash),
 		map[string]any{"opening_cash": round2(openingCash), "notes": notes},
@@ -571,6 +568,107 @@ func Open(db *sql.DB, actor Actor, openingCash float64, notes *string) (Day, err
 		return Day{}, err
 	}
 	return Get(db, id)
+}
+
+// insertDay is the one INSERT INTO business_days in the package. Open calls
+// it for a human-declared float; autoOpen calls it with a zero float when the
+// day-close switch is off. no_auto_open_contract_test.go pins both facts.
+func insertDay(tx *sql.Tx, actor Actor, dateKey string, openingCash float64, notes *string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := tx.QueryRow(`
+		INSERT INTO business_days (business_date, status, opened_by, opening_cash, opening_notes)
+		VALUES ($1::date, 'open', $2, $3, $4)
+		RETURNING id`, dateKey, actorRef(actor), round2(openingCash), notes).Scan(&id)
+	switch {
+	// A second row in the open slot: another date was opened between the
+	// caller's check and this insert.
+	case util.IsUniqueViolation(err, "uniq_business_days_single_open"):
+		return uuid.Nil, ErrPreviousDayOpen
+	case util.IsUniqueViolation(err, "business_days_business_date_key"):
+		return uuid.Nil, ErrDayAlreadyOpen
+	case err != nil:
+		return uuid.Nil, err
+	}
+	return id, nil
+}
+
+// dayCloseEnabled reads settings.day_close_enabled inside the caller's
+// transaction. A missing row (a database older than migration 007) counts as
+// on, so an upgrade never loosens the gate by accident.
+func dayCloseEnabled(q Querier) (bool, error) {
+	var enabled bool
+	err := q.QueryRow(`SELECT (value #>> '{}')::boolean FROM settings WHERE key = 'day_close_enabled'`).Scan(&enabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return enabled, nil
+}
+
+// autoSeal closes a day the till left open from an earlier date, the way a
+// force close does: counted = expected, zero variance, and a closing note
+// that says no count was taken. Only reachable with the day-close switch
+// off, from EnsureOpenDayForInvoice.
+func autoSeal(tx *sql.Tx, actor Actor, day Day) error {
+	expected, err := ComputeExpected(tx, day.ID)
+	if err != nil {
+		return err
+	}
+	note := "[Sealed automatically — day close is off, no count taken]"
+	res, err := tx.Exec(`
+		UPDATE business_days SET
+			status = 'closed', closed_at = now(), closed_by = $1,
+			counted_cash = $2, counted_card = $3, counted_online = $4,
+			expected_cash = $2, expected_card = $3, expected_online = $4,
+			cash_variance = 0, card_variance = 0, online_variance = 0,
+			gross_sales = $5, discounts = $6, tax_collected = $7, net_sales = $8,
+			on_account_sales = $9, receipts_collected = $10,
+			invoice_count = $11, void_count = $12,
+			closing_notes = $13, updated_at = now()
+		WHERE id = $14 AND status IN ('open', 'reopened')`,
+		actorRef(actor),
+		expected.Cash, expected.Card, expected.Online,
+		expected.GrossSales, expected.Discounts, expected.TaxCollected, expected.NetSales,
+		expected.OnAccountSales, expected.ReceiptsCollected,
+		expected.InvoiceCount, expected.VoidCount,
+		note, day.ID)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrDayClosed
+	}
+	return writeAuditTx(tx, &day.ID, day.DateKey(), "auto_close", actor,
+		fmt.Sprintf("Sealed %s automatically — day close is off, no count taken", day.DateKey()),
+		map[string]any{
+			"auth":            "day_close_off",
+			"expected_cash":   expected.Cash,
+			"expected_card":   expected.Card,
+			"expected_online": expected.Online,
+			"net_sales":       expected.NetSales,
+		})
+}
+
+// autoOpen opens today's day with a zero float for the sale that arrived
+// first. Only reachable with the day-close switch off, from
+// EnsureOpenDayForInvoice.
+func autoOpen(tx *sql.Tx, actor Actor, todayKey string) (Day, error) {
+	notes := "Opened automatically — day close is off"
+	id, err := insertDay(tx, actor, todayKey, 0, &notes)
+	if err != nil {
+		return Day{}, err
+	}
+	if err := writeAuditTx(tx, &id, todayKey, "auto_open", actor,
+		fmt.Sprintf("Opened business day %s automatically — day close is off, float zero", todayKey),
+		map[string]any{"auth": "day_close_off", "opening_cash": 0},
+	); err != nil {
+		return Day{}, err
+	}
+	return Get(tx, id)
 }
 
 // EnsureOpenDayForInvoice resolves the business day an invoice created at
@@ -584,15 +682,23 @@ func Open(db *sql.DB, actor Actor, openingCash float64, notes *string) (Day, err
 //     write an audit row;
 //  4. no row for today → ErrDayNotOpen.
 //
-// There is deliberately no fifth branch that opens the day. Auto-opening would
-// have to invent an opening float, and every cash figure for the next 24 hours
-// is measured against that number. Blocking the sale for the seconds it takes
-// a person to tap "Open day" is the honest answer.
-// no_auto_open_contract_test.go greps this function body for
-// "INSERT INTO business_days" and fails the build if one appears, so the whole
-// path is kept inline here rather than delegated to a helper.
+// There is deliberately no fifth branch that opens the day while the
+// day-close switch is on. Auto-opening would have to invent an opening float,
+// and every cash figure for the next 24 hours is measured against that
+// number. Blocking the sale for the seconds it takes a person to tap "Open
+// day" is the honest answer.
+//
+// With settings.day_close_enabled = false (migration 007) the store has said
+// it never counts the drawer, so branches 2 and 4 become autoSeal and
+// autoOpen instead of refusals. no_auto_open_contract_test.go greps this
+// function body for "INSERT INTO business_days" and fails the build if one
+// appears; the insert lives in insertDay, reached from here only via autoOpen.
 func EnsureOpenDayForInvoice(tx *sql.Tx, actor Actor, now time.Time) (Day, error) {
 	todayKey := util.BusinessDate(now).Format(DateLayout)
+	gateOn, err := dayCloseEnabled(tx)
+	if err != nil {
+		return Day{}, err
+	}
 
 	current, err := Current(tx)
 	if err != nil {
@@ -602,12 +708,21 @@ func EnsureOpenDayForInvoice(tx *sql.Tx, actor Actor, now time.Time) (Day, error
 		if current.DateKey() == todayKey {
 			return *current, nil // 1
 		}
-		return Day{}, fmt.Errorf("%w (open day %s, today %s)", ErrPreviousDayOpen, current.DateKey(), todayKey) // 2
+		if gateOn {
+			return Day{}, fmt.Errorf("%w (open day %s, today %s)", ErrPreviousDayOpen, current.DateKey(), todayKey) // 2
+		}
+		// 2, switch off: seal the stale day and carry on to open today.
+		if err := autoSeal(tx, actor, *current); err != nil {
+			return Day{}, err
+		}
 	}
 
 	today, err := byDate(tx, todayKey)
 	if errors.Is(err, ErrDayNotFound) {
-		return Day{}, ErrDayNotOpen // 4
+		if gateOn {
+			return Day{}, ErrDayNotOpen // 4
+		}
+		return autoOpen(tx, actor, todayKey) // 4, switch off
 	}
 	if err != nil {
 		return Day{}, err

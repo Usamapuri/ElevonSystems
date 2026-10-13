@@ -88,10 +88,10 @@ func TestCheckConsistency_PrintableAreaFitsPaper(t *testing.T) {
 }
 
 func TestKeys_MatchTheSeededList(t *testing.T) {
-	if n := len(Keys()); n != 26 {
-		t.Fatalf("001_init seeds 21 keys, 003_fiscal three, 004_deal_rates one, 005 replaces the token with two slots; rules cover %d", n)
+	if n := len(Keys()); n != 27 {
+		t.Fatalf("001_init seeds 21 keys, 003_fiscal three, 004_deal_rates one, 005 replaces the token with two slots, 007 adds day_close_enabled; rules cover %d", n)
 	}
-	for _, k := range []string{"fiscal_config", "fiscal_api_key_sandbox_enc", "fiscal_api_key_production_enc", "fiscal_reference", "rate_override_band"} {
+	for _, k := range []string{"fiscal_config", "fiscal_api_key_sandbox_enc", "fiscal_api_key_production_enc", "fiscal_reference", "rate_override_band", "day_close_enabled"} {
 		if !Known(k) {
 			t.Errorf("%s is seeded and needs a rule", k)
 		}

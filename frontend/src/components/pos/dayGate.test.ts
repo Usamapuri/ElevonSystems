@@ -122,3 +122,19 @@ describe('gateFromErrorCode', () => {
     expect(gateFromErrorCode(undefined)).toBeNull()
   })
 })
+
+// Spec §6.7 addendum (2026-10-13): with the day-close switch off the till
+// never blocks — the server opens (and seals) days itself — so every state
+// the gate used to report collapses to "ok".
+describe('evaluateDayGate with day close switched off', () => {
+  const now = new Date('2026-09-20T10:00:00+05:00')
+  it('sells with no day, a stale open day or a closed today', () => {
+    expect(evaluateDayGate(null, 0, now, false)).toEqual({ kind: 'ok' })
+    expect(evaluateDayGate(day({ business_date: '2026-09-19T00:00:00+05:00' }), 0, now, false)).toEqual({ kind: 'ok' })
+    expect(evaluateDayGate(day({ status: 'closed' }), 0, now, false)).toEqual({ kind: 'ok' })
+  })
+  it('still blocks with the switch on (the default)', () => {
+    expect(evaluateDayGate(null, 0, now, true)).toEqual({ kind: 'day_not_open' })
+    expect(evaluateDayGate(null, 0, now)).toEqual({ kind: 'day_not_open' })
+  })
+})

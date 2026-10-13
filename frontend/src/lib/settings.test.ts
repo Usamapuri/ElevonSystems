@@ -58,7 +58,8 @@ describe('receipt lines', () => {
 
 describe('other sections', () => {
   it('business needs a name and a 0–12 boundary hour', () => {
-    const ok = { business_name: 'Gas House', business_address: '', business_phone: '', business_ntn: '', business_strn: '', business_province: '', day_boundary_hour: 0, receipt_logo_url: '' }
+    const ok = { business_name: 'Gas House', business_address: '', business_phone: '', business_ntn: '', business_strn: '', business_province: '', day_boundary_hour: 0, receipt_logo_url: '', day_close_enabled: true }
+    expect(businessSchema.safeParse({ ...ok, day_close_enabled: 'yes' }).success).toBe(false)
     expect(businessSchema.safeParse(ok).success).toBe(true)
     expect(businessSchema.safeParse({ ...ok, business_name: ' ' }).success).toBe(false)
     expect(businessSchema.safeParse({ ...ok, day_boundary_hour: 13 }).success).toBe(false)

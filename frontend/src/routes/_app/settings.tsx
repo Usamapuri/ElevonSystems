@@ -25,13 +25,16 @@ const TABS = [
 
 function SettingsPage() {
   const { data: settings, isLoading, error } = useSettings()
+  // The Day close tab only has the variance threshold on it; with the
+  // switch (Business tab) off there is nothing there to set.
+  const tabs = settings?.day_close_enabled === false ? TABS.filter((t) => t.value !== 'day-close') : TABS
 
   return (
     <div className="space-y-4 p-4 md:p-6">
       <PageHeader title="Settings" description="How the shop identifies itself, taxes a sale, prints it and closes the day." />
       <Tabs defaultValue="business" className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>
               {t.label}
             </TabsTrigger>

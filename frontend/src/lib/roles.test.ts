@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canAccess, defaultPath, isRole, NAV_ITEMS, roleLabel } from './roles'
+import { canAccess, defaultPath, isRole, NAV_ITEMS, roleLabel, visibleNavItems } from './roles'
 
 describe('roles', () => {
   it('knows exactly admin and counter', () => {
@@ -28,5 +28,18 @@ describe('roles', () => {
   })
   it('labels roles', () => {
     expect(roleLabel('counter')).toBe('Counter')
+  })
+})
+
+describe('visibleNavItems', () => {
+  it('drops Day close from the rail when the switch is off, keeps it on', () => {
+    const off = visibleNavItems('counter', { day_close_enabled: false }).map((i) => i.id)
+    const on = visibleNavItems('counter', { day_close_enabled: true }).map((i) => i.id)
+    expect(off).not.toContain('day-close')
+    expect(on).toContain('day-close')
+    expect(off).toContain('pos')
+  })
+  it('shows everything while settings are still loading', () => {
+    expect(visibleNavItems('admin', undefined).map((i) => i.id)).toContain('day-close')
   })
 })

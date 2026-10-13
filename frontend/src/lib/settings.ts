@@ -35,6 +35,8 @@ export const businessSchema = z.object({
   // The one logo: the app chrome and every printed document wear it. Kept
   // under the setting key receipts have always read.
   receipt_logo_url: z.string().max(400_000, 'Image is too large; use one under 300 KB'),
+  /** Off: no "Open day" gate on the till, no day-close screens. */
+  day_close_enabled: z.boolean(),
 })
 export type BusinessFormValues = z.infer<typeof businessSchema>
 
@@ -48,6 +50,7 @@ export function businessFromSettings(s: AppSettings): BusinessFormValues {
     business_province: s.business_province,
     day_boundary_hour: s.day_boundary_hour,
     receipt_logo_url: s.receipt_logo_url,
+    day_close_enabled: s.day_close_enabled,
   }
 }
 

@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Field } from '@/components/settings/Field'
 import { useSaveSettings } from '@/components/settings/useSettings'
@@ -96,6 +98,20 @@ export function BusinessForm({ settings }: { settings: AppSettings }) {
           >
             <Input id="day_boundary_hour" type="number" min={0} max={12} {...form.register('day_boundary_hour', { valueAsNumber: true })} />
           </Field>
+          <div className="flex flex-col gap-1.5 md:col-span-2">
+            <div className="flex items-center gap-3">
+              <Controller
+                control={form.control}
+                name="day_close_enabled"
+                render={({ field }) => <Switch id="day_close_enabled" checked={field.value} onCheckedChange={field.onChange} />}
+              />
+              <Label htmlFor="day_close_enabled">Day close</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              On: the till waits for someone to open the day and the drawer is counted at close. Off: sales open the day by
+              themselves, nothing is counted, and the Day close screen and report are hidden.
+            </p>
+          </div>
           <div className="flex items-end justify-end md:col-span-2">
             <Button type="submit" disabled={!isDirty || save.isPending}>
               {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save business details'}

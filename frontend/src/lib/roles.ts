@@ -37,6 +37,17 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'settings', label: 'Settings', to: '/settings', icon: Settings, roles: ['admin'] },
 ]
 
+/**
+ * The rail for a role, minus the screens a store has switched off: Day close
+ * goes when `day_close_enabled` is false (spec §6.7 addendum). Undefined
+ * settings (still loading) hide nothing, so the rail never flickers an item
+ * in after the fact. `canAccess` is untouched: the URL still opens, it is
+ * only not offered.
+ */
+export function visibleNavItems(role: string, settings: { day_close_enabled: boolean } | undefined): NavItem[] {
+  return NAV_ITEMS.filter((i) => i.roles.includes(role as Role) && !(i.id === 'day-close' && settings?.day_close_enabled === false))
+}
+
 /** Whether the role may open the URL (exact or prefix match on a nav item). */
 export function canAccess(role: string, pathname: string): boolean {
   if (!isRole(role)) return false

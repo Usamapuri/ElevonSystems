@@ -64,6 +64,9 @@ export interface AppSettings {
   receipt_footer_lines: string[]
   receipt_default_document: 'thermal' | 'a4'
   day_close_variance_threshold: number
+  /** Off: the till never waits for "Open day"; the server opens and seals
+   * days itself and the day-close screens are hidden (spec §6.7 addendum). */
+  day_close_enabled: boolean
   credit_limit_enforced: boolean
   /** Phase 7 keys. Optional on the type because print fixtures and the
    * fallback settings predate them; the server always returns them. */

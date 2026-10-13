@@ -67,7 +67,10 @@ var rules = map[string]rule{
 	"receipt_default_document":  notNull(oneOf("thermal", "a4")),
 
 	"day_close_variance_threshold": notNull(number(0, 1_000_000)),
-	"credit_limit_enforced":        notNull(boolean),
+	// 007_day_close_switch: false means the till never waits for "Open day"
+	// — the invoice path opens and seals days itself (dayops §6.7 addendum).
+	"day_close_enabled":     notNull(boolean),
+	"credit_limit_enforced": notNull(boolean),
 
 	// Phase 7, seeded by migrations/003_fiscal.sql and 005_fiscal_on_demand.
 	// The two token slots hold the AES-GCM ciphertext of the sandbox and

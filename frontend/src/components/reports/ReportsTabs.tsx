@@ -13,6 +13,7 @@ import {
   CashiersPanel, DailyPanel, DayClosesPanel, HourlyPanel, ProductsPanel, ReceivablesPanel, TaxPanel,
 } from './ReportPanels'
 import { FiscalQueueTab } from './FiscalQueueTab'
+import { useSettings } from '@/components/settings/useSettings'
 import type { ReportName } from '@/types'
 
 const TABS: { name: ReportName | 'fbr-queue'; label: string }[] = [
@@ -30,6 +31,10 @@ export function ReportsTabs() {
   const range = useReportRange()
   const enabled = range.ready && !range.inverted
   const panelProps = { from: range.from, to: range.to, params: range.params, enabled }
+  // Day closes are automatic, uncounted seals with the switch off (spec
+  // §6.7 addendum): nothing in that tab would mean anything, so it goes.
+  const { data: settings } = useSettings()
+  const tabs = settings?.day_close_enabled === false ? TABS.filter((t) => t.name !== 'day-closes') : TABS
 
   return (
     <div className="space-y-4">
@@ -37,7 +42,7 @@ export function ReportsTabs() {
 
       <Tabs defaultValue="daily">
         <TabsList className="h-auto flex-wrap justify-start">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <TabsTrigger key={t.name} value={t.name}>
               {t.label}
             </TabsTrigger>

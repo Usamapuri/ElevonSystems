@@ -54,7 +54,13 @@ export function dayDateKey(day: BusinessDay): string {
   return day.business_date.slice(0, 10)
 }
 
-export function evaluateDayGate(day: BusinessDay | null | undefined, boundaryHour: number, now: Date): DayGate {
+/**
+ * `dayCloseEnabled` false (settings.day_close_enabled, spec §6.7 addendum):
+ * the server opens and seals days itself inside the sale, so nothing here
+ * can block and the gate is always "ok".
+ */
+export function evaluateDayGate(day: BusinessDay | null | undefined, boundaryHour: number, now: Date, dayCloseEnabled = true): DayGate {
+  if (!dayCloseEnabled) return { kind: 'ok' }
   if (!day) return { kind: 'day_not_open' }
   const today = businessDateKey(now, boundaryHour)
   const key = dayDateKey(day)

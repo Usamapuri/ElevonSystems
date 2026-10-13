@@ -51,22 +51,53 @@ func TestEnsureOpenDayForInvoice_NeverInsertsABusinessDay(t *testing.T) {
 	}
 }
 
-// The same rule from the other side: Open is the only function in the package
-// that may create a business day. A helper that inserted one and was called
-// from the invoice path would slip past the body scan above.
-func TestOpen_IsTheOnlyInsertOfABusinessDay(t *testing.T) {
+// The same rule from the other side: insertDay is the only place in the
+// package that creates a business day, and only Open (a human-declared
+// float) and autoOpen (the day-close switch off, float zero) may call it. A
+// helper that inserted one and was called from the invoice path would slip
+// past the body scan above.
+func TestInsertDay_IsTheOnlyInsertAndHasTwoCallers(t *testing.T) {
+	insStart, insEnd := funcRange(t, "insertDay")
 	openStart, openEnd := funcRange(t, "Open")
+	autoStart, autoEnd := funcRange(t, "autoOpen")
 	for i, line := range sourceLines() {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "//") {
 			continue // prose about the rule, not code
 		}
-		if !strings.Contains(strings.ToUpper(trimmed), "INSERT INTO BUSINESS_DAYS") {
+		if strings.Contains(strings.ToUpper(trimmed), "INSERT INTO BUSINESS_DAYS") && (i < insStart || i >= insEnd) {
+			t.Errorf("service.go:%d inserts a business day outside insertDay: %s", i+1, trimmed)
+		}
+		if strings.Contains(trimmed, "insertDay(") && !strings.HasPrefix(trimmed, "func ") {
+			inOpen := i >= openStart && i < openEnd
+			inAuto := i >= autoStart && i < autoEnd
+			if !inOpen && !inAuto {
+				t.Errorf("service.go:%d calls insertDay outside Open/autoOpen: %s", i+1, trimmed)
+			}
+		}
+	}
+}
+
+// autoOpen and autoSeal exist for the switch-off case only: the one caller
+// is EnsureOpenDayForInvoice, and there every call sits behind a gateOn
+// check (auto_open_db_test.go proves the behaviour; this pins the shape).
+func TestAutoOpen_OnlyFromTheGateAndOnlyWhenOff(t *testing.T) {
+	start, end := funcRange(t, "EnsureOpenDayForInvoice")
+	for i, line := range sourceLines() {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "func ") {
 			continue
 		}
-		if i < openStart || i >= openEnd {
-			t.Errorf("service.go:%d inserts a business day outside Open: %s", i+1, trimmed)
+		if !strings.Contains(trimmed, "autoOpen(") && !strings.Contains(trimmed, "autoSeal(") {
+			continue
 		}
+		if i < start || i >= end {
+			t.Errorf("service.go:%d calls autoOpen/autoSeal outside EnsureOpenDayForInvoice: %s", i+1, trimmed)
+		}
+	}
+	body := strings.Join(sourceLines()[start:end], "\n")
+	if !strings.Contains(body, "dayCloseEnabled(tx)") || !strings.Contains(body, "if gateOn {") {
+		t.Error("EnsureOpenDayForInvoice must read the switch and keep the refusals behind `if gateOn`")
 	}
 }
 

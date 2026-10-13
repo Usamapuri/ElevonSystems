@@ -37,6 +37,7 @@ const settings: AppSettings = {
   receipt_default_document: 'thermal',
   day_close_variance_threshold: 200,
   credit_limit_enforced: true,
+  day_close_enabled: true,
 }
 
 /** The money below is the §6.3 arithmetic worked through, not decoration:
