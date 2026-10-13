@@ -9,7 +9,7 @@
  * through the browser's timezone (see lib/print/format.ts rule 2).
  */
 
-export const BACKDATE_LIMIT_DAYS = 30
+export const BACKDATE_LIMIT_DAYS = 40
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 

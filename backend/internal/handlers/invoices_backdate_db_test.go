@@ -13,7 +13,7 @@ import (
 )
 
 // Back-dated invoices (spec 2026-10-12 §8): an admin may give a sale an
-// invoice_date up to 30 days before the current business date. The sale is
+// invoice_date up to 40 days before the current business date. The sale is
 // still numbered, drawered and reported on today's business day; only the
 // document date and what FBR is told change.
 
@@ -29,7 +29,7 @@ func backdateBody(productID uuid.UUID, invoiceDate string) map[string]any {
 	return body
 }
 
-func TestInvoice_BackDated_AdminWithinThirtyDays(t *testing.T) {
+func TestInvoice_BackDated_AdminWithinWindow(t *testing.T) {
 	db := testdb.Fresh(t)
 	ownerID := seedUser(t, db, "owner", "admin", "owner-pass-1", nil)
 	today := businessToday()
@@ -105,7 +105,7 @@ func TestInvoice_BackDated_Refusals(t *testing.T) {
 	}{
 		{"counter cannot back-date", counter, today.AddDate(0, 0, -1).Format(dayops.DateLayout), http.StatusForbidden, "invoice_date_requires_admin"},
 		{"tomorrow", admin, today.AddDate(0, 0, 1).Format(dayops.DateLayout), http.StatusBadRequest, "invoice_date_future"},
-		{"31 days back", admin, today.AddDate(0, 0, -31).Format(dayops.DateLayout), http.StatusBadRequest, "invoice_date_too_old"},
+		{"41 days back", admin, today.AddDate(0, 0, -41).Format(dayops.DateLayout), http.StatusBadRequest, "invoice_date_too_old"},
 		{"garbage", admin, "12/10/2026", http.StatusBadRequest, "invalid_request"},
 	}
 	for _, c := range cases {
@@ -123,14 +123,15 @@ func TestInvoice_BackDated_Refusals(t *testing.T) {
 	}
 
 	// The edges are allowed: today itself (for either role — it changes
-	// nothing) and exactly 30 days back for an admin.
+	// nothing) and exactly 40 days back for an admin. The number is literal
+	// on purpose: a change to backdateLimitDays has to come through here.
 	for _, c := range []struct {
 		name   string
 		router http.Handler
 		date   time.Time
 	}{
 		{"counter sends today", counter, today},
-		{"admin sends 30 days back", admin, today.AddDate(0, 0, -30)},
+		{"admin sends 40 days back", admin, today.AddDate(0, 0, -40)},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := doJSON(c.router, http.MethodPost, "/invoices", backdateBody(productID, c.date.Format(dayops.DateLayout)))

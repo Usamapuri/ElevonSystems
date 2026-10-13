@@ -146,8 +146,10 @@ type parsedInvoice struct {
 }
 
 // backdateLimitDays is how far before the business date an admin may date a
-// sale (spec 2026-10-12 §8.1). The till mirrors it in lib/invoiceDate.ts.
-const backdateLimitDays = 30
+// sale (spec 2026-10-12 §8.1). It is the store's own rule, not FBR's: the
+// sandbox validated dates 90 days back (audit 2026-10-13). The till mirrors
+// it in lib/invoiceDate.ts.
+const backdateLimitDays = 40
 
 // validPaymentMethod matches the invoices_payment_method_check constraint.
 func validPaymentMethod(s string) bool {

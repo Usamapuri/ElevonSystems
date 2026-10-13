@@ -637,7 +637,7 @@ export interface CreateInvoiceRequest {
   pin?: string
   /** File this one sale with FBR right away (Charge + FBR). */
   file_fbr?: boolean
-  /** Back-date the document (admins only, at most 30 days), `YYYY-MM-DD`. */
+  /** Back-date the document (admins only, at most 40 days), `YYYY-MM-DD`. */
   invoice_date?: string
 }
 

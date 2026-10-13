@@ -216,7 +216,7 @@ Rounding, tax base and further tax are untouched. The owner's approval of this f
 - Every invoice carries an **invoice date** (`invoices.invoice_date DATE NOT NULL`), the date printed on the document and sent to FBR. It defaults to the business date and is only ever different when an admin back-dates the sale.
 - The sale is still **recorded on the current business day**: today's invoice number, today's drawer, today's day close and every report, which filter on `business_date` and nothing else (invariant 6). Closed days stay sealed; no day row is invented for a date before the system existed.
 - **Who:** an admin signed in at the till picks the date from a calendar beside the cart before charging. A counter login cannot back-date; the server refuses with `invoice_date_requires_admin` whatever the client sends. No PIN: the signed-in role is the authority, and the date is printed on the document.
-- **How far back:** at most 30 days before the current business date (`invoice_date_too_old`); never after it (`invoice_date_future`). An unparseable date is `invalid_request`.
+- **How far back:** at most 40 days before the current business date (`invoice_date_too_old`); never after it (`invoice_date_future`). An unparseable date is `invalid_request`. The limit is the store's own guard, not an FBR rule: the sandbox validated sale invoices dated 40, 60 and 90 days back (2026-10-13). It was 30 days until the owner asked for ten more on 2026-10-13.
 - **What the customer sees:** the receipt and the A4 invoice print `Invoice date 5 Oct 2026`, then `Recorded 12 Oct 2026, 5:40 pm` and the business day, whenever the two differ. A same-day sale prints exactly as before. The invoice drawer says `Invoice date 5 Oct 2026 (back-dated)` and the invoice list carries a `dated 5 Oct 2026` chip; the till shows an amber line under the calendar while a back-date is set, and the date resets to today after every sale.
 
 ### 8.2 FBR
@@ -238,8 +238,8 @@ idx_invoices_fiscal_unfiled_invoice_date (invoice_date) WHERE fiscal_status IN (
 
 ### 8.4 Testing
 
-- DB: admin back-dates within 30 days → 201, `invoice_date` as sent, `business_date` and the invoice number are today's; counter refused; a future date and a 31-day-old date refused; omitted → equals the business date.
+- DB: admin back-dates exactly 40 days → 201, `invoice_date` as sent, `business_date` and the invoice number are today's; counter refused; a future date and a 41-day-old date refused; omitted → equals the business date.
 - Payload: a sale's `invoiceDate` is `invoice_date`, not `business_date`.
 - Batches: `Eligible` and `CreateBatch` select by `invoice_date`; a sale rung today and back-dated to yesterday is listed under yesterday and refused for today. The pending summary's "today" counts by invoice date.
 - Print: a back-dated invoice prints the `Invoice date` and `Recorded` rows; a same-day one prints neither.
-- Till: the date helper refuses a future date and one older than 30 days, and accepts today and 30 days ago.
+- Till: the date helper refuses a future date and one older than 40 days, and accepts today and 40 days ago.
