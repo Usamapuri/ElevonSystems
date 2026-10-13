@@ -48,4 +48,33 @@ The job is rebuilt from the customers row at every attempt (`fiscal.loadBuyer`),
 
 So FBR accepts the letter-prefixed NTN as issued, or a zero-padded 7-digit form, and the buyer province has to be one of the seven names from `/pdi/v1/provinces` (`ICT` is not one). The STRN plays no part in Digital Invoicing. The owner saved `0723262` + `CAPITAL TERRITORY` and the retry filed.
 
+**Follow-up, 13:00.** FBR's POS Invoice Verification shows the buyer from its own registry: for registration number `0723262` it shows **ALI BILAL, CNIC 3520228922089**, an individual, not the AOP. The zero-padded form validates because it is somebody's real NTN. All six production sales on the Unity store (`20261013-001` … `-006`, all to this customer, all on credit) therefore stand on FBR in the wrong buyer's name. The company's own number is `A723262` as printed.
+
+**Reversal attempt, 13:02.** `20261013-001` was voided with the admin PIN so the app would file a Debit Note against `3792106DI6CQ6AV596379`. Production refused it:
+
+```
+0402  Unauthorized access: Provided buyer registration number is not 13 digits
+      (CNIC) or 7 digits (NTN) or the authorized token does not exist against
+      buyer registration number
+```
+
+The buyer number sent was 7 digits, so the second clause applies: FBR expects the Debit Note to be filed under a token registered to the **buyer**. A seller cannot reverse its own filed sale invoice through Digital Invoicing. The sandbox never proved this path (0106 on unregistered buyers on 2026-09-21; today a seller-issued Debit Note against a freshly posted SN001 sale to PRAL's sample buyer 0786909 answered 0510 "Exception occurred"). Stopped there: the other five sales were not voided, the customer card still says `0723262`, and nothing was re-rung, because a second sale invoice would double the output tax on FBR while the first still stands.
+
+State left behind: `20261013-001` is voided locally (ledger credit 2,655,933 posted, balance 14,594,160), `fiscal_void_status = failed`, its Debit Note job dead. Open for the tax advisor or PRAL helpdesk: how a seller corrects a sale invoice filed against the wrong buyer (a credit note in the monthly return, or cancellation by PRAL). The app's void path must stop presenting the Debit Note as a reversal until that is answered.
+
+**Re-filing, 13:12–13:20, on the owner's go-ahead.** With PRAL unreachable the owner chose the return-filing route: the six wrong invoices stay on FBR and are reversed by Credit Notes declared in the monthly sales tax return (rule 20, within 180 days); the sales were re-filed under `A723262`. Sequence: the remaining five voided in the app (each Debit Note died with 0402, as expected); customer card set to NTN `A723262`, Registered, CAPITAL TERRITORY (the first production save of a letter-prefixed NTN, on the build pushed to `main` at 12:57); six new sales rung through `POST /invoices` with `file_fbr`, same product, kg, list rate 198.57, credit, same invoice date. All six synced on the first attempt. Customer balance returned to 17,250,093, exactly the original six.
+
+| Voided (wrong buyer, still on FBR) | FBR number to credit-note | Replacement | FBR number (A723262) | Invoice date | kg | Total |
+|---|---|---|---|---|---|---|
+| 20261013-001 | 3792106DI6CQ6AV596379 | 20261013-007 | 3792106DI6EMO4C799644 | 2026-09-17 | 11,335 LPG 1910 | 2,655,933 |
+| 20261013-002 | 3792106DI6DJC5A870972 | 20261013-011 | 3792106DI6EOJAK076056 | 2026-09-13 | 13,545 LPG 1910 | 3,173,764 |
+| 20261013-003 | 3792106DI6DK4VI389824 | 20261013-008 | 3792106DI6ENRE8215315 | 2026-10-13 | 11,335 LPG 1400 | 2,655,933 |
+| 20261013-004 | 3792106DI6DKTHR478419 | 20261013-009 | 3792106DI6ENSD5415046 | 2026-10-13 | 13,035 LPG 1400 | 3,054,265 |
+| 20261013-005 | 3792106DI6DVWIR931898 | 20261013-012 | 3792106DI6EOK7W067174 | 2026-09-04 | 11,335 LPG 1400 | 2,655,933 |
+| 20261013-006 | 3792106DI6DXSK0332055 | 20261013-010 | 3792106DI6ENTNM018156 | 2026-09-30 | 13,035 LPG 1400 | 3,054,265 |
+
+The left-hand column is the list for whoever files Unity Exploration's returns: six Credit Notes, 17,250,093 in all, tax periods 202609 (four) and 202610 (two). Until they are declared FBR holds twelve sale invoices where there should be six.
+
+**Product consequences (open):** the void path must stop presenting a Debit Note as an FBR reversal, since the gateway only accepts one from the buyer's token; the till should warn when a Registered buyer's NTN does not match the certificate shape; the sandbox-only "0723262 validates" trap belongs in the FBR README.
+
 **Product fix (same day).** The customer form, the handler and the payload builder now agree with FBR: an NTN may carry one leading letter and is stored upper case; the payload's `registrationNumber` keeps the letter, drops the certificate's `-N` suffix (`A723262-4` → `A723262`, `3792106-1` → `3792106`) and strips dashes from a CNIC; the province is a dropdown of the seven FBR names (`fiscal.Provinces`, mirrored in `lib/customerSchemas.ts`), the handler canonicalises case and refuses anything else with `invalid_province`, and a row saved before the list existed is mapped onto it when the dialog opens. A warning when the NTN looks like a CNIC under Registered is still not done.
