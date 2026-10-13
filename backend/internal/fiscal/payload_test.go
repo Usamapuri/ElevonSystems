@@ -486,3 +486,51 @@ func TestBuildBatchInvoice_Refusals(t *testing.T) {
 		t.Fatalf("ErrorCode must know the batch refusal: %q", ErrorCode(ErrBatchEmpty))
 	}
 }
+
+// --- Buyer registration number --------------------------------------------
+
+// buyerNTNCNIC is 7 characters for an NTN (7 digits, or a letter and 6 digits
+// for registrations FBR issues as e.g. A723262) or 13 digits for a CNIC, no
+// dashes. People copy the number off the FBR certificate with its "-N"
+// suffix, so that suffix is dropped; everything else only loses dashes and
+// spaces. Sandbox 2026-10-13: "A723262" validates as a registered buyer,
+// "723262" is 0002 (format) and "7232624" is 0053 (not registered).
+func TestRegistrationNumber(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"A723262", "A723262"},
+		{"a723262", "A723262"},
+		{"A723262-4", "A723262"},
+		{"3792106-1", "3792106"},
+		{"3792106", "3792106"},
+		{" 89519 43 ", "8951943"},
+		{"42101-1234567-1", "4210112345671"},
+		{"4210112345671", "4210112345671"},
+		{"", ""},
+		{"-", ""},
+	}
+	for _, c := range cases {
+		if got := registrationNumber(c.in); got != c.want {
+			t.Errorf("registrationNumber(%q) = %q want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestBuildSaleInvoice_LetterPrefixedNTNKeepsItsLetter(t *testing.T) {
+	inv := models.Invoice{
+		BusinessDate: businessDate(),
+		Lines: []models.InvoiceLine{
+			{ProductName: "LPG bulk", Quantity: 12.5, LineTotal: 3312.5, LineTax: 596.25},
+		},
+	}
+	buyer := &Buyer{NTNCNIC: "A723262-4", Name: "Unity LPG Distributors", Province: "CAPITAL TERRITORY", Address: "Islamabad", RegistrationType: "Registered"}
+	got, err := BuildSaleInvoice(BuildInput{Invoice: inv, Buyer: buyer, DefaultHSCode: "2711.1910"}, sandboxCfg())
+	if err != nil {
+		t.Fatalf("BuildSaleInvoice: %v", err)
+	}
+	if got.BuyerNTNCNIC != "A723262" {
+		t.Errorf("buyerNTNCNIC = %q want A723262", got.BuyerNTNCNIC)
+	}
+	if got.BuyerRegistrationType != "Registered" || got.ScenarioID != sandboxCfg().ScenarioRegistered {
+		t.Errorf("registered buyer not recognised: type %q scenario %q", got.BuyerRegistrationType, got.ScenarioID)
+	}
+}

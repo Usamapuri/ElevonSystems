@@ -3,6 +3,7 @@ package fiscal
 import (
 	"errors"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -93,22 +94,27 @@ func round2(x float64) float64 {
 	return math.Round(x*100) / 100
 }
 
-// digitsOnly strips '-' and spaces from an NTN/CNIC, per the payload rule
-// that buyerNTNCNIC is digits only.
-func digitsOnly(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		if r == '-' || r == ' ' {
-			continue
-		}
-		b.WriteRune(r)
+// ntnWithSuffix is an NTN as printed on an FBR certificate: 7 digits, or a
+// letter and 6 digits (A723262, registrations issued since 2023), followed
+// by a "-N" reference suffix that buyerNTNCNIC must not carry.
+var ntnWithSuffix = regexp.MustCompile(`^([A-Z]\d{6}|\d{7})-\d+$`)
+
+// registrationNumber turns what a customer row holds into FBR's
+// buyerNTNCNIC: upper case, no spaces, the certificate's "-N" suffix dropped
+// from an NTN, and dashes removed from everything else (a CNIC typed as
+// 42101-1234567-1 becomes its 13 digits). Letters are kept: the sandbox
+// validates "A723262" as a registered buyer and refuses "723262" with 0002.
+func registrationNumber(s string) string {
+	s = strings.ToUpper(strings.Join(strings.Fields(s), ""))
+	if m := ntnWithSuffix.FindStringSubmatch(s); m != nil {
+		return m[1]
 	}
-	return b.String()
+	return strings.ReplaceAll(s, "-", "")
 }
 
 // isRegisteredBuyer reports whether a buyer is registered for the payload's
 // purposes: RegistrationType must literally be "Registered" and the NTN/CNIC
-// must have at least one digit once '-' and spaces are stripped.
+// must be non-empty once cleaned by registrationNumber.
 func isRegisteredBuyer(b *Buyer) bool {
 	if b == nil {
 		return false
@@ -116,7 +122,7 @@ func isRegisteredBuyer(b *Buyer) bool {
 	if b.RegistrationType != "Registered" {
 		return false
 	}
-	return digitsOnly(b.NTNCNIC) != ""
+	return registrationNumber(b.NTNCNIC) != ""
 }
 
 // buildBuyerFields resolves the six buyer-related DIInvoice fields for both
@@ -134,7 +140,7 @@ func buildBuyerFields(b *Buyer, cfg Config) (ntn, name, province, address, regTy
 	if regType == "" {
 		regType = "Unregistered"
 	}
-	return digitsOnly(b.NTNCNIC), b.Name, province, b.Address, regType
+	return registrationNumber(b.NTNCNIC), b.Name, province, b.Address, regType
 }
 
 // scenarioFor resolves scenarioId: sandbox-only, SN001/SN002 (cfg's own

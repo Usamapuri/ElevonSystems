@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"elevon-backend/internal/dayops"
+	"elevon-backend/internal/fiscal"
 	"elevon-backend/internal/invoice"
 	"elevon-backend/internal/ledger"
 	"elevon-backend/internal/models"
@@ -35,7 +36,10 @@ func NewCustomersHandler(db *sql.DB) *CustomersHandler { return &CustomersHandle
 
 var (
 	customerPhoneRe = regexp.MustCompile(`^[0-9+ ]{1,30}$`)
-	customerNTNRe   = regexp.MustCompile(`^[0-9-]{1,20}$`)
+	// An NTN is digits and dashes, optionally led by one letter: FBR issues
+	// registrations such as A723262 (sandbox 2026-10-13 validates it as a
+	// registered buyer). 20 characters in all (VARCHAR(20)).
+	customerNTNRe = regexp.MustCompile(`^[A-Za-z]?[0-9-]{1,19}$`)
 	customerCNICRe  = regexp.MustCompile(`^[0-9]{1,15}$`)
 )
 
@@ -60,9 +64,10 @@ func normalisePhone(s string) (*string, bool) {
 }
 
 // normaliseNTN trims s; blank becomes (nil, true). A non-blank NTN is
-// digits or dashes, at most 20 characters (VARCHAR(20)).
+// digits or dashes with at most one leading letter, at most 20 characters
+// (VARCHAR(20)); the letter is stored upper case as FBR prints it.
 func normaliseNTN(s string) (*string, bool) {
-	s = strings.TrimSpace(s)
+	s = strings.ToUpper(strings.TrimSpace(s))
 	if s == "" {
 		return nil, true
 	}
@@ -90,17 +95,20 @@ func validBuyerRegistrationType(s string) bool {
 	return s == "Registered" || s == "Unregistered"
 }
 
-// normaliseProvince trims s; blank becomes (nil, true). A non-blank value is
-// at most 40 characters (VARCHAR(40)).
+// normaliseProvince trims s; blank becomes (nil, true), meaning "the
+// store's own province" when the sale is filed. A non-blank value must be
+// one of FBR's seven province names in any case and is stored as FBR spells
+// it: the gateway refuses anything else with 0074, and a customer saved as
+// "ICT" would fail at the till, not here.
 func normaliseProvince(s string) (*string, bool) {
-	s = strings.TrimSpace(s)
-	if s == "" {
+	if strings.TrimSpace(s) == "" {
 		return nil, true
 	}
-	if utf8.RuneCountInString(s) > 40 {
+	p, ok := fiscal.CanonicalProvince(s)
+	if !ok {
 		return nil, false
 	}
-	return &s, true
+	return &p, true
 }
 
 // customerColumns is deliberately unprefixed: it is reused as-is by Create,
@@ -298,7 +306,7 @@ func (h *CustomersHandler) Create(c *gin.Context) {
 	}
 	ntn, ok := normaliseNTN(req.NTN)
 	if !ok {
-		c.JSON(http.StatusBadRequest, models.Fail("NTN must be at most 20 characters of digits or dashes", "invalid_ntn"))
+		c.JSON(http.StatusBadRequest, models.Fail("NTN must be at most 20 characters of digits or dashes, with at most one leading letter", "invalid_ntn"))
 		return
 	}
 	cnic, ok := normaliseCNIC(req.CNIC)
@@ -316,7 +324,7 @@ func (h *CustomersHandler) Create(c *gin.Context) {
 	}
 	province, ok := normaliseProvince(req.Province)
 	if !ok {
-		c.JSON(http.StatusBadRequest, models.Fail("Province is at most 40 characters", "invalid_province"))
+		c.JSON(http.StatusBadRequest, models.Fail("Province must be one of FBR's seven province names", "invalid_province"))
 		return
 	}
 	if req.CreditLimit != nil && !validRate(*req.CreditLimit) {
@@ -388,7 +396,7 @@ func (h *CustomersHandler) Update(c *gin.Context) {
 	if req.NTN != nil {
 		ntn, ok := normaliseNTN(*req.NTN)
 		if !ok {
-			c.JSON(http.StatusBadRequest, models.Fail("NTN must be at most 20 characters of digits or dashes", "invalid_ntn"))
+			c.JSON(http.StatusBadRequest, models.Fail("NTN must be at most 20 characters of digits or dashes, with at most one leading letter", "invalid_ntn"))
 			return
 		}
 		if ntn == nil {
@@ -427,7 +435,7 @@ func (h *CustomersHandler) Update(c *gin.Context) {
 	if req.Province != nil {
 		province, ok := normaliseProvince(*req.Province)
 		if !ok {
-			c.JSON(http.StatusBadRequest, models.Fail("Province is at most 40 characters", "invalid_province"))
+			c.JSON(http.StatusBadRequest, models.Fail("Province must be one of FBR's seven province names", "invalid_province"))
 			return
 		}
 		if province == nil {

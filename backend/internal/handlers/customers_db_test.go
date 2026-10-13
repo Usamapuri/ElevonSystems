@@ -43,17 +43,22 @@ func TestCustomers_CreateListSearchAndConflicts(t *testing.T) {
 	if created.Name != "Ali Traders" || created.Phone == nil || *created.Phone != "0300 1234567" ||
 		created.NTN == nil || *created.NTN != "1234567-8" || created.CNIC == nil || *created.CNIC != "3520112345678" ||
 		created.BuyerRegistrationType != "Registered" || created.Address == nil || *created.Address != "Shop 4, Main Market" ||
-		created.Province == nil || *created.Province != "Punjab" || !created.CreditAllowed ||
+		created.Province == nil || *created.Province != "PUNJAB" || !created.CreditAllowed ||
 		created.CreditLimit == nil || *created.CreditLimit != 5000 || created.Balance != 0 || !created.IsActive {
 		t.Fatalf("normalised customer: %+v", created)
 	}
 
-	// A blank buyer_registration_type defaults to Unregistered.
-	w = doJSON(r, http.MethodPost, "/admin/customers", models.CreateCustomerRequest{Name: "Beta Gas", Phone: "0311 1111111"})
+	// A blank buyer_registration_type defaults to Unregistered. An NTN FBR
+	// issued with a letter (A723262, sandbox 2026-10-13) is kept, upper-cased;
+	// the province is stored as FBR spells it whatever case was typed.
+	w = doJSON(r, http.MethodPost, "/admin/customers", models.CreateCustomerRequest{Name: "Beta Gas", Phone: "0311 1111111", NTN: "a723262", Province: "capital territory"})
 	var second models.Customer
 	dataAs(t, decodeEnvelope(t, w), &second)
 	if w.Code != http.StatusCreated || second.BuyerRegistrationType != "Unregistered" {
 		t.Fatalf("default buyer type: %d %+v", w.Code, second)
+	}
+	if second.NTN == nil || *second.NTN != "A723262" || second.Province == nil || *second.Province != "CAPITAL TERRITORY" {
+		t.Fatalf("letter NTN / province canonical form: %+v", second)
 	}
 
 	negative := -1.0
@@ -65,9 +70,12 @@ func TestCustomers_CreateListSearchAndConflicts(t *testing.T) {
 		{models.CreateCustomerRequest{Name: ""}, "invalid_name"},
 		{models.CreateCustomerRequest{Name: "Gamma", Phone: "abc-123"}, "invalid_phone"},
 		{models.CreateCustomerRequest{Name: "Gamma", NTN: "abc"}, "invalid_ntn"},
+		{models.CreateCustomerRequest{Name: "Gamma", NTN: "AB1234"}, "invalid_ntn"},
 		{models.CreateCustomerRequest{Name: "Gamma", CNIC: "12-345"}, "invalid_cnic"},
 		{models.CreateCustomerRequest{Name: "Gamma", BuyerRegistrationType: "Foreign"}, "invalid_buyer_registration_type"},
 		{models.CreateCustomerRequest{Name: "Gamma", Province: longProvince}, "invalid_province"},
+		// FBR knows seven province names (0074 otherwise); abbreviations are refused here.
+		{models.CreateCustomerRequest{Name: "Gamma", Province: "ICT"}, "invalid_province"},
 		{models.CreateCustomerRequest{Name: "Gamma", CreditLimit: &negative}, "invalid_credit_limit"},
 	} {
 		w := doJSON(r, http.MethodPost, "/admin/customers", tc.req)

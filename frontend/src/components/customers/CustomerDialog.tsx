@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Field } from '@/components/settings/Field'
 import { toast } from '@/hooks/use-toast'
-import { BUYER_REGISTRATION_TYPES, customerDialogSchema, type CustomerDialogValues } from '@/lib/customerSchemas'
+import { BUYER_REGISTRATION_TYPES, FBR_PROVINCES, canonicalProvince, customerDialogSchema, type CustomerDialogValues } from '@/lib/customerSchemas'
 import type { Customer } from '@/types'
 
 interface Props {
@@ -22,6 +22,9 @@ interface Props {
   /** Present when editing; omitted for "New customer". */
   customer?: Customer
 }
+
+/** Radix Select cannot hold an empty-string item, so blank gets a sentinel. */
+const NO_PROVINCE = '__none__'
 
 const EMPTY: CustomerDialogValues = {
   name: '',
@@ -45,7 +48,7 @@ function fromCustomer(c: Customer): CustomerDialogValues {
     cnic: c.cnic ?? '',
     buyer_registration_type: c.buyer_registration_type,
     address: c.address ?? '',
-    province: c.province ?? '',
+    province: canonicalProvince(c.province),
     credit_allowed: c.credit_allowed,
     credit_limit: c.credit_limit === null ? '' : String(c.credit_limit),
     notes: c.notes ?? '',
@@ -65,13 +68,13 @@ function apiMessage(err: unknown): { field?: FieldName; message: string } {
       case 'phone_taken':
         return { field: 'phone', message: 'A customer with that phone number already exists' }
       case 'invalid_ntn':
-        return { field: 'ntn', message: 'NTN must be digits or dashes, at most 20 characters' }
+        return { field: 'ntn', message: 'NTN must be digits or dashes with at most one leading letter, at most 20 characters' }
       case 'invalid_cnic':
         return { field: 'cnic', message: 'CNIC must be digits only, at most 15 characters' }
       case 'invalid_buyer_registration_type':
         return { field: 'buyer_registration_type', message: 'Choose Registered or Unregistered' }
       case 'invalid_province':
-        return { field: 'province', message: 'Province is at most 40 characters' }
+        return { field: 'province', message: 'Pick one of FBR’s province names' }
       case 'invalid_credit_limit':
         return { field: 'credit_limit', message: 'Credit limit must be zero or more with at most 2 decimal places' }
       case 'no_changes':
@@ -142,8 +145,8 @@ export function CustomerDialog({ open, onOpenChange, customer }: Props) {
             <Field label="Phone (optional)" htmlFor="phone" error={errors.phone?.message}>
               <Input id="phone" autoComplete="off" placeholder="0300 1234567" {...form.register('phone')} />
             </Field>
-            <Field label="NTN (optional)" htmlFor="ntn" error={errors.ntn?.message}>
-              <Input id="ntn" autoComplete="off" {...form.register('ntn')} />
+            <Field label="NTN (optional)" htmlFor="ntn" error={errors.ntn?.message} hint="The Registration No on the FBR certificate, e.g. 3792106 or A723262. Not the STRN.">
+              <Input id="ntn" autoComplete="off" placeholder="A723262" {...form.register('ntn')} />
             </Field>
             <Field label="CNIC (optional)" htmlFor="cnic" error={errors.cnic?.message}>
               <Input id="cnic" autoComplete="off" inputMode="numeric" {...form.register('cnic')} />
@@ -168,8 +171,26 @@ export function CustomerDialog({ open, onOpenChange, customer }: Props) {
                 )}
               />
             </Field>
-            <Field label="Province (optional)" htmlFor="province" error={errors.province?.message}>
-              <Input id="province" autoComplete="off" {...form.register('province')} />
+            <Field label="Province (optional)" htmlFor="province" error={errors.province?.message} hint="As FBR names it; blank uses the store’s province">
+              <Controller
+                control={form.control}
+                name="province"
+                render={({ field }) => (
+                  <Select value={field.value === '' ? NO_PROVINCE : field.value} onValueChange={(v) => field.onChange(v === NO_PROVINCE ? '' : v)}>
+                    <SelectTrigger id="province">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_PROVINCE}>Same as the store</SelectItem>
+                      {FBR_PROVINCES.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {p}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </Field>
             <Field label="Address (optional)" htmlFor="address" error={errors.address?.message}>
               <Textarea id="address" rows={2} {...form.register('address')} />

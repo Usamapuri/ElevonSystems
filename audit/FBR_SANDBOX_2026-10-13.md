@@ -36,4 +36,16 @@ Two correct outcomes, depending on the facts:
 
 The job is rebuilt from the customers row at every attempt (`fiscal.loadBuyer`), so editing the card and retrying is enough; no new sale is needed.
 
-Same class of mistake as yesterday's 0205 on the test store ("Sangeen Khan" saved Unregistered with an NTN): the customer form lets NTN and buyer type disagree with FBR's registry. A form warning when the NTN looks like a CNIC under Registered, or a lookup against FBR's registration check, is the product fix; not done yet.
+**What the number actually was.** The owner then sent the FBR certificate: Registration No `A723262` (the NTN, with a letter), Reference No `A723262-4`, and the 13-digit number was the STRN. The customer form had refused `A723262` (digits and dashes only), so the card ended up holding `7232624`. Validate calls, seller 8951943, buyer "Unity LPG Distributors", Registered, SN001:
+
+| buyerNTNCNIC | buyerProvince | Result |
+|---|---|---|
+| 7232624 | ICT | 0053 registration type does not match |
+| 723262 | ICT | 0002 not in proper format |
+| 3277876318252 (STRN) | ICT | 0205 scenario not valid for unregistered |
+| A723262 or 0723262 | ICT | 0074 buyer province invalid |
+| A723262 or 0723262 | CAPITAL TERRITORY | 00 Valid |
+
+So FBR accepts the letter-prefixed NTN as issued, or a zero-padded 7-digit form, and the buyer province has to be one of the seven names from `/pdi/v1/provinces` (`ICT` is not one). The STRN plays no part in Digital Invoicing. The owner saved `0723262` + `CAPITAL TERRITORY` and the retry filed.
+
+**Product fix (same day).** The customer form, the handler and the payload builder now agree with FBR: an NTN may carry one leading letter and is stored upper case; the payload's `registrationNumber` keeps the letter, drops the certificate's `-N` suffix (`A723262-4` → `A723262`, `3792106-1` → `3792106`) and strips dashes from a CNIC; the province is a dropdown of the seven FBR names (`fiscal.Provinces`, mirrored in `lib/customerSchemas.ts`), the handler canonicalises case and refuses anything else with `invalid_province`, and a row saved before the list existed is mapped onto it when the dialog opens. A warning when the NTN looks like a CNIC under Registered is still not done.
