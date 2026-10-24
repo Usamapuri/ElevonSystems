@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Money } from '@/components/shared/Money'
 import { CustomerPicker } from '@/components/pos/CustomerPicker'
 import { formatMoney } from '@/lib/money'
+import { earlierTaxMonth } from '@/lib/invoiceDate'
 import { formatBusinessDate } from '@/lib/print/format'
 import { cn } from '@/lib/utils'
 import { formatKg } from '@/lib/weight'
@@ -47,7 +48,8 @@ interface Props {
   chargeHint: string | null
   /** Present only for an admin: the sale-date calendar (spec 2026-10-12
    * §8). `value` is '' for today; `min`/`max` bound the picker to the
-   * 30-day window; `todayKey` is the server's business date. */
+   * store's window (settings.backdate_limit_days); `todayKey` is the
+   * server's business date. Absent when back-dating is off. */
   backdate?: {
     value: string
     min: string
@@ -87,6 +89,7 @@ export function CartRail({
 }: Props) {
   const empty = cart.lines.length === 0
   const backDated = !!backdate && backdate.value !== '' && backdate.value !== backdate.todayKey
+  const taxMonth = backDated ? earlierTaxMonth(backdate.value, backdate.todayKey) : null
 
   return (
     <div className={cn('flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-lg', className)}>
@@ -132,6 +135,7 @@ export function CartRail({
           {backDated && (
             <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
               Back-dated to {formatBusinessDate(backdate.value)} — recorded on today’s business day.
+              {taxMonth && ` Dated in ${taxMonth}: if that month’s sales tax return is already filed, this sale needs a revised return.`}
             </p>
           )}
         </div>

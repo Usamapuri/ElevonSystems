@@ -19,6 +19,7 @@ const settings: AppSettings = {
   business_address: 'Plot 14, Multan Road, Lahore',
   business_phone: '042-3555-0100',
   rate_override_band: 0,
+  backdate_limit_days: 40,
   business_ntn: '1234567-8',
   business_strn: '03-05-8888-001-99',
   business_province: 'Punjab',

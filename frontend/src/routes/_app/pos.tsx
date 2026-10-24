@@ -39,7 +39,7 @@ import { computeTotals, taxRateFor, type Totals } from '@/lib/pricing'
 import { printInvoice } from '@/lib/print/printInvoice'
 import { cartDiscount, cartReducer, emptyCart, pricingLines, requestLines, type CartLine } from '@/components/pos/cart'
 import { pendingLine } from '@/lib/fiscal'
-import { checkInvoiceDate, invoiceDateBounds, invoiceDateMessage } from '@/lib/invoiceDate'
+import { backdateLimit, checkInvoiceDate, invoiceDateBounds, invoiceDateMessage } from '@/lib/invoiceDate'
 import type { FiscalPending } from '@/types'
 import { businessDateKey, dayDateKey, evaluateDayGate, gateBlocks, gateFromErrorCode, type DayGate } from '@/components/pos/dayGate'
 import { dialogIsOpen, shouldOpenTender } from '@/components/pos/chargeGuard'
@@ -169,7 +169,9 @@ function PosPage() {
   // date when there is one, else the same boundary-hour arithmetic the gate
   // uses — never the browser's calendar date on its own.
   const todayKey = dayCurrent.data?.day ? dayDateKey(dayCurrent.data.day) : businessDateKey(new Date(), settings?.day_boundary_hour ?? 0)
-  const dateCheck = invoiceDate === '' ? 'ok' : checkInvoiceDate(invoiceDate, todayKey)
+  // settings.backdate_limit_days (0 = off); the server reads the same value.
+  const limitDays = backdateLimit(settings?.backdate_limit_days)
+  const dateCheck = invoiceDate === '' ? 'ok' : checkInvoiceDate(invoiceDate, todayKey, limitDays)
   const backDating = invoiceDate !== '' && invoiceDate !== todayKey
 
   const blocked = gateBlocks(gate)
@@ -177,7 +179,7 @@ function PosPage() {
   const chargeHint = blocked
     ? 'The business day has to be sorted out first.'
     : dateCheck !== 'ok'
-      ? invoiceDateMessage(dateCheck)
+      ? invoiceDateMessage(dateCheck, limitDays)
       : cart.lines.length === 0
         ? null
         : !discount.valid
@@ -406,7 +408,7 @@ function PosPage() {
           // attempt.
           chargeDisabled={chargeDisabled || charge.isPending}
           chargeHint={chargeHint}
-          backdate={isAdmin ? { value: invoiceDate, ...invoiceDateBounds(todayKey), todayKey, onChange: setInvoiceDate } : undefined}
+          backdate={isAdmin && limitDays > 0 ? { value: invoiceDate, ...invoiceDateBounds(todayKey, limitDays), todayKey, onChange: setInvoiceDate } : undefined}
         />
 
         <div className="min-w-0 lg:col-start-1 lg:row-start-2">

@@ -162,7 +162,8 @@ type CreateInvoiceRequest struct {
 	// 2026-10-12 §2.2). Nothing is filed unless asked.
 	FileFBR bool `json:"file_fbr"`
 	// InvoiceDate (YYYY-MM-DD, optional) back-dates the document (spec
-	// 2026-10-12 §8): admins only, at most 40 days before the business date.
+	// 2026-10-12 §8): admins only, at most settings.backdate_limit_days
+	// (default 40, max 90; 0 = off) before the business date.
 	InvoiceDate string `json:"invoice_date"`
 }
 

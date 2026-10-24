@@ -37,6 +37,30 @@ type rule func(raw json.RawMessage) error
 
 var hsCodeRe = regexp.MustCompile(`^[0-9]{4}\.[0-9]{4}$`)
 
+// Back-date window (008_backdate_limit). DefaultBackdateLimitDays is the
+// seeded value and what a reader falls back to when the stored value is
+// missing or malformed — never "unlimited".
+const (
+	DefaultBackdateLimitDays = 40
+	MaxBackdateLimitDays     = 90
+)
+
+// BackdateLimitDays reads backdate_limit_days from a loaded settings map,
+// falling back to the default for anything the rule would refuse.
+func BackdateLimitDays(all map[string]json.RawMessage) int {
+	raw, ok := all["backdate_limit_days"]
+	// json.Unmarshal("null", &n) succeeds and leaves 0, which would quietly
+	// switch back-dating off; null is malformed here, so it takes the default.
+	if !ok || strings.TrimSpace(string(raw)) == "null" {
+		return DefaultBackdateLimitDays
+	}
+	var n int
+	if err := json.Unmarshal(raw, &n); err != nil || n < 0 || n > MaxBackdateLimitDays {
+		return DefaultBackdateLimitDays
+	}
+	return n
+}
+
 // rules covers exactly the keys seeded in migrations/001_init.sql. Every
 // entry is wrapped in notNull except tax_rate_credit, the one key the spec
 // allows to be null.
@@ -58,6 +82,10 @@ var rules = map[string]rule{
 	// Rs per kg a cashier may move a line's rate without an admin PIN
 	// (004_deal_rates). 0 means every deal rate needs a PIN.
 	"rate_override_band": notNull(number(0, 100000)),
+	// Days before the business date an admin may date a sale (008). 0 turns
+	// back-dating off. The cap is the furthest the FBR sandbox has accepted
+	// (90 days, audit FBR_SANDBOX_2026-10-13); past it needs a fresh probe.
+	"backdate_limit_days": notNull(integer(0, MaxBackdateLimitDays)),
 
 	"receipt_paper_width_mm":    notNull(oneOfInt(58, 80)),
 	"receipt_printable_area_mm": notNull(integer(40, 80)),

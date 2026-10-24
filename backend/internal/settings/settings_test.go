@@ -20,6 +20,7 @@ func TestValidate_PerKeyRules(t *testing.T) {
 		{"receipt_logo_url", `""`}, {"receipt_logo_url", `"https://x/logo.png"`}, {"receipt_logo_url", `"data:image/png;base64,iVBORw0KGgo="`},
 		{"receipt_header_lines", `[]`}, {"receipt_header_lines", `["a","b"]`}, {"receipt_default_document", `"a4"`},
 		{"day_close_variance_threshold", `100`}, {"credit_limit_enforced", `true`},
+		{"backdate_limit_days", `0`}, {"backdate_limit_days", `40`}, {"backdate_limit_days", `90`},
 		{"fiscal_config", `{}`}, {"fiscal_config", seededFiscalConfig},
 		{"fiscal_config", `{"enabled":true,"seller_ntn_cnic":"8951943","seller_business_name":"Elevon Gas","seller_province":"PUNJAB","seller_address":"Main Bazar"}`},
 		{"fiscal_api_key_sandbox_enc", `""`}, {"fiscal_api_key_sandbox_enc", `"AAAA"`}, {"fiscal_api_key_production_enc", `"AAAA"`},
@@ -39,6 +40,7 @@ func TestValidate_PerKeyRules(t *testing.T) {
 		{"receipt_logo_url", `"ftp://x"`}, {"receipt_logo_url", `"data:text/plain;base64,QQ=="`},
 		{"receipt_header_lines", `["a","b","c","d","e","f","g"]`}, {"receipt_header_lines", `"a"`}, {"receipt_footer_lines", `[1]`},
 		{"receipt_default_document", `"pdf"`}, {"day_close_variance_threshold", `-1`}, {"credit_limit_enforced", `"yes"`},
+		{"backdate_limit_days", `-1`}, {"backdate_limit_days", `91`}, {"backdate_limit_days", `40.5`}, {"backdate_limit_days", `"40"`},
 		{"fiscal_config", `{"nope":1}`}, {"fiscal_config", `{"trans_type_id":"75"}`}, {"fiscal_config", `[]`},
 		{"fiscal_config", `{"enabled":true}`}, {"fiscal_config", `{"enabled":true,"seller_province":"Punjab","seller_ntn_cnic":"8951943","seller_business_name":"G","seller_address":"A"}`},
 		{"fiscal_reference", `[]`}, {"fiscal_reference", `"x"`},
@@ -54,6 +56,32 @@ func TestValidate_PerKeyRules(t *testing.T) {
 		if ve, ok := err.(*ValueError); !ok || ve.Key != c.key {
 			t.Errorf("%s: want *ValueError naming the key, got %v", c.key, err)
 		}
+	}
+}
+
+// BackdateLimitDays never reads a bad value as "unlimited" or as "off": the
+// default stands in for anything the rule would refuse.
+func TestBackdateLimitDays_FallsBackToTheDefault(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want int
+	}{
+		{"", DefaultBackdateLimitDays}, // key missing
+		{`60`, 60}, {`0`, 0}, {`90`, 90},
+		{`null`, DefaultBackdateLimitDays}, {`91`, DefaultBackdateLimitDays}, {`-5`, DefaultBackdateLimitDays},
+		{`40.5`, DefaultBackdateLimitDays}, {`"60"`, DefaultBackdateLimitDays},
+	}
+	for _, c := range cases {
+		all := map[string]json.RawMessage{}
+		if c.raw != "" {
+			all["backdate_limit_days"] = json.RawMessage(c.raw)
+		}
+		if got := BackdateLimitDays(all); got != c.want {
+			t.Errorf("BackdateLimitDays(%q) = %d, want %d", c.raw, got, c.want)
+		}
+	}
+	if DefaultBackdateLimitDays != 40 || MaxBackdateLimitDays != 90 {
+		t.Fatalf("default %d / max %d: changing either is an owner decision and must come through this test", DefaultBackdateLimitDays, MaxBackdateLimitDays)
 	}
 }
 
@@ -88,10 +116,10 @@ func TestCheckConsistency_PrintableAreaFitsPaper(t *testing.T) {
 }
 
 func TestKeys_MatchTheSeededList(t *testing.T) {
-	if n := len(Keys()); n != 27 {
-		t.Fatalf("001_init seeds 21 keys, 003_fiscal three, 004_deal_rates one, 005 replaces the token with two slots, 007 adds day_close_enabled; rules cover %d", n)
+	if n := len(Keys()); n != 28 {
+		t.Fatalf("001_init seeds 21 keys, 003_fiscal three, 004_deal_rates one, 005 replaces the token with two slots, 007 adds day_close_enabled, 008 backdate_limit_days; rules cover %d", n)
 	}
-	for _, k := range []string{"fiscal_config", "fiscal_api_key_sandbox_enc", "fiscal_api_key_production_enc", "fiscal_reference", "rate_override_band", "day_close_enabled"} {
+	for _, k := range []string{"fiscal_config", "fiscal_api_key_sandbox_enc", "fiscal_api_key_production_enc", "fiscal_reference", "rate_override_band", "day_close_enabled", "backdate_limit_days"} {
 		if !Known(k) {
 			t.Errorf("%s is seeded and needs a rule", k)
 		}

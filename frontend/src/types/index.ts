@@ -57,6 +57,9 @@ export interface AppSettings {
   default_hs_code: string
   /** Rs per kg a cashier may move a line's rate without an admin PIN. */
   rate_override_band: number
+  /** Days before the business date an admin may date a sale (008; seeded
+   * 40, max 90, 0 = back-dating off). */
+  backdate_limit_days: number
   receipt_paper_width_mm: 58 | 80
   receipt_printable_area_mm: number
   receipt_logo_url: string
@@ -640,7 +643,7 @@ export interface CreateInvoiceRequest {
   pin?: string
   /** File this one sale with FBR right away (Charge + FBR). */
   file_fbr?: boolean
-  /** Back-date the document (admins only, at most 40 days), `YYYY-MM-DD`. */
+  /** Back-date the document (admins only, within settings.backdate_limit_days), `YYYY-MM-DD`. */
   invoice_date?: string
 }
 

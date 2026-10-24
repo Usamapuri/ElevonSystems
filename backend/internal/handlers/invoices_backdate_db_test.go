@@ -13,7 +13,8 @@ import (
 )
 
 // Back-dated invoices (spec 2026-10-12 §8): an admin may give a sale an
-// invoice_date up to 40 days before the current business date. The sale is
+// invoice_date up to settings.backdate_limit_days (seeded 40, max 90, 0 =
+// off) before the current business date. The sale is
 // still numbered, drawered and reported on today's business day; only the
 // document date and what FBR is told change.
 
@@ -124,7 +125,8 @@ func TestInvoice_BackDated_Refusals(t *testing.T) {
 
 	// The edges are allowed: today itself (for either role — it changes
 	// nothing) and exactly 40 days back for an admin. The number is literal
-	// on purpose: a change to backdateLimitDays has to come through here.
+	// on purpose: a change to the seeded backdate_limit_days (migration 008)
+	// has to come through here.
 	for _, c := range []struct {
 		name   string
 		router http.Handler
@@ -139,5 +141,57 @@ func TestInvoice_BackDated_Refusals(t *testing.T) {
 				t.Fatalf("create: %d %s", w.Code, w.Body.String())
 			}
 		})
+	}
+}
+
+// The window is the store's setting (plan 2026-10-24): the owner moves it in
+// Settings, the server reads it on every sale, and 0 switches back-dating off
+// without stopping a sale dated today.
+func TestInvoice_BackDated_LimitIsASetting(t *testing.T) {
+	db := testdb.Fresh(t)
+	ownerID := seedUser(t, db, "owner", "admin", "owner-pass-1", nil)
+	counterID := seedUser(t, db, "till1", "counter", "till-pass-1", nil)
+	today := businessToday()
+	openBusinessDay(t, db, ownerID, today)
+	productID := seedProductRow(t, db, "LPG bulk", 250.00)
+	admin := moneyRouter(db, actor{id: ownerID, username: "owner", role: "admin"})
+	counter := moneyRouter(db, actor{id: counterID, username: "till1", role: "counter"})
+
+	post := func(r http.Handler, d time.Time) (int, string, string) {
+		w := doJSON(r, http.MethodPost, "/invoices", backdateBody(productID, d.Format(dayops.DateLayout)))
+		env := decodeEnvelope(t, w)
+		code := ""
+		if env.Error != nil {
+			code = *env.Error
+		}
+		return w.Code, code, env.Message
+	}
+
+	setSetting(t, db, "backdate_limit_days", "60")
+	if status, code, msg := post(admin, today.AddDate(0, 0, -60)); status != http.StatusCreated {
+		t.Fatalf("60 days back with the limit at 60: %d %s %s", status, code, msg)
+	}
+	if status, code, msg := post(admin, today.AddDate(0, 0, -61)); status != http.StatusBadRequest || code != "invoice_date_too_old" || msg != "An invoice can be back-dated at most 60 days" {
+		t.Fatalf("61 days back with the limit at 60: %d %s %q", status, code, msg)
+	}
+
+	setSetting(t, db, "backdate_limit_days", "0")
+	if status, code, msg := post(admin, today.AddDate(0, 0, -1)); status != http.StatusBadRequest || code != "invoice_date_too_old" || msg != "Back-dating is switched off in Settings" {
+		t.Fatalf("yesterday with back-dating off: %d %s %q", status, code, msg)
+	}
+	for name, r := range map[string]http.Handler{"admin": admin, "counter": counter} {
+		if status, code, msg := post(r, today); status != http.StatusCreated {
+			t.Fatalf("%s sending today with back-dating off: %d %s %s", name, status, code, msg)
+		}
+	}
+
+	// A malformed stored value (written around the settings rule) behaves as
+	// the default 40, never as unlimited and never as off.
+	setSetting(t, db, "backdate_limit_days", "null")
+	if status, code, msg := post(admin, today.AddDate(0, 0, -40)); status != http.StatusCreated {
+		t.Fatalf("40 days back with a null limit: %d %s %s", status, code, msg)
+	}
+	if status, code, _ := post(admin, today.AddDate(0, 0, -41)); code != "invoice_date_too_old" {
+		t.Fatalf("41 days back with a null limit: %d %s", status, code)
 	}
 }

@@ -145,12 +145,6 @@ type parsedInvoice struct {
 	invoiceDate *time.Time
 }
 
-// backdateLimitDays is how far before the business date an admin may date a
-// sale (spec 2026-10-12 §8.1). It is the store's own rule, not FBR's: the
-// sandbox validated dates 90 days back (audit 2026-10-13). The till mirrors
-// it in lib/invoiceDate.ts.
-const backdateLimitDays = 40
-
 // validPaymentMethod matches the invoices_payment_method_check constraint.
 func validPaymentMethod(s string) bool {
 	switch s {
@@ -314,9 +308,12 @@ func parseCreateInvoice(req models.CreateInvoiceRequest) (parsedInvoice, *apiErr
 // resolveInvoiceDate decides the document date for a sale on the open day
 // (spec 2026-10-12 §8.1): the business date unless the request named one,
 // and then only for an admin, never after the business date and at most
-// backdateLimitDays before it. Sending the business date itself is not a
-// back-date and is allowed for anyone — the till sends what it shows.
-func resolveInvoiceDate(requested *time.Time, businessDate time.Time, role string) (time.Time, *apiError) {
+// limitDays before it (settings.backdate_limit_days; 0 = back-dating off).
+// The limit is the store's own rule, not FBR's: the sandbox validated dates
+// 90 days back (audit 2026-10-13). The till mirrors it in lib/invoiceDate.ts.
+// Sending the business date itself is not a back-date and is allowed for
+// anyone — the till sends what it shows.
+func resolveInvoiceDate(requested *time.Time, businessDate time.Time, role string, limitDays int) (time.Time, *apiError) {
 	if requested == nil {
 		return businessDate, nil
 	}
@@ -332,9 +329,12 @@ func resolveInvoiceDate(requested *time.Time, businessDate time.Time, role strin
 	if want > have {
 		return time.Time{}, badRequest("invoice_date_future", "An invoice cannot be dated after the current business day")
 	}
-	if want < businessDate.AddDate(0, 0, -backdateLimitDays).Format(dayops.DateLayout) {
+	if limitDays <= 0 {
+		return time.Time{}, badRequest("invoice_date_too_old", "Back-dating is switched off in Settings")
+	}
+	if want < businessDate.AddDate(0, 0, -limitDays).Format(dayops.DateLayout) {
 		return time.Time{}, badRequest("invoice_date_too_old",
-			fmt.Sprintf("An invoice can be back-dated at most %d days", backdateLimitDays))
+			fmt.Sprintf("An invoice can be back-dated at most %d days", limitDays))
 	}
 	return *requested, nil
 }
@@ -650,7 +650,7 @@ func (h *InvoicesHandler) Create(c *gin.Context) {
 
 	// 5b — the document date, judged against the day that just passed the
 	// gate: a back-date needs an admin and stays within the limit.
-	invoiceDate, bad := resolveInvoiceDate(p.invoiceDate, day.BusinessDate, actor.Role)
+	invoiceDate, bad := resolveInvoiceDate(p.invoiceDate, day.BusinessDate, actor.Role, settings.BackdateLimitDays(all))
 	if bad != nil {
 		bad.send(c)
 		return

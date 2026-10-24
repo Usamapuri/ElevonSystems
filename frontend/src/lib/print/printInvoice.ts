@@ -38,6 +38,7 @@ const FALLBACK_SETTINGS: AppSettings = {
   business_province: '',
   day_boundary_hour: 0,
   rate_override_band: 0,
+  backdate_limit_days: 40,
   tax_rate_cash: 0,
   tax_rate_card: 0,
   tax_rate_online: 0,

@@ -4,7 +4,7 @@ import {
   receiptSchema, receiptToPatch, taxFromSettings, taxSchema, taxToPatch, textToLines,
 } from './settings'
 
-describe('percent ↔ fraction', () => {
+describe('percent â†” fraction', () => {
   it('formats fractions as clean percentages', () => {
     expect(fractionToPercent(0)).toBe('0')
     expect(fractionToPercent(0.18)).toBe('18')
@@ -23,7 +23,7 @@ describe('percent ↔ fraction', () => {
 })
 
 describe('taxSchema', () => {
-  const base = { tax_rate_cash: '18', tax_rate_card: '18', tax_rate_online: '18', tax_rate_credit: '', further_tax_rate: '0', default_hs_code: '', rate_override_band: '0' }
+  const base = { tax_rate_cash: '18', tax_rate_card: '18', tax_rate_online: '18', tax_rate_credit: '', further_tax_rate: '0', default_hs_code: '', rate_override_band: '0', backdate_limit_days: '40' }
   it('accepts blanks for credit (same as cash) and HS code', () => {
     expect(taxSchema.safeParse(base).success).toBe(true)
   })
@@ -35,7 +35,7 @@ describe('taxSchema', () => {
   })
   it('converts to a fraction patch with null credit rate', () => {
     expect(taxToPatch({ ...base, tax_rate_credit: '' })).toEqual({
-      tax_rate_cash: 0.18, tax_rate_card: 0.18, tax_rate_online: 0.18, tax_rate_credit: null, further_tax_rate: 0, default_hs_code: '', rate_override_band: 0,
+      tax_rate_cash: 0.18, tax_rate_card: 0.18, tax_rate_online: 0.18, tax_rate_credit: null, further_tax_rate: 0, default_hs_code: '', rate_override_band: 0, backdate_limit_days: 40,
     })
     expect(taxToPatch({ ...base, tax_rate_credit: '20' }).tax_rate_credit).toBe(0.2)
   })
@@ -57,7 +57,7 @@ describe('receipt lines', () => {
 })
 
 describe('other sections', () => {
-  it('business needs a name and a 0–12 boundary hour', () => {
+  it('business needs a name and a 0â€“12 boundary hour', () => {
     const ok = { business_name: 'Gas House', business_address: '', business_phone: '', business_ntn: '', business_strn: '', business_province: '', day_boundary_hour: 0, receipt_logo_url: '', day_close_enabled: true }
     expect(businessSchema.safeParse({ ...ok, day_close_enabled: 'yes' }).success).toBe(false)
     expect(businessSchema.safeParse(ok).success).toBe(true)
@@ -74,8 +74,8 @@ describe('other sections', () => {
   })
 })
 
-describe('taxSchema — rate_override_band', () => {
-  const base = { tax_rate_cash: '18', tax_rate_card: '18', tax_rate_online: '18', tax_rate_credit: '', further_tax_rate: '0', default_hs_code: '', rate_override_band: '0' }
+describe('taxSchema â€” rate_override_band', () => {
+  const base = { tax_rate_cash: '18', tax_rate_card: '18', tax_rate_online: '18', tax_rate_credit: '', further_tax_rate: '0', default_hs_code: '', rate_override_band: '0', backdate_limit_days: '40' }
   it('accepts rupees per kg to 2 dp and refuses the rest', () => {
     expect(taxSchema.safeParse(base).success).toBe(true)
     expect(taxSchema.safeParse({ ...base, rate_override_band: '2.5' }).success).toBe(true)
@@ -87,5 +87,18 @@ describe('taxSchema — rate_override_band', () => {
     const settings = { rate_override_band: 2.5 } as Parameters<typeof taxFromSettings>[0]
     expect(taxFromSettings(settings).rate_override_band).toBe('2.5')
     expect(taxToPatch({ ...base, rate_override_band: '2.5' }).rate_override_band).toBe(2.5)
+  })
+})
+
+describe('taxSchema — backdate_limit_days', () => {
+  const base = { tax_rate_cash: '18', tax_rate_card: '18', tax_rate_online: '18', tax_rate_credit: '', further_tax_rate: '0', default_hs_code: '', rate_override_band: '0', backdate_limit_days: '40' }
+  it('accepts whole days 0–90 and refuses the rest', () => {
+    for (const ok of ['0', '40', '60', '90']) expect(taxSchema.safeParse({ ...base, backdate_limit_days: ok }).success).toBe(true)
+    for (const bad of ['91', '-1', '40.5', '', 'abc', '100']) expect(taxSchema.safeParse({ ...base, backdate_limit_days: bad }).success).toBe(false)
+  })
+  it('round-trips the limit as a whole number', () => {
+    const settings = { rate_override_band: 0, backdate_limit_days: 60 } as Parameters<typeof taxFromSettings>[0]
+    expect(taxFromSettings(settings).backdate_limit_days).toBe('60')
+    expect(taxToPatch({ ...base, backdate_limit_days: '60' }).backdate_limit_days).toBe(60)
   })
 })

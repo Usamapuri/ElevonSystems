@@ -26,8 +26,9 @@ func TestSettings_GetUpdateValidateAndReloadBoundary(t *testing.T) {
 	w := doJSON(r, http.MethodGet, "/settings", nil)
 	var all map[string]json.RawMessage
 	dataAs(t, decodeEnvelope(t, w), &all)
-	// 26 keys are seeded; the two private ones are withheld from every response.
-	if w.Code != http.StatusOK || len(all) != 24 || string(all["tax_rate_cash"]) != "0" {
+	// 28 keys are seeded (through 008); the two private ones are withheld
+	// from every response.
+	if w.Code != http.StatusOK || len(all) != 26 || string(all["tax_rate_cash"]) != "0" {
 		t.Fatalf("seeded settings: %d %d %s", w.Code, len(all), all["tax_rate_cash"])
 	}
 
@@ -58,6 +59,22 @@ func TestSettings_GetUpdateValidateAndReloadBoundary(t *testing.T) {
 	w = doJSON(r, http.MethodPut, "/admin/settings", map[string]any{"receipt_paper_width_mm": 58})
 	if errCode(decodeEnvelope(t, w)) != "invalid_setting_value" {
 		t.Fatalf("58 mm paper with the seeded 72 mm printable area must fail the cross-check: %s", w.Body.String())
+	}
+
+	// The back-date window (008): seeded 40, capped at 90, whole days only.
+	if string(all["backdate_limit_days"]) != "40" {
+		t.Fatalf("seeded backdate_limit_days: %s", all["backdate_limit_days"])
+	}
+	for _, bad := range []any{91, -1, 40.5, "60", nil} {
+		w = doJSON(r, http.MethodPut, "/admin/settings", map[string]any{"backdate_limit_days": bad})
+		if w.Code != http.StatusBadRequest || errCode(decodeEnvelope(t, w)) != "invalid_setting_value" {
+			t.Fatalf("backdate_limit_days=%v: %d %s", bad, w.Code, w.Body.String())
+		}
+	}
+	w = doJSON(r, http.MethodPut, "/admin/settings", map[string]any{"backdate_limit_days": 60})
+	dataAs(t, decodeEnvelope(t, w), &all)
+	if w.Code != http.StatusOK || string(all["backdate_limit_days"]) != "60" {
+		t.Fatalf("save backdate_limit_days 60: %d %s", w.Code, all["backdate_limit_days"])
 	}
 
 	w = doJSON(r, http.MethodPut, "/admin/settings", map[string]any{

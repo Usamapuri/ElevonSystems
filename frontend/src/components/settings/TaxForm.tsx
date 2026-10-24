@@ -55,6 +55,14 @@ export function TaxForm({ settings }: { settings: AppSettings }) {
           >
             <Input id="rate_override_band" inputMode="decimal" placeholder="0" {...form.register('rate_override_band')} />
           </Field>
+          <Field
+            label="Back-date sales up to (days)"
+            htmlFor="backdate_limit_days"
+            error={errors.backdate_limit_days?.message}
+            hint="Admins only, up to 90. 0 turns back-dating off. A sale dated in a month whose sales tax return is already filed has to go in a revised return — check with your tax advisor before raising this."
+          >
+            <Input id="backdate_limit_days" inputMode="numeric" placeholder="40" {...form.register('backdate_limit_days')} />
+          </Field>
           <div className="flex items-end justify-end md:col-span-2">
             <Button type="submit" disabled={!isDirty || save.isPending}>
               {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save tax settings'}
