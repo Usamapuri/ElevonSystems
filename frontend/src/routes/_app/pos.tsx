@@ -41,7 +41,7 @@ import { cartDiscount, cartReducer, emptyCart, pricingLines, requestLines, type 
 import { pendingLine } from '@/lib/fiscal'
 import { backdateLimit, checkInvoiceDate, invoiceDateBounds, invoiceDateMessage } from '@/lib/invoiceDate'
 import type { FiscalPending } from '@/types'
-import { businessDateKey, dayDateKey, evaluateDayGate, gateBlocks, gateFromErrorCode, type DayGate } from '@/components/pos/dayGate'
+import { businessDateKey, evaluateDayGate, gateBlocks, gateFromErrorCode, type DayGate } from '@/components/pos/dayGate'
 import { dialogIsOpen, shouldOpenTender } from '@/components/pos/chargeGuard'
 import type { CreateInvoiceRequest, Customer, PaymentMethod, PrintDocument, Product } from '@/types'
 
@@ -165,10 +165,15 @@ function PosPage() {
     }
   }, [cart, settings, tender, buyerRegistered, discount.valid, discount.discount_amount, discount.discount_percent])
 
-  // The server's business date, for the sale-date calendar: the open day's
-  // date when there is one, else the same boundary-hour arithmetic the gate
-  // uses — never the browser's calendar date on its own.
-  const todayKey = dayCurrent.data?.day ? dayDateKey(dayCurrent.data.day) : businessDateKey(new Date(), settings?.day_boundary_hour ?? 0)
+  // The server's business date, for the sale-date calendar: the same
+  // boundary-hour arithmetic the gate uses (Asia/Karachi, util.BusinessDate),
+  // never the browser's bare calendar date — and never the open day's date.
+  // With day close off, the day of the LAST sale stays 'open' until the next
+  // sale seals it, so reading "today" off that row capped the calendar at
+  // the last sale's date (saleDateContract.test.ts). With day close on, the
+  // gate only lets a sale through when the open day IS today, so the two
+  // agree there anyway.
+  const todayKey = businessDateKey(new Date(), settings?.day_boundary_hour ?? 0)
   // settings.backdate_limit_days (0 = off); the server reads the same value.
   const limitDays = backdateLimit(settings?.backdate_limit_days)
   const dateCheck = invoiceDate === '' ? 'ok' : checkInvoiceDate(invoiceDate, todayKey, limitDays)
